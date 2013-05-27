@@ -155,6 +155,9 @@
 &tps {
 	ti,pmic-shutdown-controller;
 
+	interrupt-parent = <&intc>;
+	interrupts = <7>;	/* NNMI */
+
 	regulators {
 		dcdc1_reg: regulator@0 {
 			regulator-always-on;
@@ -194,6 +197,7 @@
 			regulator-always-on;
 		};
 	};
+
 };
 
 &cpsw_emac0 {
