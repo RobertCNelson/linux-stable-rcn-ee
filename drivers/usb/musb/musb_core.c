@@ -1366,6 +1366,30 @@ static int ep_config_from_hw(struct musb *musb)
 	return 0;
 }
 
+/*
+ * musb_restart - restarts musb controller
+ * @param musb the controller
+ */
+int musb_restart(struct musb *musb)
+{
+	int status = 0;
+
+	/* during babble condition the musb controller removes the
+	 * session bit and the fifo table initialized value get changed
+	 */
+	if (musb->dyn_fifo)
+		status = ep_config_from_table(musb);
+	else
+		status = ep_config_from_hw(musb);
+
+	/* starts session */
+	if (!status)
+		musb_start(musb);
+
+	return status;
+}
+EXPORT_SYMBOL_GPL(musb_restart);
+
 enum { MUSB_CONTROLLER_MHDRC, MUSB_CONTROLLER_HDRC, };
 
 /* Initialize MUSB (M)HDRC part of the USB hardware subsystem;
