@@ -199,6 +199,8 @@ struct musb_platform_ops {
 	int	(*adjust_channel_params)(struct dma_channel *channel,
 				u16 packet_sz, u8 *mode,
 				dma_addr_t *dma_addr, u32 *len);
+
+	void	(*babble_recovery)(struct musb *musb);
 };
 
 /*
@@ -577,4 +579,9 @@ static inline int musb_platform_exit(struct musb *musb)
 	return musb->ops->exit(musb);
 }
 
+static inline void musb_babble_recovery(struct musb *musb)
+{
+	if (musb->ops->babble_recovery)
+		musb->ops->babble_recovery(musb);
+}
 #endif	/* __MUSB_CORE_H__ */

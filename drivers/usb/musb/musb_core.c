@@ -848,6 +848,12 @@ b_host:
 		}
 	}
 
+	/* handle babble condition */
+	if (int_usb & MUSB_INTR_BABBLE) {
+		pr_info("babble: restarting the musb controller..");
+		musb_babble_recovery(musb);
+	}
+
 #if 0
 /* REVISIT ... this would be for multiplexing periodic endpoints, or
  * supporting transfer phasing to prevent exceeding ISO bandwidth
