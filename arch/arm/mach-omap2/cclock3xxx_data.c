@@ -250,7 +250,9 @@ static struct dpll_data dpll1_dd = {
 
 static struct clk dpll1_ck;
 
-static const struct clk_ops dpll1_ck_ops = {
+static struct clk_ops dpll1_ck_ops;
+
+static struct clk_ops dpll1_ck_ops_34xx __initdata = {
 	.init		= &omap2_init_clk_clkdm,
 	.enable		= &omap3_noncore_dpll_enable,
 	.disable	= &omap3_noncore_dpll_disable,
@@ -258,6 +260,16 @@ static const struct clk_ops dpll1_ck_ops = {
 	.recalc_rate	= &omap3_dpll_recalc,
 	.set_rate	= &omap3_noncore_dpll_set_rate,
 	.round_rate	= &omap2_dpll_round_rate,
+};
+
+static struct clk_ops dpll5_ck_ops_3630 __initdata = {
+	.init		= &omap2_init_clk_clkdm,
+	.enable		= &omap3_noncore_dpll_enable,
+	.disable	= &omap3_noncore_dpll_disable,
+	.get_parent	= &omap2_init_dpll_parent,
+	.recalc_rate	= &omap3_dpll_recalc,
+	.set_rate	= &omap3_noncore_dpll_set_rate,
+	.round_rate	= &omap2_dpll5_round_rate,
 };
 
 static struct clk_hw_omap dpll1_ck_hw = {
@@ -3599,6 +3611,11 @@ int __init omap3xxx_clk_init(void)
 		dpll4_dd = dpll4_dd_3630;
 	else
 		dpll4_dd = dpll4_dd_34xx;
+
+	if (cpu_is_omap3630())
+		dpll1_ck_ops = dpll5_ck_ops_3630;
+	else
+		dpll1_ck_ops = dpll1_ck_ops_34xx;
 
 
 	/*
