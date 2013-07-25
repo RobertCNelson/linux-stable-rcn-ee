@@ -243,6 +243,9 @@ void omap2_clk_print_new_rates(const char *hfclkin_ck_name,
 u32 omap2_clk_readl(struct clk_hw_omap *clk, void __iomem *reg);
 void omap2_clk_writel(u32 val, struct clk_hw_omap *clk, void __iomem *reg);
 
+long omap2_dpll5_round_rate(struct clk_hw *hw, unsigned long target_rate,
+			unsigned long *parent_rate);
+
 extern u16 cpu_mask;
 
 extern const struct clkops clkops_omap2_dflt_wait;
