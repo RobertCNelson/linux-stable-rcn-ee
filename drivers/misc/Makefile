@@ -38,6 +38,7 @@ obj-$(CONFIG_TI_DAC7512)	+= ti_dac7512.o
 obj-$(CONFIG_C2PORT)		+= c2port/
 obj-$(CONFIG_BONE_CAPEMGR)	+= bone_capemgr.o
 obj-$(CONFIG_DEV_OVERLAYMGR)	+= devovmgr.o
+obj-$(CONFIG_TIEQEP)		+= tieqep.o
 obj-$(CONFIG_HMC6352)		+= hmc6352.o
 obj-y				+= eeprom/
 obj-y				+= cb710/
