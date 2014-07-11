@@ -182,4 +182,9 @@ int tilcdc_crtc_update_fb(struct drm_crtc *crtc,
 
 int tilcdc_plane_init(struct drm_device *dev, struct drm_plane *plane);
 
+/* used by SGX OMAPLFB drvier */
+typedef void (*vsync_callback_t)(void *arg);
+int register_vsync_cb(vsync_callback_t handler, void *arg, int idx);
+int unregister_vsync_cb(vsync_callback_t handler, void *arg, int idx);
+
 #endif /* __TILCDC_DRV_H__ */
