@@ -27,6 +27,12 @@
 
 #define DEFAULT_FBDEFIO_DELAY_MS 50
 
+/*
+ * number of buffers to allocate from CMA pool, often increased for
+ * double/triple buffering
+ */
+#define DRM_NUM_FBDEV_BUFFERS 3
+
 struct drm_fbdev_cma {
 	struct drm_fb_helper	fb_helper;
 	const struct drm_framebuffer_funcs *fb_funcs;
@@ -327,7 +333,7 @@ drm_fbdev_cma_create(struct drm_fb_helper *helper,
 			sizes->surface_bpp);
 
 	bytes_per_pixel = DIV_ROUND_UP(sizes->surface_bpp, 8);
-	size = sizes->surface_width * sizes->surface_height * bytes_per_pixel;
+	size = sizes->surface_width * sizes->surface_height * bytes_per_pixel * DRM_NUM_FBDEV_BUFFERS;
 	obj = drm_gem_cma_create(dev, size);
 	if (IS_ERR(obj))
 		return -ENOMEM;
@@ -353,7 +359,7 @@ drm_fbdev_cma_create(struct drm_fb_helper *helper,
 	fbi->fbops = &drm_fbdev_cma_ops;
 
 	drm_fb_helper_fill_fix(fbi, fb->pitches[0], fb->format->depth);
-	drm_fb_helper_fill_var(fbi, helper, sizes->fb_width, sizes->fb_height);
+	drm_fb_helper_fill_var(fbi, helper, sizes->fb_width, sizes->surface_height);
 
 	offset = fbi->var.xoffset * bytes_per_pixel;
 	offset += fbi->var.yoffset * fb->pitches[0];
