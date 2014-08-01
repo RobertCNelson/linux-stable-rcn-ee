@@ -165,3 +165,26 @@ void ti_dt_clk_init_provider(struct device_node *parent, int index)
 		kfree(retry);
 	}
 }
+
+static struct of_device_id ti_ext_clk_match_table[] = {
+	{ .compatible = "ti,external-clocks" },
+	{ }
+};
+
+/**
+ * ti_dt_clk_ext_init - initialize external clocks from DT
+ *
+ * Some clocks are provided from external chips outside the main SoC.
+ * The details for these are given under a special DT node, which will
+ * be parsed by this function.
+ */
+int ti_dt_clk_ext_init(void)
+{
+	struct device_node *np;
+
+	for_each_matching_node(np, ti_ext_clk_match_table) {
+		ti_dt_clk_init_provider(np, -1);
+	}
+
+	return 0;
+}

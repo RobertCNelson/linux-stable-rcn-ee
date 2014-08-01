@@ -1,0 +1,32 @@
+TI external clock provider properties
+
+External clock provider is used to group SoC external board specific
+clock nodes. A separate provider node is required as the TI clock
+driver registers clocks hierarchically.
+
+Required properties:
+- compatible:		Shall be: "ti,external-clocks"
+- clocks:		Contains the external clocks for the board
+- clockdomains:		Contains the external clockdomains for the board
+
+Example:
+
+ext_clocks {
+	compatible = "ti,external-clocks";
+
+	ext_clocks: clocks {
+	};
+
+	ext_clockdomains: clockdomains {
+	};
+};
+
+...
+
+&ext_clocks {
+	gpio_test_clock {
+		compatible = "gpio-clock";
+		#clock-cells = <0>;
+		enable-gpios = <&gpio5 25 GPIO_ACTIVE_HIGH>;
+	};
+};

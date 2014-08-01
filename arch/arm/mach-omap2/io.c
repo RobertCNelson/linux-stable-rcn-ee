@@ -21,6 +21,8 @@
 #include <linux/init.h>
 #include <linux/io.h>
 #include <linux/clk.h>
+#include <linux/clk-provider.h>
+#include <linux/clk/ti.h>
 
 #include <asm/tlb.h>
 #include <asm/mach/map.h>
@@ -734,8 +736,14 @@ int __init omap_clk_init(void)
 	ti_clk_init_features();
 
 	ret = of_prcm_init();
-	if (!ret)
-		ret = omap_clk_soc_init();
+	if (ret)
+		return ret;
+
+	ret = ti_dt_clk_ext_init();
+	if (ret)
+		return ret;
+
+	ret = omap_clk_soc_init();
 
 	return ret;
 }
