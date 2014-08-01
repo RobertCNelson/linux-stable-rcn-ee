@@ -16,6 +16,7 @@
 #include <linux/wl12xx.h>
 
 #include <linux/platform_data/pinctrl-single.h>
+#include <linux/platform_data/iommu-omap.h>
 #include <linux/platform_data/gfx-sgx.h>
 
 #include "am35xx.h"
@@ -25,6 +26,7 @@
 #include "control.h"
 #include "omap-secure.h"
 #include "soc.h"
+#include "omap_device.h"
 
 struct pdata_init {
 	const char *compatible;
@@ -101,6 +103,12 @@ static void __init hsmmc2_internal_input_clk(void)
 	reg |= OMAP2_MMCSDIO2ADPCLKISEL;
 	omap_ctrl_writel(reg, OMAP343X_CONTROL_DEVCONF1);
 }
+
+static struct iommu_platform_data omap3_iommu_pdata = {
+	.reset_name = "mmu",
+	.assert_reset = omap_device_assert_hardreset,
+	.deassert_reset = omap_device_deassert_hardreset,
+};
 
 static int omap3_sbc_t3730_twl_callback(struct device *dev,
 					   unsigned gpio,
@@ -267,6 +275,8 @@ struct of_dev_auxdata omap_auxdata_lookup[] __initdata = {
 	OF_DEV_AUXDATA("ti,omap3-padconf", 0x48002030, "48002030.pinmux", &pcs_pdata),
 	OF_DEV_AUXDATA("ti,omap3-padconf", 0x480025a0, "480025a0.pinmux", &pcs_pdata),
 	OF_DEV_AUXDATA("ti,omap3-padconf", 0x48002a00, "48002a00.pinmux", &pcs_pdata),
+	OF_DEV_AUXDATA("ti,omap2-iommu", 0x5d000000, "5d000000.mmu",
+		       &omap3_iommu_pdata),
 	/* Only on am3517 */
 	OF_DEV_AUXDATA("ti,davinci_mdio", 0x5c030000, "davinci_mdio.0", NULL),
 	OF_DEV_AUXDATA("ti,am3517-emac", 0x5c000000, "davinci_emac.0",
