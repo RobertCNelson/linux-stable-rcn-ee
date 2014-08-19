@@ -28,6 +28,10 @@
 
 #include "am335x-boneblack-emmc.dtsi"
 
+/* Max Core Speed */
+#include "am335x-boneblack-1ghz.dtsi"
+/* #include "am335x-boneblack-800mhz.dtsi" */
+
 /* spi0: P9.17, P9.18, P9.21, P9.22 */
 /* #include "am335x-bone-spi0-spidev.dtsi" */
 
