@@ -41,6 +41,10 @@
 /* HDMI: without audio */
 #include "am335x-boneblack-nxp-hdmi-no-audio.dtsi"
 
+/* Max Core Speed */
+#include "am335x-boneblack-1ghz.dtsi"
+/* #include "am335x-boneblack-800mhz.dtsi" */
+
 /* spi0: */
 /* P9.17 spi0_cs0 */
 /* P9.18 spi0_d1 */
