@@ -59,7 +59,9 @@
 /* #include "am335x-bone-ttyO5.dtsi" */
 
 /* Display */
-#include "am335x-boneblack-nxp-hdmi-no-audio.dtsi"
+/* #include "am335x-boneblack-nxp-hdmi-no-audio.dtsi" */
+/* Pins: audio: P9.25, P9.28, P9.29, P9.30, P9.31 */
+#include "am335x-boneblack-nxp-hdmi-audio.dtsi"
 
 /* Capes */
 /* http://elinux.org/4D_4.3_LCD_CAPE */
