@@ -1068,6 +1068,23 @@
 			};
 		};
 
+		gpu2d: gpu@00134000 {
+			compatible = "fsl,imx6qdl-gpu2d", "vivante,gpu2d";
+			reg = <0x00134000 0x4000>;
+			interrupts = <0 10 IRQ_TYPE_LEVEL_HIGH>,	/* R2D GPU2D general IRQ */
+				     <0 11 IRQ_TYPE_LEVEL_HIGH>;	/* V2D GPU2D general IRQ */
+			interrupt-names = "gpu2d", "gpuvd";
+			clocks = <&clks IMX6QDL_CLK_GPU2D_CORE>;
+		};
+
+		gpu3d: gpu@00130000 {
+			compatible = "fsl,imx6qdl-gpu3d", "vivante,gpu3d", "galcore";
+			reg = <0x00130000 0x4000>;
+			interrupts = <0 9 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-names = "galcore-gpu3d";
+			clocks = <&clks IMX6QDL_CLK_GPU3D_CORE>;
+		};
+
 		ipu1: ipu@02400000 {
 			#address-cells = <1>;
 			#size-cells = <0>;
