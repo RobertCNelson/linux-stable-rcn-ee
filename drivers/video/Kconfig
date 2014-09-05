@@ -18,6 +18,7 @@ config SH_LCD_MIPI_DSI
 source "drivers/char/agp/Kconfig"
 
 source "drivers/gpu/vga/Kconfig"
+source "drivers/gpu/vivante/Kconfig"
 
 source "drivers/gpu/host1x/Kconfig"
 source "drivers/gpu/ipu-v3/Kconfig"
