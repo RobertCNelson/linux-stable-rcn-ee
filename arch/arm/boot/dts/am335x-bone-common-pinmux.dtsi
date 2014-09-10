@@ -16,6 +16,14 @@
 		>;
 	};
 
+	/* bbb-exp-c */
+	user_leds_s1: user_leds_s1 {
+		pinctrl-single,pins = <
+			0x98 0x7	/* gpmc_wen.gpio2_4, OUTPUT | MODE7 */
+			0x9c 0x7	/* gpmc_ben0_cle.gpio2_5, OUTPUT | MODE7 */
+		>;
+	};
+
 	bbcape_backlight_pins: bbcape_backlight_pins {
 		pinctrl-single,pins = <
 			0x48  (PIN_OUTPUT | MUX_MODE7)	/* gpmc_a[2].GPIO1[18] (backlight control) */
@@ -51,6 +59,40 @@
 			0xe4 (PIN_OUTPUT | MUX_MODE0)	/* lcd_hsync.lcd_hsync */
 			0xe8 (PIN_OUTPUT | MUX_MODE0)	/* lcd_pclk.lcd_pclk */
 			0xec (PIN_OUTPUT | MUX_MODE0)	/* lcd_ac_bias_en.lcd_ac_bias_en (lcd_en) */
+		>;
+	};
+
+	/* bbb-exp-c */
+	bbcape_lcd_24bit_pins: bbcape_lcd_24bit_pins {
+		pinctrl-single,pins = <
+			0xa0 0x00       /* lcd_data0.lcd_data0, OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT */
+			0xa4 0x00       /* lcd_data1.lcd_data1, OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT */
+			0xa8 0x00       /* lcd_data2.lcd_data2, OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT */
+			0xac 0x00       /* lcd_data3.lcd_data3, OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT */
+			0xb0 0x00       /* lcd_data4.lcd_data4, OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT */
+			0xb4 0x00       /* lcd_data5.lcd_data5, OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT */
+			0xb8 0x00       /* lcd_data6.lcd_data6, OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT */
+			0xbc 0x00       /* lcd_data7.lcd_data7, OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT */
+			0xc0 0x00       /* lcd_data8.lcd_data8, OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT */
+			0xc4 0x00       /* lcd_data9.lcd_data9, OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT */
+			0xc8 0x00       /* lcd_data10.lcd_data10, OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT */
+			0xcc 0x00       /* lcd_data11.lcd_data11, OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT */
+			0xd0 0x00       /* lcd_data12.lcd_data12, OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT */
+			0xd4 0x00       /* lcd_data13.lcd_data13, OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT */
+			0xd8 0x00       /* lcd_data14.lcd_data14, OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT */
+			0xdc 0x00       /* lcd_data15.lcd_data15, OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT */
+			0x3c 0x11       /* gpmc_ad15.lcd_data16, OMAP_MUX_MODE1 | AM33XX_PIN_OUTPUT */
+			0x38 0x11       /* gpmc_ad14.lcd_data17, OMAP_MUX_MODE1 | AM33XX_PIN_OUTPUT */
+			0x34 0x11       /* gpmc_ad13.lcd_data18, OMAP_MUX_MODE1 | AM33XX_PIN_OUTPUT */
+			0x30 0x11       /* gpmc_ad12.lcd_data19, OMAP_MUX_MODE1 | AM33XX_PIN_OUTPUT */
+			0x2c 0x11       /* gpmc_ad11.lcd_data20, OMAP_MUX_MODE1 | AM33XX_PIN_OUTPUT */
+			0x28 0x11       /* gpmc_ad10.lcd_data21, OMAP_MUX_MODE1 | AM33XX_PIN_OUTPUT */
+			0x24 0x11       /* gpmc_ad9.lcd_data22, OMAP_MUX_MODE1 | AM33XX_PIN_OUTPUT */
+			0x20 0x11       /* gpmc_ad8.lcd_data23, OMAP_MUX_MODE1 | AM33XX_PIN_OUTPUT */
+			0xe0 0x00       /* lcd_vsync.lcd_vsync, OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT */
+			0xe4 0x00       /* lcd_hsync.lcd_hsync, OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT */
+			0xe8 0x00       /* lcd_pclk.lcd_pclk, OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT */
+			0xec 0x00       /* lcd_ac_bias_en.lcd_ac_bias_en, OMAP_MUX_MODE0 | AM33XX_PIN_OUTPUT */
 		>;
 	};
 
@@ -132,6 +174,13 @@
 			0x14 (PIN_INPUT_PULLUP | MUX_MODE1) /* gpmc_ad5.mmc1_dat5 */
 			0x18 (PIN_INPUT_PULLUP | MUX_MODE1) /* gpmc_ad6.mmc1_dat6 */
 			0x1c (PIN_INPUT_PULLUP | MUX_MODE1) /* gpmc_ad7.mmc1_dat7 */
+		>;
+	};
+
+	/* bbb-exp-c */
+	gpio1_17_pins: pinmux_gpio1_17_pins {
+		pinctrl-single,pins = <
+			0x044 0x27      /* CAP_TSC gpmc_a1.gpio1_17, INPUT | MODE7 */
 		>;
 	};
 
@@ -217,6 +266,17 @@
 		>;
 	};
 
+	/* bbb-exp-c */
+	keymap3_pins: pinmux_keymap3_pins {
+		pinctrl-single,pins = <
+			0x040 0x2f      /* KEY_UP gpmc_a0.gpio1_16, INPUT | PULLDIS | MODE7 */
+			0x04c 0x2f      /* KEY_DOWN gpmc_a3.gpio1_19, INPUT | PULLDIS | MODE7 */
+			0x078 0x2f      /* KEY_RIGHT gpmc_ben1.gpio1_28, INPUT | PULLDIS | MODE7 */
+			0x164 0x2f      /* KEY_LEFT ecap0_in_pwm0_out.gpio0_7, INPUT | PULLDIS | MODE7 */
+			0x1a4 0x2f      /* KEY_ENTER mcasp0_fxr.gpio3_19, INPUT | PULLDIS | MODE7 */
+		>;
+	};
+
 	mcasp0_pins_audio: mcasp0_pins_audio {
 		pinctrl-single,pins = <
 			0x1ac 0x00	/* mcasp0_ahclkx, OUTPUT | MODE0, Codec MCLK */
@@ -224,6 +284,16 @@
 			0x194 0x20	/* mcasp0_fsx, INPUT | MODE0, Codec WCLK */
 			0x198 0x20	/* mcasp0_axr0, INPUT | MODE0, Codec DOUT */
 			0x19c 0x22	/* mcasp0_axr2, INPUT | MODE2, Codec DIN */
+		>;
+	};
+
+	/* bbb-exp-c */
+	mcasp0_pins_audio2: mcasp0_pins_audio2 {
+		pinctrl-single,pins = <
+			0x190 0x20      /* mcasp0_aclkx.mcasp0_aclkx, INPUT | MODE0 */
+			0x194 0x20      /* mcasp0_fsx.mcasp0_fsx, INPUT | MODE0 */
+			0x198 0x20      /* mcasp0_axr0.mcasp0_axr0, INPUT | MODE0 */
+			0x19c 0x22      /* mcasp0_ahclkr.mcasp0_axr2, INPUT | MODE2 */
 		>;
 	};
 
