@@ -17,11 +17,6 @@
 #include <linux/err.h>
 #include <linux/device.h>
 
-struct clk_gpio {
-	struct clk_hw	hw;
-	struct gpio_desc *gpiod;
-};
-
 /**
  * DOC: basic gpio controlled clock which can be enabled and disabled
  *      with gpio output
