@@ -42,6 +42,10 @@
 	pinctrl-0 = <&clkout2_pin>;
 };
 
+&rtc {
+	ti,system-power-controller;
+};
+
 #include "am335x-boneblack-emmc.dtsi"
 /* HDMI: without audio */
 #include "am335x-boneblack-nxp-hdmi-no-audio.dtsi"
