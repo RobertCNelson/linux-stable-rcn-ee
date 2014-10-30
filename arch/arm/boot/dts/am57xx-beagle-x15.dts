@@ -47,6 +47,15 @@
 		gpio = <&gpio7 11 GPIO_ACTIVE_HIGH>;
 	};
 
+	extcon: extcon {
+		compatible = "linux,extcon-gpio";
+		pinctrl-names = "default";
+		pinctrl-0 = <&extcon_pins_default>;
+
+		gpios = <&gpio7 24 GPIO_ACTIVE_HIGH>;
+		cable-name = "USB-HOST";
+	};
+
 	leds {
 		compatible = "gpio-leds";
 		pinctrl-names = "default";
@@ -249,6 +258,13 @@
 			0x284 (PIN_INPUT_SLEW | MUX_MODE0) /* usb2_drvvbus */
 		>;
 	};
+
+	extcon_pins_default:  extcon_pins_default {
+		pinctrl-single,pins = <
+			0x3e8 (PIN_INPUT | MUX_MODE14) /* uart1_ctsn.gpio7_24 */
+		>;
+	};
+
 };
 
 &i2c1 {
@@ -509,6 +525,10 @@
 	dr_mode = "host";
 	pinctrl-names = "default";
 	pinctrl-0 = <&usb1_pins>;
+};
+
+&omap_dwc3_2 {
+	extcon = <&extcon>;
 };
 
 &usb2_phy2 {
