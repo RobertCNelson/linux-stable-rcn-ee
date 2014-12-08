@@ -270,11 +270,13 @@ int __init early_irq_init(void)
 	return arch_early_irq_init();
 }
 
+#ifndef CONFIG_IPIPE
 struct irq_desc *irq_to_desc(unsigned int irq)
 {
 	return (irq < NR_IRQS) ? irq_desc + irq : NULL;
 }
 EXPORT_SYMBOL(irq_to_desc);
+#endif /* CONFIG_IPIPE */
 
 static void free_desc(unsigned int irq)
 {

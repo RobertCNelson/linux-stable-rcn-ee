@@ -315,6 +315,8 @@ static struct task_struct *dup_task_struct(struct task_struct *orig)
 	tsk->stack = ti;
 
 	setup_thread_stack(tsk, orig);
+	__ipipe_init_threadflags(ti);
+	__ipipe_init_threadinfo(&ti->ipipe_data);
 	clear_user_return_notifier(tsk);
 	clear_tsk_need_resched(tsk);
 	stackend = end_of_stack(tsk);
@@ -612,6 +614,7 @@ void mmput(struct mm_struct *mm)
 		exit_aio(mm);
 		ksm_exit(mm);
 		khugepaged_exit(mm); /* must run before exit_mmap */
+ 		__ipipe_report_cleanup(mm);
 		exit_mmap(mm);
 		set_mm_exe_file(mm, NULL);
 		if (!list_empty(&mm->mmlist)) {
@@ -1496,6 +1499,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	cgroup_post_fork(p);
 	if (clone_flags & CLONE_THREAD)
 		threadgroup_change_end(current);
+	__ipipe_init_taskinfo(p);
 	perf_event_fork(p);
 
 	trace_task_newtask(p, clone_flags);

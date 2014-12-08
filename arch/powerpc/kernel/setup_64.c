@@ -529,6 +529,7 @@ static u64 safe_stack_limit(void)
 #endif
 }
 
+#ifdef CONFIG_IRQSTACKS
 static void __init irqstack_early_init(void)
 {
 	u64 limit = safe_stack_limit();
@@ -547,6 +548,9 @@ static void __init irqstack_early_init(void)
 					    THREAD_SIZE, limit));
 	}
 }
+#else
+#define irqstack_early_init()
+#endif
 
 #ifdef CONFIG_PPC_BOOK3E
 static void __init exc_lvl_early_init(void)

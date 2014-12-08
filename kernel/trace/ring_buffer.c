@@ -2651,7 +2651,8 @@ static DEFINE_PER_CPU(unsigned int, current_context);
 
 static __always_inline int trace_recursive_lock(void)
 {
-	unsigned int val = this_cpu_read(current_context);
+	unsigned long flags;
+	unsigned int val;
 	int bit;
 
 	if (in_interrupt()) {
@@ -2664,22 +2665,35 @@ static __always_inline int trace_recursive_lock(void)
 	} else
 		bit = 3;
 
-	if (unlikely(val & (1 << bit)))
+	flags = hard_local_irq_save();
+
+	val = __this_cpu_read(current_context);
+	if (unlikely(val & (1 << bit))) {
+		hard_local_irq_restore(flags);
 		return 1;
+	}
 
 	val |= (1 << bit);
-	this_cpu_write(current_context, val);
+	__this_cpu_write(current_context, val);
+
+	hard_local_irq_restore(flags);
 
 	return 0;
 }
 
 static __always_inline void trace_recursive_unlock(void)
 {
-	unsigned int val = this_cpu_read(current_context);
+	unsigned long flags;
+	unsigned int val;
 
+	flags = hard_local_irq_save();
+
+	val = __this_cpu_read(current_context);
 	val--;
-	val &= this_cpu_read(current_context);
-	this_cpu_write(current_context, val);
+	val &= __this_cpu_read(current_context);
+	__this_cpu_write(current_context, val);
+
+	hard_local_irq_restore(flags);
 }
 
 #else
