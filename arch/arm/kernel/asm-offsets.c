@@ -63,6 +63,9 @@ int main(void)
   DEFINE(TI_USED_CP,		offsetof(struct thread_info, used_cp));
   DEFINE(TI_TP_VALUE,		offsetof(struct thread_info, tp_value));
   DEFINE(TI_FPSTATE,		offsetof(struct thread_info, fpstate));
+#ifdef CONFIG_IPIPE
+  DEFINE(TI_IPIPE,		offsetof(struct thread_info, ipipe_flags));
+#endif
 #ifdef CONFIG_VFP
   DEFINE(TI_VFPSTATE,		offsetof(struct thread_info, vfpstate));
 #ifdef CONFIG_SMP

@@ -48,8 +48,10 @@ static void at91x40_idle(void)
 	 * Disable the processor clock.  The processor will be automatically
 	 * re-enabled by an interrupt or by a reset.
 	 */
+	hard_local_irq_disable();
 	__raw_writel(AT91_PS_CR_CPU, AT91_IO_P2V(AT91_PS_CR));
 	cpu_do_idle();
+	hard_local_irq_enable();
 }
 
 void __init at91x40_initialize(unsigned long main_clock)

@@ -418,11 +418,15 @@ label##_relon_hv:						\
 #define SOFTEN_VALUE_0xe80	PACA_IRQ_DBELL
 #define SOFTEN_VALUE_0xe82	PACA_IRQ_DBELL
 
+#ifdef CONFIG_IPIPE
+#define __SOFTEN_TEST(h, vec)
+#else /* !CONFIG_IPIPE */
 #define __SOFTEN_TEST(h, vec)						\
 	lbz	r10,PACASOFTIRQEN(r13);					\
 	cmpwi	r10,0;							\
 	li	r10,SOFTEN_VALUE_##vec;					\
 	beq	masked_##h##interrupt
+#endif /* !CONFIG_IPIPE */
 #define _SOFTEN_TEST(h, vec)	__SOFTEN_TEST(h, vec)
 
 #define SOFTEN_TEST_PR(vec)						\
@@ -538,6 +542,16 @@ label##_common:							\
  * in the idle task and therefore need the special idle handling
  * (finish nap and runlatch)
  */
+#ifdef CONFIG_IPIPE
+/*
+ * No NAP mode when pipelining, we don't want that extra latency, and
+ * we may not always be over a regular linux stack context
+ * anyway. Runlatch will be considered later in __ipipe_exit_irq().
+ */
+#define IPIPE_EXCEPTION_COMMON_ASYNC(trap, label, hdlr)		  \
+	EXCEPTION_COMMON(trap, label, hdlr, .__ipipe_ret_from_except_lite, \
+			 DISABLE_INTS)
+#endif
 #define STD_EXCEPTION_COMMON_ASYNC(trap, label, hdlr)		  \
 	EXCEPTION_COMMON(trap, label, hdlr, ret_from_except_lite, \
 			 FINISH_NAP;DISABLE_INTS;RUNLATCH_ON)

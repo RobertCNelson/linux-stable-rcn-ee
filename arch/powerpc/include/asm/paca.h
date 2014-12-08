@@ -43,6 +43,7 @@ extern unsigned int debug_smp_processor_id(void); /* from linux/smp.h */
 
 struct task_struct;
 struct opal_machine_check_event;
+struct ipipe_percpu_domain_data;
 
 /*
  * Defines the layout of the paca.
@@ -166,6 +167,10 @@ struct paca_struct {
 	 */
 	u16 in_mce;
 #endif
+
+#ifdef CONFIG_IPIPE
+	struct ipipe_percpu_domain_data *root_context;	/* Address of root context data */
+#endif /* CONFIG_IPIPE */
 
 	/* Stuff for accurate time accounting */
 	u64 user_time;			/* accumulated usermode TB ticks */
