@@ -441,7 +441,7 @@ void update_vsyscall_tz(void)
 }
 
 void update_vsyscall_old(struct timespec *wall, struct timespec *wtm,
-			struct clocksource *c, u32 mult)
+			 struct clocksource *c, u32 mult, u32 shift)
 {
 	write_seqcount_begin(&fsyscall_gtod_data.seq);
 
