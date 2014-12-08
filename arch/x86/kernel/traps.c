@@ -659,6 +659,7 @@ asmlinkage void __attribute__((weak)) smp_threshold_interrupt(void)
 void math_state_restore(void)
 {
 	struct task_struct *tsk = current;
+	unsigned long flags;
 
 	if (!tsk_used_math(tsk)) {
 		local_irq_enable();
@@ -675,6 +676,7 @@ void math_state_restore(void)
 		local_irq_disable();
 	}
 
+	flags = hard_cond_local_irq_save();
 	__thread_fpu_begin(tsk);
 
 	/*
@@ -682,11 +684,13 @@ void math_state_restore(void)
 	 */
 	if (unlikely(restore_fpu_checking(tsk))) {
 		drop_init_fpu(tsk);
+		hard_cond_local_irq_enable();
 		force_sig(SIGSEGV, tsk);
 		return;
 	}
 
 	tsk->thread.fpu_counter++;
+	hard_cond_local_irq_restore(flags);
 }
 EXPORT_SYMBOL_GPL(math_state_restore);
 
@@ -742,9 +746,14 @@ dotraplinkage void do_iret_error(struct pt_regs *regs, long error_code)
 /* Set of traps needed for early debugging. */
 void __init early_trap_init(void)
 {
+#ifdef CONFIG_IPIPE
+	__set_intr_gate(X86_TRAP_DB, debug);
+	set_system_intr_gate(X86_TRAP_BP, &int3);
+#else
 	set_intr_gate_ist(X86_TRAP_DB, &debug, DEBUG_STACK);
 	/* int3 can be called from all */
 	set_system_intr_gate_ist(X86_TRAP_BP, &int3, DEBUG_STACK);
+#endif
 #ifdef CONFIG_X86_32
 	set_intr_gate(X86_TRAP_PF, page_fault);
 #endif

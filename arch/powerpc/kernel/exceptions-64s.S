@@ -768,8 +768,13 @@ kvmppc_skip_Hinterrupt:
 
 	STD_EXCEPTION_COMMON(0x100, system_reset, .system_reset_exception)
 
+#ifdef CONFIG_IPIPE
+	IPIPE_EXCEPTION_COMMON_ASYNC(0x500, hardware_interrupt, .__ipipe_grab_irq)
+	IPIPE_EXCEPTION_COMMON_ASYNC(0x900, decrementer, .__ipipe_grab_timer)
+#else /* !CONFIG_IPIPE */
 	STD_EXCEPTION_COMMON_ASYNC(0x500, hardware_interrupt, do_IRQ)
 	STD_EXCEPTION_COMMON_ASYNC(0x900, decrementer, .timer_interrupt)
+#endif /* !CONFIG_IPIPE */
 	STD_EXCEPTION_COMMON(0x980, hdecrementer, .hdec_interrupt)
 #ifdef CONFIG_PPC_DOORBELL
 	STD_EXCEPTION_COMMON_ASYNC(0xa00, doorbell_super, .doorbell_exception)
