@@ -16,6 +16,8 @@
 #include <linux/init.h>
 #include <linux/interrupt.h>
 #include <linux/clockchips.h>
+#include <linux/ipipe_tickdev.h>
+#include <linux/ipipe.h>
 
 #include <asm/div64.h>
 #include <asm/mach/irq.h>
@@ -41,14 +43,22 @@ static u32 notrace pxa_read_sched_clock(void)
 
 #define MIN_OSCR_DELTA 16
 
+static inline void pxa_ost0_ack(void)
+{
+	/* Disarm the compare/match, signal the event. */
+	writel_relaxed(readl_relaxed(OIER) & ~OIER_E0, OIER);
+	writel_relaxed(OSSR_M0, OSSR);
+}
+
 static irqreturn_t
 pxa_ost0_interrupt(int irq, void *dev_id)
 {
 	struct clock_event_device *c = dev_id;
 
-	/* Disarm the compare/match, signal the event. */
-	writel_relaxed(readl_relaxed(OIER) & ~OIER_E0, OIER);
-	writel_relaxed(OSSR_M0, OSSR);
+	if (clockevent_ipipe_stolen(c) == 0)
+		pxa_ost0_ack();
+	
+	__ipipe_tsc_update();
 	c->event_handler(c);
 
 	return IRQ_HANDLED;
@@ -89,12 +99,23 @@ pxa_osmr0_set_mode(enum clock_event_mode mode, struct clock_event_device *dev)
 	}
 }
 
+#ifdef CONFIG_IPIPE
+static struct ipipe_timer pxa_osmr0_itimer = {
+	.irq = IRQ_OST0,
+	.ack = pxa_ost0_ack,
+	.min_delay_ticks = MIN_OSCR_DELTA,
+};
+#endif /* CONFIG_IPIPE */
+
 static struct clock_event_device ckevt_pxa_osmr0 = {
 	.name		= "osmr0",
 	.features	= CLOCK_EVT_FEAT_ONESHOT,
 	.rating		= 200,
 	.set_next_event	= pxa_osmr0_set_next_event,
 	.set_mode	= pxa_osmr0_set_mode,
+#ifdef CONFIG_IPIPE
+	.ipipe_timer    = &pxa_osmr0_itimer,
+#endif /* CONFIG_IPIPE */
 };
 
 static struct irqaction pxa_ost0_irq = {
@@ -103,6 +124,19 @@ static struct irqaction pxa_ost0_irq = {
 	.handler	= pxa_ost0_interrupt,
 	.dev_id		= &ckevt_pxa_osmr0,
 };
+
+#ifdef CONFIG_IPIPE
+static struct __ipipe_tscinfo tsc_info = {
+	.type = IPIPE_TSC_TYPE_FREERUNNING,
+	.counter_vaddr = (unsigned long)io_p2v(0x40A00010UL),
+	.u = {
+		{
+			.counter_paddr = 0x40A00010UL,
+			.mask = 0xffffffff,
+		},
+	},
+};
+#endif /* CONFIG_IPIPE */
 
 static void __init pxa_timer_init(void)
 {
@@ -124,6 +158,12 @@ static void __init pxa_timer_init(void)
 
 	clocksource_mmio_init(OSCR, "oscr0", clock_tick_rate, 200, 32,
 		clocksource_mmio_readl_up);
+
+#ifdef CONFIG_IPIPE
+	tsc_info.freq = clock_tick_rate;
+	__ipipe_tsc_register(&tsc_info);
+#endif /* CONFIG_IPIPE */
+
 	clockevents_register_device(&ckevt_pxa_osmr0);
 }
 

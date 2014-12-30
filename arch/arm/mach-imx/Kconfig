@@ -18,6 +18,7 @@ menu "Freescale i.MX support"
 
 config MXC_IRQ_PRIOR
 	bool "Use IRQ priority"
+	depends on !IPIPE
 	help
 	  Select this if you want to use prioritized IRQ handling.
 	  This feature prevents higher priority ISR to be interrupted

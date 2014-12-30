@@ -200,10 +200,20 @@ void __init imx51_soc_init(void)
 void __init imx51_init_late(void)
 {
 	mx51_neon_fixup();
+#ifdef CONFIG_IPIPE
+	/* Allow user-space access to emulated tsc */
+	imx_set_aips(MX51_IO_ADDRESS(MX51_AIPS1_BASE_ADDR));
+	imx_set_aips(MX51_IO_ADDRESS(MX51_AIPS2_BASE_ADDR));
+#endif
 	imx51_pm_init();
 }
 
 void __init imx53_init_late(void)
 {
+#ifdef CONFIG_IPIPE
+	/* Allow user-space access to emulated tsc */
+	imx_set_aips(MX51_IO_ADDRESS(MX53_AIPS1_BASE_ADDR));
+	imx_set_aips(MX51_IO_ADDRESS(MX53_AIPS2_BASE_ADDR));
+#endif
 	imx53_pm_init();
 }
