@@ -182,7 +182,14 @@ static int twl6030_irq_thread(void *data)
 			if (sts.int_sts & 0x1) {
 				int module_irq = twl6030_irq_base +
 					twl6030_interrupt_mapping[i];
+#ifndef CONFIG_IPIPE
 				generic_handle_irq(module_irq);
+#else
+				{
+					struct irq_desc *d = irq_to_desc(module_irq);
+					d->ipipe_ack(module_irq, d);
+				}
+#endif
 
 			}
 		local_irq_enable();
@@ -443,4 +450,3 @@ int twl6030_exit_irq(void)
 	}
 	return 0;
 }
-

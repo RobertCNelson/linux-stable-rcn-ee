@@ -64,6 +64,11 @@ config ARM
 	  Europe.  There is an ARM Linux project with a web page at
 	  <http://www.arm.linux.org.uk/>.
 
+if IPIPE
+config IPIPE_WANT_ACTIVE_MM
+       def_bool y
+endif
+
 config ARM_HAS_SG_CHAIN
 	bool
 
@@ -524,6 +529,7 @@ config ARCH_IXP4XX
 	select GENERIC_CLOCKEVENTS
 	select MIGHT_HAVE_PCI
 	select NEED_MACH_IO_H
+	select IPIPE_ARM_KUSER_TSC if IPIPE
 	help
 	  Support for Intel's IXP4XX (XScale) family of processors.
 
@@ -919,6 +925,7 @@ config PLAT_SPEAR
 	select COMMON_CLK
 	select GENERIC_CLOCKEVENTS
 	select HAVE_CLK
+	select IPIPE_ARM_KUSER_TSC if IPIPE
 	help
 	  Support for ST's SPEAr platform (SPEAr3xx, SPEAr6xx and SPEAr13xx).
 
@@ -954,6 +961,7 @@ config ARCH_VT8500_SINGLE
 	bool "VIA/WonderMedia 85xx"
 	select ARCH_HAS_CPUFREQ
 	select ARCH_REQUIRE_GPIOLIB
+	select IPIPE_ARM_KUSER_TSC if IPIPE
 	select CLKDEV_LOOKUP
 	select COMMON_CLK
 	select CPU_ARM926T
@@ -1163,6 +1171,14 @@ config ARM_TIMER_SP804
 	bool
 	select CLKSRC_MMIO
 	select HAVE_SCHED_CLOCK
+
+if IPIPE
+config IPIPE_ARM_KUSER_TSC
+       bool
+       select GENERIC_TIME_VSYSCALL
+       select IPIPE_HAVE_HOSTRT if IPIPE
+       default y if ARCH_AT91 || ARM_TIMER_SP804 || ARCH_MXC || ARCH_OMAP || PLAT_PXA || PLAT_S3C24XX || ARCH_SA1100
+endif
 
 source arch/arm/mm/Kconfig
 
@@ -1644,6 +1660,8 @@ config ARCH_NR_GPIO
 	  Maximum number of GPIOs in the system.
 
 	  If unsure, leave the default value.
+
+source kernel/ipipe/Kconfig
 
 source kernel/Kconfig.preempt
 
