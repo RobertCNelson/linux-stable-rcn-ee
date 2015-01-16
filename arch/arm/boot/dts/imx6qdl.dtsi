@@ -78,12 +78,52 @@
 		};
 	};
 
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		gpu_reserved: gpu_reserved {
+			compatible = "shared-dma-pool";
+			size = <0x8000000>;
+			alloc-ranges = <0x0 0x40000000>;
+			reusable;
+		};
+	};
+
 	soc {
 		#address-cells = <1>;
 		#size-cells = <1>;
 		compatible = "simple-bus";
 		interrupt-parent = <&intc>;
 		ranges;
+
+		gpu_subsystem {
+			#address-cells = <1>;
+			#size-cells = <1>;
+			compatible = "vivante,gccore";
+			ranges;
+			memory-region 	= <&gpu_reserved>;
+
+			gpu_2d: gpu-2d@00134000 {
+				clocks = <&clks IMX6QDL_CLK_GPU2D_CORE>,
+					 <&clks IMX6QDL_CLK_GPU2D_AXI>;
+				clock-names = "core", "bus";
+				compatible = "vivante,vivante-gpu-2d";
+				interrupts = <0 10 0x04>;
+				reg = <0x00134000 0x4000>;
+			};
+
+			gpu_3d: gpu-3d@00130000 {
+				clocks = <&clks IMX6QDL_CLK_GPU3D_CORE>,
+					 <&clks IMX6QDL_CLK_GPU3D_SHADER>,
+					 <&clks IMX6QDL_CLK_GPU3D_AXI>;
+				clock-names = "core", "shader", "bus";
+				compatible = "vivante,vivante-gpu-3d";
+				interrupts = <0 9 0x04>;
+				reg = <0x00130000 0x4000>;
+			};
+		};
 
 		dma_apbh: dma-apbh@00110000 {
 			compatible = "fsl,imx6q-dma-apbh", "fsl,imx28-dma-apbh";
