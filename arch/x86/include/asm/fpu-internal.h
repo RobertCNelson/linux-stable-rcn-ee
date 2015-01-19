@@ -353,23 +353,31 @@ static inline void __drop_fpu(struct task_struct *tsk)
 {
 	if (__thread_has_fpu(tsk)) {
 		/* Ignore delayed exceptions from user space */
+#ifdef CONFIG_IPIPE
+		asm volatile("sti\n"
+			     "1: fwait\n"
+			     "2: cli\n"
+			     _ASM_EXTABLE(1b, 2b));
+#else
 		asm volatile("1: fwait\n"
 			     "2:\n"
 			     _ASM_EXTABLE(1b, 2b));
+#endif
 		__thread_fpu_end(tsk);
 	}
 }
 
 static inline void drop_fpu(struct task_struct *tsk)
 {
+	unsigned long flags;
 	/*
 	 * Forget coprocessor state..
 	 */
-	preempt_disable();
+	flags = hard_preempt_disable();
 	tsk->thread.fpu_counter = 0;
 	__drop_fpu(tsk);
 	clear_used_math();
-	preempt_enable();
+	hard_preempt_enable(flags);
 }
 
 static inline void drop_init_fpu(struct task_struct *tsk)
@@ -424,8 +432,12 @@ static inline fpu_switch_t switch_fpu_prepare(struct task_struct *old, struct ta
 	 * If the task has used the math, pre-load the FPU on xsave processors
 	 * or if the past 5 consecutive context-switches used math.
 	 */
+#ifndef CONFIG_IPIPE
 	fpu.preload = tsk_used_math(new) && (use_eager_fpu() ||
 					     new->thread.fpu_counter > 5);
+#else
+	fpu.preload = 0;
+#endif
 	if (__thread_has_fpu(old)) {
 		if (!__save_init_fpu(old))
 			cpu = ~0;
@@ -433,15 +445,18 @@ static inline fpu_switch_t switch_fpu_prepare(struct task_struct *old, struct ta
 		old->thread.fpu.has_fpu = 0;	/* But leave fpu_owner_task! */
 
 		/* Don't change CR0.TS if we just switch! */
+#ifndef CONFIG_IPIPE
 		if (fpu.preload) {
 			new->thread.fpu_counter++;
 			__thread_set_has_fpu(new);
 			prefetch(new->thread.fpu.state);
 		} else if (!use_eager_fpu())
+#endif
 			stts();
 	} else {
 		old->thread.fpu_counter = 0;
 		old->thread.fpu.last_cpu = ~0;
+#ifndef CONFIG_IPIPE
 		if (fpu.preload) {
 			new->thread.fpu_counter++;
 			if (!use_eager_fpu() && fpu_lazy_restore(new, cpu))
@@ -450,6 +465,7 @@ static inline fpu_switch_t switch_fpu_prepare(struct task_struct *old, struct ta
 				prefetch(new->thread.fpu.state);
 			__thread_fpu_begin(new);
 		}
+#endif
 	}
 	return fpu;
 }
@@ -462,10 +478,12 @@ static inline fpu_switch_t switch_fpu_prepare(struct task_struct *old, struct ta
  */
 static inline void switch_fpu_finish(struct task_struct *new, fpu_switch_t fpu)
 {
+#ifndef CONFIG_IPIPE
 	if (fpu.preload) {
 		if (unlikely(restore_fpu_checking(new)))
 			drop_init_fpu(new);
 	}
+#endif
 }
 
 /*

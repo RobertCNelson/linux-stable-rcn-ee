@@ -32,6 +32,7 @@
 #include <linux/getcpu.h>
 #include <linux/cpu.h>
 #include <linux/smp.h>
+#include <linux/ipipe_tickdev.h>
 #include <linux/notifier.h>
 #include <linux/syscalls.h>
 #include <linux/ratelimit.h>
@@ -117,6 +118,9 @@ void update_vsyscall(struct timekeeper *tk)
 							tk->wall_to_monotonic);
 
 	write_seqcount_end(&vdata->seq);
+
+	if (tk->clock == &clocksource_tsc)
+		ipipe_update_hostrt(tk);
 }
 
 static void warn_bad_vsyscall(const char *level, struct pt_regs *regs,
