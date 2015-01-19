@@ -563,6 +563,10 @@ static void __init xstate_enable_boot_cpu(void)
 	if (cpu_has_xsaveopt && eagerfpu != DISABLE)
 		eagerfpu = ENABLE;
 
+#ifdef CONFIG_IPIPE
+	eagerfpu = DISABLE;
+#endif
+
 	if (pcntxt_mask & XSTATE_EAGER) {
 		if (eagerfpu == DISABLE) {
 			pr_err("eagerfpu not present, disabling some xstate features: 0x%llx\n",
