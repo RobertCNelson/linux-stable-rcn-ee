@@ -34,6 +34,7 @@
 #include <linux/dmi.h>
 #include <linux/smp.h>
 #include <linux/mm.h>
+#include <linux/ipipe_tickdev.h>
 
 #include <asm/trace/irq_vectors.h>
 #include <asm/irq_remapping.h>
@@ -498,7 +499,7 @@ static void lapic_timer_setup(enum clock_event_mode mode,
 	if (evt->features & CLOCK_EVT_FEAT_DUMMY)
 		return;
 
-	local_irq_save(flags);
+	flags = hard_local_irq_save();
 
 	switch (mode) {
 	case CLOCK_EVT_MODE_PERIODIC:
@@ -518,7 +519,7 @@ static void lapic_timer_setup(enum clock_event_mode mode,
 		break;
 	}
 
-	local_irq_restore(flags);
+	hard_local_irq_restore(flags);
 }
 
 /*
@@ -531,6 +532,17 @@ static void lapic_timer_broadcast(const struct cpumask *mask)
 #endif
 }
 
+#ifdef CONFIG_IPIPE
+static void lapic_itimer_ack(void)
+{
+	__ack_APIC_irq();
+}
+
+static DEFINE_PER_CPU(struct ipipe_timer, lapic_itimer) = {
+	.irq = ipipe_apic_vector_irq(LOCAL_TIMER_VECTOR),
+	.ack = lapic_itimer_ack,
+};
+#endif /* CONFIG_IPIPE */
 
 /*
  * The local apic timer can be used for any function which is CPU local.
@@ -564,6 +576,16 @@ static void setup_APIC_timer(void)
 
 	memcpy(levt, &lapic_clockevent, sizeof(*levt));
 	levt->cpumask = cpumask_of(smp_processor_id());
+#ifdef CONFIG_IPIPE
+	if (!(lapic_clockevent.features & CLOCK_EVT_FEAT_DUMMY))
+		levt->ipipe_timer = &__get_cpu_var(lapic_itimer);
+	else {
+		static atomic_t once = ATOMIC_INIT(-1);
+		if (atomic_inc_and_test(&once))
+			printk(KERN_INFO
+			       "I-pipe: cannot use LAPIC as a tick device\n");
+	}
+#endif /* CONFIG_IPIPE */
 
 	if (this_cpu_has(X86_FEATURE_TSC_DEADLINE_TIMER)) {
 		levt->features &= ~(CLOCK_EVT_FEAT_PERIODIC |
@@ -1094,7 +1116,7 @@ void lapic_shutdown(void)
 	if (!cpu_has_apic && !apic_from_smp_config())
 		return;
 
-	local_irq_save(flags);
+	flags = hard_local_irq_save();
 
 #ifdef CONFIG_X86_32
 	if (!enabled_via_apicbase)
@@ -1104,7 +1126,7 @@ void lapic_shutdown(void)
 		disable_local_APIC();
 
 
-	local_irq_restore(flags);
+	hard_local_irq_restore(flags);
 }
 
 /*
@@ -1376,7 +1398,7 @@ void setup_local_APIC(void)
 			value = apic_read(APIC_ISR + i*0x10);
 			for (j = 31; j >= 0; j--) {
 				if (value & (1<<j)) {
-					ack_APIC_irq();
+					__ack_APIC_irq();
 					acked++;
 				}
 			}
@@ -1945,7 +1967,7 @@ static inline void __smp_spurious_interrupt(void)
 	 */
 	v = apic_read(APIC_ISR + ((SPURIOUS_APIC_VECTOR & ~0x1f) >> 1));
 	if (v & (1 << (SPURIOUS_APIC_VECTOR & 0x1f)))
-		ack_APIC_irq();
+		__ack_APIC_irq();
 
 	inc_irq_stat(irq_spurious_count);
 
@@ -2352,7 +2374,7 @@ static void lapic_resume(void)
 	if (!apic_pm_state.active)
 		return;
 
-	local_irq_save(flags);
+	flags = hard_local_irq_save();
 
 	/*
 	 * IO-APIC and PIC have their own resume routines.
@@ -2406,7 +2428,7 @@ static void lapic_resume(void)
 
 	irq_remapping_reenable(x2apic_mode);
 
-	local_irq_restore(flags);
+	hard_local_irq_restore(flags);
 }
 
 /*
