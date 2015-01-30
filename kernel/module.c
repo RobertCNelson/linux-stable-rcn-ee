@@ -879,7 +879,7 @@ static inline void print_unload_info(struct seq_file *m, struct module *mod)
 	seq_printf(m, " %lu ", module_refcount(mod));
 
 	/* Always include a trailing , so userspace can differentiate
-           between this and the old multi-field proc format. */
+	   between this and the old multi-field proc format. */
 	list_for_each_entry(use, &mod->source_list, source_list) {
 		printed_something = 1;
 		seq_printf(m, "%s,", use->source->name);
@@ -948,7 +948,7 @@ bool try_module_get(struct module *module)
 	bool ret = true;
 
 	if (module) {
-		preempt_disable();
+		unsigned long flags = hard_preempt_disable();
 
 		if (likely(module_is_live(module))) {
 			__this_cpu_inc(module->refptr->incs);
@@ -956,7 +956,7 @@ bool try_module_get(struct module *module)
 		} else
 			ret = false;
 
-		preempt_enable();
+		hard_preempt_enable(flags);
 	}
 	return ret;
 }
@@ -965,12 +965,12 @@ EXPORT_SYMBOL(try_module_get);
 void module_put(struct module *module)
 {
 	if (module) {
-		preempt_disable();
+		unsigned long flags = hard_preempt_disable();
 		smp_wmb(); /* see comment in module_refcount */
 		__this_cpu_inc(module->refptr->decs);
 
 		trace_module_put(module, _RET_IP_);
-		preempt_enable();
+		hard_preempt_enable(flags);
 	}
 }
 EXPORT_SYMBOL(module_put);
@@ -1130,7 +1130,7 @@ static unsigned long maybe_relocated(unsigned long crc,
 static int check_version(Elf_Shdr *sechdrs,
 			 unsigned int versindex,
 			 const char *symname,
-			 struct module *mod, 
+			 struct module *mod,
 			 const unsigned long *crc,
 			 const struct module *crc_owner)
 {
@@ -1199,7 +1199,7 @@ static inline int same_magic(const char *amagic, const char *bmagic,
 static inline int check_version(Elf_Shdr *sechdrs,
 				unsigned int versindex,
 				const char *symname,
-				struct module *mod, 
+				struct module *mod,
 				const unsigned long *crc,
 				const struct module *crc_owner)
 {
@@ -2254,7 +2254,7 @@ static char elf_type(const Elf_Sym *sym, const struct load_info *info)
 }
 
 static bool is_core_symbol(const Elf_Sym *src, const Elf_Shdr *sechdrs,
-                           unsigned int shnum)
+			   unsigned int shnum)
 {
 	const Elf_Shdr *sec;
 
@@ -3037,7 +3037,7 @@ static int do_init_module(struct module *mod)
 		ret = do_one_initcall(mod->init);
 	if (ret < 0) {
 		/* Init routine failed: abort.  Try to protect us from
-                   buggy refcounters. */
+		   buggy refcounters. */
 		mod->state = MODULE_STATE_GOING;
 		synchronize_sched();
 		module_put(mod);
@@ -3172,7 +3172,7 @@ out:
 
 static int unknown_module_param_cb(char *param, char *val, const char *modname)
 {
-	/* Check for magic 'dyndbg' arg */ 
+	/* Check for magic 'dyndbg' arg */
 	int ret = ddebug_dyndbg_module_param_cb(param, val, modname);
 	if (ret != 0)
 		pr_warn("%s: unknown parameter '%s' ignored\n", modname, param);

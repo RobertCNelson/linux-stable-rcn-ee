@@ -43,13 +43,17 @@ struct flush_tlb_info {
  */
 void leave_mm(int cpu)
 {
+	unsigned long flags;
+
 	struct mm_struct *active_mm = this_cpu_read(cpu_tlbstate.active_mm);
 	if (this_cpu_read(cpu_tlbstate.state) == TLBSTATE_OK)
 		BUG();
+	flags = hard_cond_local_irq_save();
 	if (cpumask_test_cpu(cpu, mm_cpumask(active_mm))) {
 		cpumask_clear_cpu(cpu, mm_cpumask(active_mm));
 		load_cr3(swapper_pg_dir);
 	}
+	hard_cond_local_irq_restore(flags);
 }
 EXPORT_SYMBOL_GPL(leave_mm);
 
