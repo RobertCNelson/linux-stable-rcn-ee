@@ -83,6 +83,43 @@
 	CFI_UNDEFINED	r15
 	.endm
 
+	.macro IPIPE_IA32_SYSCALL nr fast_exit post_exit
+#ifdef CONFIG_IPIPE
+	testl $_TIP_NOTIFY,TI_ipipe+THREAD_INFO(%rsp,RIP-ARGOFFSET)
+	jnz 1f
+	cmpq $(IA32_NR_syscalls),\nr
+	jb 2f
+1:
+	pushq_cfi \nr
+	movl %edi,%r8d
+	movl %esi,%r10d
+	movl %edx,%edx	/* zero extension */
+	movl %ecx,%esi
+	movl %ebx,%edi
+	SAVE_ARGS 0,1,1
+	leaq -ARGOFFSET(%rsp),%rdi
+	call __ipipe_notify_syscall
+	movq %rax,%rdi
+	movq RAX-ARGOFFSET(%rsp),%rax
+	addq $ARG_SKIP+8, %rsp
+	movq %rax,RAX-ARGOFFSET(%rsp)
+	testl $_TIP_HEAD,TI_ipipe+THREAD_INFO(%rsp,RIP-ARGOFFSET)
+	jnz \fast_exit
+	test %rdi,%rdi
+	jnz \post_exit
+	movq ORIG_RAX-ARGOFFSET(%rsp),%rax
+	movq RCX-ARGOFFSET(%rsp),%rcx
+	movq RDI-ARGOFFSET(%rsp),%rdi
+	movq RSI-ARGOFFSET(%rsp),%rsi
+	movq RDX-ARGOFFSET(%rsp),%rdx
+	movq R10-ARGOFFSET(%rsp),%r10
+	movq R9-ARGOFFSET(%rsp),%r9
+	movq R8-ARGOFFSET(%rsp),%r8
+2:
+	/* Keep going with regular syscall */
+#endif
+	.endm
+
 #ifdef CONFIG_PARAVIRT
 ENTRY(native_usergs_sysret32)
 	swapgs
@@ -162,6 +199,7 @@ ENTRY(ia32_sysenter_target)
 sysenter_flags_fixed:
 
 	orl     $TS_COMPAT,TI_status+THREAD_INFO(%rsp,RIP-ARGOFFSET)
+	IPIPE_IA32_SYSCALL %rax sysexit_from_sys_call sysexit_work
 	testl   $_TIF_WORK_SYSCALL_ENTRY,TI_flags+THREAD_INFO(%rsp,RIP-ARGOFFSET)
 	CFI_REMEMBER_STATE
 	jnz  sysenter_tracesys
@@ -172,6 +210,7 @@ sysenter_do_call:
 sysenter_dispatch:
 	call	*ia32_sys_call_table(,%rax,8)
 	movq	%rax,RAX-ARGOFFSET(%rsp)
+sysexit_work:
 	DISABLE_INTERRUPTS(CLBR_NONE)
 	TRACE_IRQS_OFF
 	testl	$_TIF_ALLWORK_MASK,TI_flags+THREAD_INFO(%rsp,RIP-ARGOFFSET)
@@ -325,6 +364,7 @@ ENTRY(ia32_cstar_target)
 	_ASM_EXTABLE(1b,ia32_badarg)
 	ASM_CLAC
 	orl     $TS_COMPAT,TI_status+THREAD_INFO(%rsp,RIP-ARGOFFSET)
+	IPIPE_IA32_SYSCALL %rax sysretl_from_sys_call cstar_work
 	testl   $_TIF_WORK_SYSCALL_ENTRY,TI_flags+THREAD_INFO(%rsp,RIP-ARGOFFSET)
 	CFI_REMEMBER_STATE
 	jnz   cstar_tracesys
@@ -335,6 +375,7 @@ cstar_do_call:
 cstar_dispatch:
 	call *ia32_sys_call_table(,%rax,8)
 	movq %rax,RAX-ARGOFFSET(%rsp)
+cstar_work:
 	DISABLE_INTERRUPTS(CLBR_NONE)
 	TRACE_IRQS_OFF
 	testl $_TIF_ALLWORK_MASK,TI_flags+THREAD_INFO(%rsp,RIP-ARGOFFSET)
@@ -435,6 +476,7 @@ ENTRY(ia32_syscall)
 	   this could be a problem. */
 	SAVE_ARGS 0,1,0
 	orl $TS_COMPAT,TI_status+THREAD_INFO(%rsp,RIP-ARGOFFSET)
+	IPIPE_IA32_SYSCALL %rax fast_exit_syscall ia32_ret_from_sys_call
 	testl $_TIF_WORK_SYSCALL_ENTRY,TI_flags+THREAD_INFO(%rsp,RIP-ARGOFFSET)
 	jnz ia32_tracesys
 	cmpq $(IA32_NR_syscalls-1),%rax
@@ -446,7 +488,10 @@ ia32_sysret:
 	movq %rax,RAX-ARGOFFSET(%rsp)
 ia32_ret_from_sys_call:
 	CLEAR_RREGS -ARGOFFSET
-	jmp int_ret_from_sys_call 
+	jmp int_ret_from_sys_call
+fast_exit_syscall:
+	CLEAR_RREGS -ARGOFFSET
+	jmp int_fast_exit
 
 ia32_tracesys:			 
 	SAVE_REST
