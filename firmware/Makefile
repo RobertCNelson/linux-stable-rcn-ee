@@ -220,7 +220,9 @@ fw-shipped-$(CONFIG_CAPE_BEAGLEBONE) += \
 	BB-BONE-CRYPTO-00A0.dtbo \
 	bone_eqep0-00A0.dtbo \
 	bone_eqep1-00A0.dtbo \
-	bone_eqep2-00A0.dtbo
+	bone_eqep2-00A0.dtbo \
+	DD-GPS-00A0.dtbo \
+	DD-GPS-TCLKIN-00A0.dtbo
 
 # Probotix LCD Display
 fw-shipped-$(CONFIG_CAPE_BEAGLEBONE) += \
