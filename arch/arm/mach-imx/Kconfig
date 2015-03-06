@@ -807,6 +807,7 @@ config SOC_IMX6Q
 	select PL310_ERRATA_727915 if CACHE_PL310
 	select PL310_ERRATA_769419 if CACHE_PL310
 	select PM_OPP if PM
+	select ARM_GLOBAL_TIMER if SMP && IPIPE
 
 	help
 	  This enables support for Freescale i.MX6 Quad processor.
