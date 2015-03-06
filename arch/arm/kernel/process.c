@@ -127,18 +127,50 @@ EXPORT_SYMBOL(pm_power_off);
 void (*arm_pm_restart)(enum reboot_mode reboot_mode, const char *cmd) = null_restart;
 EXPORT_SYMBOL_GPL(arm_pm_restart);
 
-/*
- * This is our default idle handler.
- */
-
 void (*arm_pm_idle)(void);
 
-static void default_idle(void)
+#ifdef CONFIG_IPIPE
+static void __ipipe_halt_root(void)
+{
+	struct ipipe_percpu_domain_data *p;
+
+	/*
+	 * Emulate idle entry sequence over the root domain, which is
+	 * stalled on entry.
+	 */
+	hard_local_irq_disable();
+
+	p = ipipe_this_cpu_root_context();
+	__clear_bit(IPIPE_STALL_FLAG, &p->status);
+
+	if (unlikely(__ipipe_ipending_p(p)))
+		__ipipe_sync_stage();
+	else {
+		if (arm_pm_idle)
+			arm_pm_idle();
+		else
+			cpu_do_idle();
+	}
+}
+#else /* !CONFIG_IPIPE */
+static void __ipipe_halt_root(void)
 {
 	if (arm_pm_idle)
 		arm_pm_idle();
 	else
 		cpu_do_idle();
+}
+#endif /* !CONFIG_IPIPE */
+
+/*
+ * This is our default idle handler.
+ */
+static void default_idle(void)
+{
+	if (!need_resched())
+		__ipipe_halt_root();
+
+	/* This will re-enable hard_irqs also with IPIPE */
 	local_irq_enable();
 }
 
