@@ -659,8 +659,8 @@ sysret_check:
 	/* Handle reschedules */
 	/* edx:	work, edi: workmask */
 sysret_careful:
-	bt $TIF_NEED_RESCHED,%edx
-	jnc sysret_signal
+	testl $_TIF_NEED_RESCHED_MASK,%edx
+	jz sysret_signal
 	TRACE_IRQS_ON
 	ENABLE_INTERRUPTS(CLBR_NONE)
 	pushq_cfi %rdi
@@ -772,8 +772,8 @@ GLOBAL(int_with_check)
 	/* First do a reschedule test. */
 	/* edx:	work, edi: workmask */
 int_careful:
-	bt $TIF_NEED_RESCHED,%edx
-	jnc  int_very_careful
+	testl $_TIF_NEED_RESCHED_MASK,%edx
+	jz  int_very_careful
 	TRACE_IRQS_ON
 	ENABLE_INTERRUPTS(CLBR_NONE)
 	pushq_cfi %rdi
@@ -1092,8 +1092,8 @@ native_irq_return_ldt:
 	/* edi: workmask, edx: work */
 retint_careful:
 	CFI_RESTORE_STATE
-	bt    $TIF_NEED_RESCHED,%edx
-	jnc   retint_signal
+	testl $_TIF_NEED_RESCHED_MASK,%edx
+	jz   retint_signal
 	TRACE_IRQS_ON
 	ENABLE_INTERRUPTS(CLBR_NONE)
 	pushq_cfi %rdi
@@ -1125,7 +1125,22 @@ retint_signal:
 	/* rcx:	 threadinfo. interrupts off. */
 ENTRY(retint_kernel)
 	cmpl $0,PER_CPU_VAR(__preempt_count)
+#ifndef CONFIG_PREEMPT_LAZY
 	jnz  retint_restore_args
+#else
+	jz  check_int_off
+
+	# atleast preempt count == 0 ?
+	cmpl $_PREEMPT_ENABLED,PER_CPU_VAR(__preempt_count)
+	jnz retint_restore_args
+
+	cmpl $0, TI_preempt_lazy_count(%rcx)
+	jnz retint_restore_args
+
+	bt $TIF_NEED_RESCHED_LAZY,TI_flags(%rcx)
+	jnc  retint_restore_args
+check_int_off:
+#endif
 	bt   $9,EFLAGS-ARGOFFSET(%rsp)	/* interrupts off? */
 	jnc  retint_restore_args
 	call preempt_schedule_irq
@@ -1371,6 +1386,7 @@ bad_gs:
 	jmp  2b
 	.previous
 
+#ifndef CONFIG_PREEMPT_RT_FULL
 /* Call softirq on interrupt stack. Interrupts are off. */
 ENTRY(do_softirq_own_stack)
 	CFI_STARTPROC
@@ -1390,6 +1406,7 @@ ENTRY(do_softirq_own_stack)
 	ret
 	CFI_ENDPROC
 END(do_softirq_own_stack)
+#endif
 
 #ifdef CONFIG_XEN
 zeroentry xen_hypervisor_callback xen_do_hypervisor_callback
@@ -1559,7 +1576,7 @@ paranoid_userspace:
 	movq %rsp,%rdi			/* &pt_regs */
 	call sync_regs
 	movq %rax,%rsp			/* switch stack for scheduling */
-	testl $_TIF_NEED_RESCHED,%ebx
+	testl $_TIF_NEED_RESCHED_MASK,%ebx
 	jnz paranoid_schedule
 	movl %ebx,%edx			/* arg3: thread flags */
 	TRACE_IRQS_ON
