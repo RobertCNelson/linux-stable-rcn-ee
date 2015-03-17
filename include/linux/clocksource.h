@@ -195,6 +195,10 @@ struct clocksource {
 	cycle_t cs_last;
 	cycle_t wd_last;
 #endif
+#ifdef CONFIG_IPIPE_WANT_CLOCKSOURCE
+	cycle_t (*ipipe_read)(struct clocksource *cs);
+#endif /* CONFIG_IPIPE_WANT_CLOCKSOURCE */
+
 } ____cacheline_aligned;
 
 /*

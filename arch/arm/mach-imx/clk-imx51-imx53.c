@@ -313,6 +313,10 @@ static void __init mx5_clocks_common_init(unsigned long rate_ckil,
 	clk_prepare_enable(clk[tmax1]);
 	clk_prepare_enable(clk[tmax2]); /* esdhc2, fec */
 	clk_prepare_enable(clk[tmax3]); /* esdhc1, esdhc4 */
+
+#ifdef CONFIG_IPIPE
+	mxc_pic_muter_register();
+#endif
 }
 
 int __init mx51_clocks_init(unsigned long rate_ckil, unsigned long rate_osc,
@@ -385,7 +389,8 @@ int __init mx51_clocks_init(unsigned long rate_ckil, unsigned long rate_osc,
 	clk_set_rate(clk[esdhc_b_podf], 166250000);
 
 	/* System timer */
-	mxc_timer_init(MX51_IO_ADDRESS(MX51_GPT1_BASE_ADDR), MX51_INT_GPT);
+	mxc_timer_init(MX51_IO_ADDRESS(MX51_GPT1_BASE_ADDR), 
+		       MX51_GPT1_BASE_ADDR, MX51_INT_GPT);
 
 	clk_prepare_enable(clk[iim_gate]);
 	imx_print_silicon_rev("i.MX51", mx51_revision());
@@ -492,7 +497,8 @@ int __init mx53_clocks_init(unsigned long rate_ckil, unsigned long rate_osc,
 	clk_set_rate(clk[esdhc_b_podf], 200000000);
 
 	/* System timer */
-	mxc_timer_init(MX53_IO_ADDRESS(MX53_GPT1_BASE_ADDR), MX53_INT_GPT);
+	mxc_timer_init(MX53_IO_ADDRESS(MX53_GPT1_BASE_ADDR), 
+		       MX53_GPT1_BASE_ADDR, MX53_INT_GPT);
 
 	clk_prepare_enable(clk[iim_gate]);
 	imx_print_silicon_rev("i.MX53", mx53_revision());

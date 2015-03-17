@@ -806,7 +806,7 @@ static void ipu_irq_handle(struct ipu_soc *ipu, const int *regs, int num_regs)
 
 		irq_base = ipu->irq_start + regs[i] * 32;
 		for_each_set_bit(bit, &status, 32)
-			generic_handle_irq(irq_base + bit);
+			ipipe_handle_demuxed_irq(irq_base + bit);
 	}
 }
 

@@ -31,6 +31,7 @@
 #include <asm/mach/time.h>
 
 #include <mach/at91_st.h>
+#include "at91_ipipe.h"
 
 static unsigned long last_crtr;
 static u32 irqmask;
@@ -63,6 +64,8 @@ static inline unsigned long read_CRTR(void)
 static irqreturn_t at91rm9200_timer_interrupt(int irq, void *dev_id)
 {
 	u32	sr = at91_st_read(AT91_ST_SR) & irqmask;
+
+	__ipipe_tsc_update();
 
 	/*
 	 * irqs should be disabled here, but as the irq is shared they are only
@@ -269,6 +272,7 @@ void __init at91rm9200_timer_init(void)
 	clkevt.max_delta_ns = clockevent_delta2ns(AT91_ST_ALMV, &clkevt);
 	clkevt.min_delta_ns = clockevent_delta2ns(2, &clkevt) + 1;
 	clkevt.cpumask = cpumask_of(0);
+	at91_ipipe_init(&clkevt);
 	clockevents_register_device(&clkevt);
 
 	/* register clocksource */
@@ -278,4 +282,3 @@ void __init at91rm9200_timer_init(void)
 struct sys_timer at91rm9200_timer = {
 	.init		= at91rm9200_timer_init,
 };
-
