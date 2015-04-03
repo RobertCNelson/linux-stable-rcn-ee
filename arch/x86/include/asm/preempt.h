@@ -84,11 +84,13 @@ static __always_inline bool test_preempt_need_resched(void)
 
 static __always_inline void __preempt_count_add(int val)
 {
+	ipipe_preempt_root_only();
 	__this_cpu_add_4(__preempt_count, val);
 }
 
 static __always_inline void __preempt_count_sub(int val)
 {
+	ipipe_preempt_root_only();
 	__this_cpu_add_4(__preempt_count, -val);
 }
 
@@ -99,6 +101,7 @@ static __always_inline void __preempt_count_sub(int val)
  */
 static __always_inline bool __preempt_count_dec_and_test(void)
 {
+	ipipe_preempt_root_only();
 	GEN_UNARY_RMWcc("decl", __preempt_count, __percpu_arg(0), "e");
 }
 

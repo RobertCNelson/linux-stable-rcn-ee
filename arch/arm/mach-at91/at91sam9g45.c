@@ -393,6 +393,7 @@ static void __init at91sam9g45_initialize(void)
 /*
  * The default interrupt priority levels (0 = lowest, 7 = highest).
  */
+#ifndef CONFIG_IPIPE
 static unsigned int at91sam9g45_default_irq_priority[NR_AIC_IRQS] __initdata = {
 	7,	/* Advanced Interrupt Controller (FIQ) */
 	7,	/* System Peripherals */
@@ -427,6 +428,44 @@ static unsigned int at91sam9g45_default_irq_priority[NR_AIC_IRQS] __initdata = {
 	0,
 	0,	/* Advanced Interrupt Controller (IRQ0) */
 };
+#else
+static unsigned int at91sam9g45_default_irq_priority[NR_AIC_IRQS] __initdata = {
+/* Give the highest priority to TC, since they are used as timer interrupt by
+   I-pipe. */
+	7,	/* Advanced Interrupt Controller (FIQ) */
+	6,	/* System Peripherals */
+	0,	/* Parallel IO Controller A */
+	0,	/* Parallel IO Controller B */
+	0,	/* Parallel IO Controller C */
+	0,	/* Parallel IO Controller D and E */
+	0,
+	5,	/* USART 0 */
+	5,	/* USART 1 */
+	5,	/* USART 2 */
+	5,	/* USART 3 */
+	0,	/* Multimedia Card Interface 0 */
+	6,	/* Two-Wire Interface 0 */
+	6,	/* Two-Wire Interface 1 */
+	5,	/* Serial Peripheral Interface 0 */
+	5,	/* Serial Peripheral Interface 1 */
+	4,	/* Serial Synchronous Controller 0 */
+	4,	/* Serial Synchronous Controller 1 */
+	7,	/* Timer Counter 0, 1, 2, 3, 4 and 5 */
+	0,	/* Pulse Width Modulation Controller */
+	0,	/* Touch Screen Controller */
+	0,	/* DMA Controller */
+	2,	/* USB Host High Speed port */
+	3,	/* LDC Controller */
+	5,	/* AC97 Controller */
+	2,	/* Ethernet */
+	0,	/* Image Sensor Interface */
+	2,	/* USB Device High speed port */
+	0,
+	0,	/* Multimedia Card Interface 1 */
+	0,
+	0,	/* Advanced Interrupt Controller (IRQ0) */
+};
+#endif
 
 AT91_SOC_START(at91sam9g45)
 	.map_io = at91sam9g45_map_io,
