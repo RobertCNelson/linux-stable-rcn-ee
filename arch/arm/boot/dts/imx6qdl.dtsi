@@ -106,6 +106,12 @@
 			clocks = <&clks 15>;
 		};
 
+		timer@00a00200 {
+			compatible = "arm,cortex-a9-global-timer";
+			reg = <0x00a00200 0x20>;
+			clocks = <&clks 15>;
+		};
+
 		L2: l2-cache@00a02000 {
 			compatible = "arm,pl310-cache";
 			reg = <0x00a02000 0x1000>;

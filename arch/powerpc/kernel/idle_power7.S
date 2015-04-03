@@ -56,10 +56,12 @@ _GLOBAL(power7_nap)
 	rotldi	r9,r9,16
 	mtmsrd	r9,1			/* hard-disable interrupts */
 
+#ifndef CONFIG_IPIPE	
 	/* Check if something happened while soft-disabled */
 	lbz	r0,PACAIRQHAPPENED(r13)
 	cmpwi	cr0,r0,0
 	beq	1f
+#endif	
 	addi	r1,r1,INT_FRAME_SIZE
 	ld	r0,16(r1)
 	mtlr	r0
@@ -69,8 +71,10 @@ _GLOBAL(power7_nap)
 	 * be in when returning and we need to tell arch_local_irq_restore()
 	 * about it
 	 */
+#ifndef CONFIG_IPIPE	
 	li	r0,PACA_IRQ_HARD_DIS
 	stb	r0,PACAIRQHAPPENED(r13)
+#endif	
 
 	/* We haven't lost state ... yet */
 	li	r0,0
