@@ -165,6 +165,13 @@ void switch_stab(struct task_struct *tsk, struct mm_struct *mm)
 	unsigned long pc = KSTK_EIP(tsk);
 	unsigned long stack = KSTK_ESP(tsk);
 	unsigned long unmapped_base;
+	unsigned long flags;
+
+#ifdef CONFIG_IPIPE
+	flags = hard_local_save_flags();
+#else
+ 	WARN_ON(!irqs_disabled());
+#endif
 
 	/* Force previous translations to complete. DRENG */
 	asm volatile("isync" : : : "memory");
@@ -207,6 +214,8 @@ void switch_stab(struct task_struct *tsk, struct mm_struct *mm)
 	asm volatile("sync; slbia; sync":::"memory");
 
 	__get_cpu_var(stab_cache_ptr) = 0;
+
+	hard_cond_local_irq_restore(flags);
 
 	/* Now preload some entries for the new task */
 	if (test_tsk_thread_flag(tsk, TIF_32BIT))

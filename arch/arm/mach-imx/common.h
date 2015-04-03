@@ -17,6 +17,7 @@ struct irq_data;
 struct platform_device;
 struct pt_regs;
 struct clk;
+struct device_node;
 enum mxc_cpu_pwr_mode;
 
 void mx1_map_io(void);
@@ -55,7 +56,9 @@ void imx51_soc_init(void);
 void imx51_init_late(void);
 void imx53_init_late(void);
 void epit_timer_init(void __iomem *base, int irq);
-void mxc_timer_init(void __iomem *, int);
+void mxc_pic_muter_register(void);
+void mxc_timer_init(void __iomem *, unsigned long, int);
+void mxc_timer_init_dt(struct device_node *);
 int mx1_clocks_init(unsigned long fref);
 int mx21_clocks_init(unsigned long lref, unsigned long fref);
 int mx25_clocks_init(void);

@@ -33,6 +33,7 @@
 #include <asm/irqflags.h>
 #include <asm/ftrace.h>
 #include <asm/hw_irq.h>
+#include <asm/exception-64s.h>
 #include <asm/context_tracking.h>
 
 /*
@@ -121,27 +122,86 @@ END_FW_FTR_SECTION_IFSET(FW_FEATURE_SPLPAR)
 	 * of irq tracing is used, we additionally check that condition
 	 * is correct
 	 */
-#if defined(CONFIG_TRACE_IRQFLAGS) && defined(CONFIG_BUG)
+#if defined(CONFIG_TRACE_IRQFLAGS) && \
+	defined(CONFIG_BUG) && !defined(CONFIG_IPIPE)
 	lbz	r10,PACASOFTIRQEN(r13)
 	xori	r10,r10,1
 1:	tdnei	r10,0
 	EMIT_BUG_ENTRY 1b,__FILE__,__LINE__,BUGFLAG_WARNING
 #endif
 
-#ifdef CONFIG_PPC_BOOK3E
-	wrteei	1
-#else
-	ld	r11,PACAKMSR(r13)
-	ori	r11,r11,MSR_EE
-	mtmsrd	r11,1
-#endif /* CONFIG_PPC_BOOK3E */
-
+#ifdef CONFIG_IPIPE
+	COPY_SOFTISTATE(r11)
+	HARD_ENABLE_INTS
+	CURRENT_THREAD_INFO(r10, r1)
+#ifndef CONFIG_IPIPE_LEGACY
+	cmpldi	cr0,r0,NR_syscalls
+	blt	slow_path
+	ld	r11,TI_IPIPE(r10)
+	andi.	r12,r11,_TIP_HEAD /* implies that TIP_NOTIFY if set */
+	beq	slow_path_check
+	addi	r3,r1,GPR0
+	bl	ipipe_fastcall_hook /* __IPIPE_SYSCALL_E is assumed */
+	cmpwi	r3,0
+	blt	no_fastcall
+	CURRENT_THREAD_INFO(r10, r1)
+	ld	r11,TI_IPIPE(r10)
+	andi.	r12,r11,_TIP_HEAD
+	bne+	fastcall_exit_check
+	bl	__ipipe_root_sync
+	ld	r3,GPR3(r1)
+	b	syscall_exit
+no_fastcall:
+	/* fastcall handler not implemented */
+	ld	r0,GPR0(r1)
+slow_path:
+#endif /* !CONFIG_IPIPE_LEGACY */
+	ld	r11,TI_IPIPE(r10)
+slow_path_check:
+	andi.	r12,r11,_TIP_NOTIFY
+	bne	pipeline_syscall
+	cmpldi	cr0,r0,NR_syscalls
+	blt	root_syscall
+pipeline_syscall:
+	addi	r3,r1,GPR0
+	bl	__ipipe_notify_syscall
+	cmpwi	cr1,r3,0
+	CURRENT_THREAD_INFO(r10, r1)
+	ld	r11,TI_IPIPE(r10)
+	andi.	r12,r11,_TIP_HEAD
+	bne	fastcall_exit
+	beq	cr1,root_syscall
+	ld	r3,GPR3(r1)	/* syscall return value */
+	b	syscall_exit
+fastcall_exit_check:
+	andi.	r12,r11,_TIP_MAYDAY
+	beq+	fastcall_exit
+	addi	r3,r1,GPR0
+	bl	__ipipe_call_mayday
+fastcall_exit:
+	HARD_DISABLE_INTS_RI
+	ld	r3,GPR3(r1)	/* syscall return value */
+	ld	r8,_MSR(r1)
+	ld	r5,_CCR(r1)
+	b	.Lsyscall_error_cont
+root_syscall:
+	ld	r0,GPR0(r1)
+	ld	r3,GPR3(r1)
+	ld	r4,GPR4(r1)
+	ld	r5,GPR5(r1)
+	ld	r6,GPR6(r1)
+	ld	r7,GPR7(r1)
+	ld	r8,GPR8(r1)
+#else /* !CONFIG_IPIPE */
+	HARD_ENABLE_INTS
 	/* We do need to set SOFTE in the stack frame or the return
 	 * from interrupt will be painful
 	 */
 	li	r10,1
 	std	r10,SOFTE(r1)
-
+#endif /* !CONFIG_IPIPE */
+	addi	r9,r1,STACK_FRAME_OVERHEAD
+	
 #ifdef SHOW_SYSCALLS
 	bl	.do_show_syscall
 	REST_GPR(0,r1)
@@ -196,22 +256,7 @@ syscall_exit:
 	 * Disable interrupts so current_thread_info()->flags can't change,
 	 * and so that we don't get interrupted after loading SRR0/1.
 	 */
-#ifdef CONFIG_PPC_BOOK3E
-	wrteei	0
-#else
-	ld	r10,PACAKMSR(r13)
-	/*
-	 * For performance reasons we clear RI the same time that we
-	 * clear EE. We only need to clear RI just before we restore r13
-	 * below, but batching it with EE saves us one expensive mtmsrd call.
-	 * We have to be careful to restore RI if we branch anywhere from
-	 * here (eg syscall_exit_work).
-	 */
-	li	r9,MSR_RI
-	andc	r11,r10,r9
-	mtmsrd	r11,1
-#endif /* CONFIG_PPC_BOOK3E */
-
+	HARD_DISABLE_INTS_RI
 	ld	r9,TI_FLAGS(r12)
 	li	r11,-_LAST_ERRNO
 	andi.	r0,r9,(_TIF_SYSCALL_T_OR_A|_TIF_SINGLESTEP|_TIF_USER_WORK_MASK|_TIF_PERSYSCALL_MASK)
@@ -310,16 +355,9 @@ syscall_exit_work:
 	andi.	r0,r9,(_TIF_SYSCALL_T_OR_A|_TIF_SINGLESTEP)
 	beq	.ret_from_except_lite
 
-	/* Re-enable interrupts */
-#ifdef CONFIG_PPC_BOOK3E
-	wrteei	1
-#else
-	ld	r10,PACAKMSR(r13)
-	ori	r10,r10,MSR_EE
-	mtmsrd	r10,1
-#endif /* CONFIG_PPC_BOOK3E */
-
 	bl	.save_nvgprs
+	/* Re-enable interrupts */
+	HARD_ENABLE_INTS
 	addi	r3,r1,STACK_FRAME_OVERHEAD
 	bl	.do_syscall_trace_leave
 	b	.ret_from_except
@@ -370,12 +408,18 @@ _GLOBAL(ppc64_swapcontext)
 	b	syscall_exit
 
 _GLOBAL(ret_from_fork)
+#ifdef CONFIG_IPIPE
+	HARD_ENABLE_INTS
+#endif /* CONFIG_IPIPE */
 	bl	.schedule_tail
 	REST_NVGPRS(r1)
 	li	r3,0
 	b	syscall_exit
 
 _GLOBAL(ret_from_kernel_thread)
+#ifdef CONFIG_IPIPE
+	HARD_ENABLE_INTS
+#endif /* CONFIG_IPIPE */
 	bl	.schedule_tail
 	REST_NVGPRS(r1)
 	ld	r14, 0(r14)
@@ -607,6 +651,13 @@ END_FTR_SECTION_IFSET(CPU_FTR_DSCR)
 	addi	r1,r1,SWITCH_FRAME_SIZE
 	blr
 
+#ifdef CONFIG_IPIPE
+_GLOBAL(__ipipe_ret_from_except_lite)
+	cmpwi	r3,0
+	bne+	.ret_from_except_lite
+	b	restore
+#endif /* CONFIG_IPIPE */
+
 	.align	7
 _GLOBAL(ret_from_except)
 	ld	r11,_TRAP(r1)
@@ -620,14 +671,20 @@ _GLOBAL(ret_from_except_lite)
 	 * can't change between when we test it and when we return
 	 * from the interrupt.
 	 */
-#ifdef CONFIG_PPC_BOOK3E
-	wrteei	0
-#else
-	ld	r10,PACAKMSR(r13) /* Get kernel MSR without EE */
-	mtmsrd	r10,1		  /* Update machine state */
-#endif /* CONFIG_PPC_BOOK3E */
-
+	HARD_DISABLE_INTS
 	CURRENT_THREAD_INFO(r9, r1)
+#ifdef CONFIG_IPIPE
+#ifdef CONFIG_IPIPE_LEGACY
+	bl	.__ipipe_check_root
+	cmpwi	r3,0
+	beq-	restore
+#else	
+	ld	r3,TI_IPIPE(r9)
+	andi.	r3,r3,_TIP_HEAD
+	bne-	restore
+#endif	
+#endif /* CONFIG_IPIPE */
+
 	ld	r3,_MSR(r1)
 #ifdef CONFIG_PPC_BOOK3E
 	ld	r10,PACACURRENT(r13)
@@ -730,8 +787,16 @@ resume_kernel:
 	 * sure we are soft-disabled first and reconcile irq state.
 	 */
 	RECONCILE_IRQ_STATE(r3,r4)
+	/*
+	 * Call the scheduler with soft IRQs off. When the interrupt
+	 * pipeline is enabled, we enter the IRQ preemption code with hw
+	 * interrupts disabled as well.
+	 */
+#ifdef CONFIG_IPIPE
+1:	bl	.__ipipe_preempt_schedule_irq
+#else
 1:	bl	.preempt_schedule_irq
-
+#endif
 	/* Re-test flags and eventually loop */
 	CURRENT_THREAD_INFO(r9, r1)
 	ld	r4,TI_FLAGS(r9)
@@ -744,12 +809,7 @@ resume_kernel:
 	 * when we return from the interrupt, and so that we don't get
 	 * interrupted after loading SRR0/1.
 	 */
-#ifdef CONFIG_PPC_BOOK3E
-	wrteei	0
-#else
-	ld	r10,PACAKMSR(r13) /* Get kernel MSR without EE */
-	mtmsrd	r10,1		  /* Update machine state */
-#endif /* CONFIG_PPC_BOOK3E */
+	HARD_DISABLE_INTS
 #endif /* CONFIG_PREEMPT */
 
 	.globl	fast_exc_return_irq
@@ -760,6 +820,17 @@ restore:
 	 * are about to re-enable interrupts
 	 */
 	ld	r5,SOFTE(r1)
+#ifdef CONFIG_IPIPE
+	cmpwi	cr0,r5,0
+	nor	r5,r5,r5	/* IPIPE_STALL_FLAG = !SOFTE */
+	ld	r4,PACAROOTPCPU(r13)
+	ld	r3,0(r4)
+	insrdi	r3,r5,1,63
+	std	r3,0(r4)
+	beq	1f
+	TRACE_ENABLE_INTS
+1:
+#else	/* !CONFIG_IPIPE */
 	lbz	r6,PACASOFTIRQEN(r13)
 	cmpwi	cr0,r5,0
 	beq	restore_irq_off
@@ -786,6 +857,7 @@ restore_no_replay:
 	TRACE_ENABLE_INTS
 	li	r0,1
 	stb	r0,PACASOFTIRQEN(r13);
+#endif	/* !CONFIG_IPIPE */
 
 	/*
 	 * Final return path. BookE is handled in a different file
@@ -876,6 +948,7 @@ END_FTR_SECTION_IFSET(CPU_FTR_HAS_PPR)
 
 #endif /* CONFIG_PPC_BOOK3E */
 
+#ifndef CONFIG_IPIPE	
 	/*
 	 * We are returning to a context with interrupts soft disabled.
 	 *
@@ -952,6 +1025,8 @@ restore_check_irq_replay:
 	b	.ret_from_except
 #endif /* CONFIG_PPC_DOORBELL */
 1:	b	.ret_from_except /* What else to do here ? */
+
+#endif /* !CONFIG_IPIPE */	
  
 unrecov_restore:
 	addi	r3,r1,STACK_FRAME_OVERHEAD
@@ -998,7 +1073,7 @@ _GLOBAL(enter_rtas)
 	li	r0,0
 	mtcr	r0
 
-#ifdef CONFIG_BUG	
+#if defined(CONFIG_BUG) && !defined(CONFIG_IPIPE)
 	/* There is no way it is acceptable to get here with interrupts enabled,
 	 * check it with the asm equivalent of WARN_ON
 	 */
@@ -1174,6 +1249,10 @@ _GLOBAL(_mcount)
 	blr
 
 _GLOBAL(ftrace_caller)
+        LOAD_REG_IMMEDIATE(r3, function_trace_stop)
+        lwz     r3, 0(r3)
+        cmpwi   r3, 0
+        bne     ftrace_stub
 	/* Taken from output of objdump from lib64/glibc */
 	mflr	r3
 	ld	r11, 0(r1)
@@ -1201,6 +1280,10 @@ _GLOBAL(mcount)
 	blr
 
 _GLOBAL(_mcount)
+        LOAD_REG_IMMEDIATE(r3, function_trace_stop)
+        lwz     r3, 0(r3)
+        cmpwi   r3, 0
+        bne     ftrace_stub
 	/* Taken from output of objdump from lib64/glibc */
 	mflr	r3
 	ld	r11, 0(r1)
