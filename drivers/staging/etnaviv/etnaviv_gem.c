@@ -790,7 +790,8 @@ static int etnaviv_gem_userptr_get_pages(struct etnaviv_gem_object *etnaviv_obj)
 	struct page **pvec = NULL;
 	struct get_pages_work *work;
 	struct mm_struct *mm;
-	int ret, pinned, npages = etnaviv_obj->base.size >> PAGE_SHIFT;
+	int ret = 0;
+	int pinned, npages = etnaviv_obj->base.size >> PAGE_SHIFT;
 
 	if (etnaviv_obj->userptr.work) {
 		if (IS_ERR(etnaviv_obj->userptr.work)) {
