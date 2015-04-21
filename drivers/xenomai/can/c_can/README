@@ -1,0 +1,4 @@
+# xeno_d_can
+
+Driver for Bosch CCAN and DCAN peripherals ported to RTDM for use with Xenomai.
+Based heavily on existing Linux driver for the same hardware. Tested on Beaglebone Black.
