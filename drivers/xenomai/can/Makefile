@@ -4,7 +4,7 @@ ifneq ($(VERSION).$(PATCHLEVEL),2.4)
 
 EXTRA_CFLAGS += -D__IN_XENOMAI__ -Iinclude/xenomai -Idrivers/xenomai/can
 
-obj-$(CONFIG_XENO_DRIVERS_CAN) += xeno_can.o mscan/ sja1000/
+obj-$(CONFIG_XENO_DRIVERS_CAN) += xeno_can.o mscan/ sja1000/ c_can/
 obj-$(CONFIG_XENO_DRIVERS_CAN_FLEXCAN) += xeno_can_flexcan.o
 obj-$(CONFIG_XENO_DRIVERS_CAN_VIRT) += xeno_can_virt.o
 
@@ -16,10 +16,12 @@ else
 
 # Makefile frag for Linux v2.4
 
-mod-subdirs := mscan sja1000
+mod-subdirs := mscan sja1000 c_can
 
 subdir-$(CONFIG_XENO_DRIVERS_CAN_MSCAN) += mscan
 subdir-$(CONFIG_XENO_DRIVERS_CAN_SJA1000) += sja1000
+subdir-$(CONFIG_XENO_DRIVERS_CAN_CCAN) += c_can
+
 
 O_TARGET := built-in.o
 
