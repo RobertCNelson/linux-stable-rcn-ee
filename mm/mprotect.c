@@ -228,6 +228,12 @@ unsigned long change_protection(struct vm_area_struct *vma, unsigned long start,
 		pages = hugetlb_change_protection(vma, start, end, newprot);
 	else
 		pages = change_protection_range(vma, start, end, newprot, dirty_accountable, prot_numa);
+#ifdef CONFIG_IPIPE
+	if (test_bit(MMF_VM_PINNED, &mm->flags) &&
+	    ((vma->vm_flags | mm->def_flags) & VM_LOCKED) &&
+	    (vma->vm_flags & (VM_READ | VM_WRITE | VM_EXEC)))
+		__ipipe_pin_vma(mm, vma);
+#endif
 	mmu_notifier_invalidate_range_end(mm, start, end);
 
 	return pages;

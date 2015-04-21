@@ -9,13 +9,20 @@
 #include <linux/thread_info.h>
 #include <linux/linkage.h>
 #include <linux/list.h>
+#include <linux/ipipe_base.h>
 
 #if defined(CONFIG_DEBUG_PREEMPT) || defined(CONFIG_PREEMPT_TRACER)
   extern void add_preempt_count(int val);
   extern void sub_preempt_count(int val);
 #else
-# define add_preempt_count(val)	do { preempt_count() += (val); } while (0)
-# define sub_preempt_count(val)	do { preempt_count() -= (val); } while (0)
+# define add_preempt_count(val)	do {		\
+    ipipe_preempt_root_only();			\
+    preempt_count() += (val);			\
+  } while (0)
+# define sub_preempt_count(val)	do {		\
+    ipipe_preempt_root_only();			\
+    preempt_count() -= (val);			\
+  } while (0)
 #endif
 
 #define inc_preempt_count() add_preempt_count(1)
