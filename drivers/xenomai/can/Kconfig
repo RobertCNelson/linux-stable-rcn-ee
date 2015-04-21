@@ -95,5 +95,6 @@ config XENO_DRIVERS_CAN_CCAN
 
 source drivers/xenomai/can/mscan/Kconfig
 source drivers/xenomai/can/sja1000/Kconfig
+source drivers/xenomai/can/c_can/Kconfig
 
 endmenu
