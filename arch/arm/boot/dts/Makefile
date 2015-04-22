@@ -398,6 +398,22 @@ dtb-$(CONFIG_SOC_AM33XX) += \
 	am335x-base0033.dtb \
 	am335x-bone.dtb \
 	am335x-boneblack.dtb \
+	am335x-boneblack-replicape.dtb \
+	am335x-boneblack-ttyS5.dtb \
+	am335x-boneblack-ttyS4.dtb \
+	am335x-boneblack-ttyS2.dtb \
+	am335x-boneblack-ttyS1.dtb \
+	am335x-boneblack-cape-bone-argus.dtb \
+	am335x-boneblack-can1.dtb \
+	am335x-boneblack-can0.dtb \
+	am335x-boneblack-bbb-exp-c.dtb \
+	am335x-bone-ttyS5.dtb \
+	am335x-bone-ttyS4.dtb \
+	am335x-bone-ttyS2.dtb \
+	am335x-bone-ttyS1.dtb \
+	am335x-bone-cape-bone-argus.dtb \
+	am335x-bone-can1.dtb \
+	am335x-bone-can0.dtb \
 	am335x-evm.dtb \
 	am335x-evmsk.dtb \
 	am335x-nano.dtb \
