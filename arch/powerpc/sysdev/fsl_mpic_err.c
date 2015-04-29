@@ -13,6 +13,7 @@
 #include <linux/irq.h>
 #include <linux/smp.h>
 #include <linux/interrupt.h>
+#include <linux/ipipe.h>
 
 #include <asm/io.h>
 #include <asm/irq.h>
@@ -39,10 +40,14 @@ static void fsl_mpic_mask_err(struct irq_data *d)
 	u32 eimr;
 	struct mpic *mpic = irq_data_get_irq_chip_data(d);
 	unsigned int src = virq_to_hw(d->irq) - mpic->err_int_vecs[0];
+	unsigned long flags;
 
+	flags = hard_cond_local_irq_save();
+	ipipe_lock_irq(d->irq);
 	eimr = mpic_fsl_err_read(mpic->err_regs, MPIC_ERR_INT_EIMR);
 	eimr |= (1 << (31 - src));
 	mpic_fsl_err_write(mpic->err_regs, eimr);
+	hard_cond_local_irq_restore(flags);
 }
 
 static void fsl_mpic_unmask_err(struct irq_data *d)
@@ -50,10 +55,14 @@ static void fsl_mpic_unmask_err(struct irq_data *d)
 	u32 eimr;
 	struct mpic *mpic = irq_data_get_irq_chip_data(d);
 	unsigned int src = virq_to_hw(d->irq) - mpic->err_int_vecs[0];
+	unsigned long flags;
 
+	flags = hard_cond_local_irq_save();
 	eimr = mpic_fsl_err_read(mpic->err_regs, MPIC_ERR_INT_EIMR);
 	eimr &= ~(1 << (31 - src));
 	mpic_fsl_err_write(mpic->err_regs, eimr);
+	ipipe_unlock_irq(d->irq);
+	hard_cond_local_irq_restore(flags);
 }
 
 static struct irq_chip fsl_mpic_err_chip = {
@@ -117,7 +126,7 @@ static irqreturn_t fsl_error_int_handler(int irq, void *data)
 				 mpic->err_int_vecs[errint]);
 		WARN_ON(cascade_irq == NO_IRQ);
 		if (cascade_irq != NO_IRQ) {
-			generic_handle_irq(cascade_irq);
+			ipipe_handle_demuxed_irq(cascade_irq);
 		} else {
 			eimr |=  1 << (31 - errint);
 			mpic_fsl_err_write(mpic->err_regs, eimr);
