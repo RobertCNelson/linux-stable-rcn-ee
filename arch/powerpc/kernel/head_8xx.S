@@ -179,6 +179,12 @@ i##n:								\
 	EXC_XFER_TEMPLATE(n, hdlr, n, NOCOPY, transfer_to_handler_full,	\
 			  ret_from_except_full)
 
+#ifdef CONFIG_IPIPE
+#define EXC_XFER_IPIPE(n, hdlr)		\
+	EXC_XFER_TEMPLATE(n, hdlr, n+1, NOCOPY, transfer_to_handler, \
+			  __ipipe_ret_from_except)
+#endif /* CONFIG_IPIPE */
+
 #define EXC_XFER_LITE(n, hdlr)		\
 	EXC_XFER_TEMPLATE(n, hdlr, n+1, NOCOPY, transfer_to_handler, \
 			  ret_from_except)
@@ -234,7 +240,11 @@ InstructionAccess:
 	EXC_XFER_LITE(0x400, handle_page_fault)
 
 /* External interrupt */
+#ifdef CONFIG_IPIPE
+	EXCEPTION(0x500, HardwareInterrupt, __ipipe_grab_irq, EXC_XFER_IPIPE)
+#else /* !CONFIG_IPIPE */
 	EXCEPTION(0x500, HardwareInterrupt, do_IRQ, EXC_XFER_LITE)
+#endif /* CONFIG_IPIPE */
 
 /* Alignment exception */
 	. = 0x600
@@ -257,7 +267,11 @@ Alignment:
 	EXCEPTION(0x800, FPUnavailable, unknown_exception, EXC_XFER_STD)
 
 /* Decrementer */
+#ifdef CONFIG_IPIPE
+	EXCEPTION(0x900, Decrementer, __ipipe_grab_timer, EXC_XFER_IPIPE)
+#else /* !CONFIG_IPIPE */
 	EXCEPTION(0x900, Decrementer, timer_interrupt, EXC_XFER_LITE)
+#endif /* CONFIG_IPIPE */
 
 	EXCEPTION(0xa00, Trap_0a, unknown_exception, EXC_XFER_EE)
 	EXCEPTION(0xb00, Trap_0b, unknown_exception, EXC_XFER_EE)
@@ -935,15 +949,24 @@ _GLOBAL(set_context)
  * It is important we get called with interrupts disabled.  I used to
  * do that, but it appears that all code that calls this already had
  * interrupt disabled.
+ * I-pipe: we enforce this back, we need to bypass virtualization
+ * here.
  */
 	.globl	set_dec_cpu6
 set_dec_cpu6:
+#ifdef CONFIG_IPIPE
+	mfmsr	r6
+	rlwinm	r5,r6,0,17,15	/* clear MSR_EE */
+#endif
 	lis	r7, cpu6_errata_word@h
 	ori	r7, r7, cpu6_errata_word@l
 	li	r4, 0x2c00
 	stw	r4, 8(r7)
 	lwz	r4, 8(r7)
         mtspr   22, r3		/* Update Decrementer */
+#ifdef CONFIG_IPIPE
+	MTMSRD(r6)
+#endif
 	SYNC
 	blr
 #endif

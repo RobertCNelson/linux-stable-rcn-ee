@@ -53,6 +53,7 @@
 #include <linux/irq.h>
 #include <linux/delay.h>
 #include <linux/irq_work.h>
+#include <linux/ipipe_tickdev.h>
 #include <asm/trace.h>
 
 #include <asm/io.h>
@@ -112,6 +113,9 @@ EXPORT_SYMBOL(decrementer_clockevent);
 
 DEFINE_PER_CPU(u64, decrementers_next_tb);
 static DEFINE_PER_CPU(struct clock_event_device, decrementers);
+#ifdef CONFIG_IPIPE
+static DEFINE_PER_CPU(struct ipipe_timer, itimers);
+#endif /* CONFIG_IPIPE */
 
 #define XSEC_PER_SEC (1024*1024)
 
@@ -492,7 +496,8 @@ void timer_interrupt(struct pt_regs * regs)
 	/* Ensure a positive value is written to the decrementer, or else
 	 * some CPUs will continue to take decrementer exceptions.
 	 */
-	set_dec(DECREMENTER_MAX);
+	if (!clockevent_ipipe_stolen(evt))
+		set_dec(DECREMENTER_MAX);
 
 	/* Some implementations of hotplug will get timer interrupts while
 	 * offline, just ignore these and we also need to set
@@ -517,7 +522,14 @@ void timer_interrupt(struct pt_regs * regs)
 #endif
 
 	old_regs = set_irq_regs(regs);
+#ifndef CONFIG_IPIPE
+	/*
+	 * The timer interrupt is a virtual one when the I-pipe is
+	 * active, therefore we already called irq_enter() for it (see
+	 * __ipipe_run_isr).
+	 */
 	irq_enter();
+#endif
 
 	trace_timer_interrupt_entry(regs);
 
@@ -527,7 +539,7 @@ void timer_interrupt(struct pt_regs * regs)
 	}
 
 	now = get_tb_or_rtc();
-	if (now >= *next_tb) {
+	if (clockevent_ipipe_stolen(evt) || now >= *next_tb) {
 		*next_tb = ~(u64)0;
 		if (evt->event_handler)
 			evt->event_handler(evt);
@@ -552,7 +564,9 @@ void timer_interrupt(struct pt_regs * regs)
 
 	trace_timer_interrupt_exit(regs);
 
+#ifndef CONFIG_IPIPE
 	irq_exit();
+#endif
 	set_irq_regs(old_regs);
 }
 
@@ -732,8 +746,35 @@ static cycle_t timebase_read(struct clocksource *cs)
 	return (cycle_t)get_tb();
 }
 
+#ifdef CONFIG_GENERIC_TIME_VSYSCALL_OLD
+/*
+ * Expect build error once converted to the newest update_vsyscall()
+ * API.
+ */
+static inline void update_hostrt(struct timespec *wall_time, struct timespec *wtm,
+				 struct clocksource *clock, u32 mult, u32 shift)
+{
+	/*
+	 * This is a temporary work-around until powerpc implements
+	 * the latest update_vsyscall() interface. We only fill in the
+	 * timekeeper fields ipipe_update_hostrt() currently uses.
+	 */
+	struct timekeeper tk = {
+		.clock = clock,
+		.shift = clock->shift,
+		.mult = mult,
+		.xtime_sec = wall_time->tv_sec,
+		.xtime_nsec = (u64)wall_time->tv_nsec << shift,
+		.wall_to_monotonic = *wtm,
+	};
+
+	ipipe_update_hostrt(&tk);
+}
+
+#endif
+
 void update_vsyscall_old(struct timespec *wall_time, struct timespec *wtm,
-			struct clocksource *clock, u32 mult)
+			 struct clocksource *clock, u32 mult, u32 shift)
 {
 	u64 new_tb_to_xs, new_stamp_xsec;
 	u32 frac_sec;
@@ -775,6 +816,8 @@ void update_vsyscall_old(struct timespec *wall_time, struct timespec *wtm,
 	vdso_data->stamp_sec_fraction = frac_sec;
 	smp_wmb();
 	++(vdso_data->tb_update_count);
+
+	update_hostrt(wall_time, wtm, clock, mult, shift);
 }
 
 void update_vsyscall_tz(void)
@@ -822,6 +865,22 @@ static void decrementer_set_mode(enum clock_event_mode mode,
 		decrementer_set_next_event(DECREMENTER_MAX, dev);
 }
 
+#ifdef CONFIG_IPIPE
+static int itimer_set(unsigned long evt, void *timer)
+{
+#ifndef CONFIG_40x
+	/*
+	 * Decrementer must be set to a positive 32bit value,
+	 * otherwise it would flood us with exceptions.
+	 */
+	if (evt > DECREMENTER_MAX)
+		evt = DECREMENTER_MAX;
+#endif /* CONFIG_40x */
+	set_dec((int)evt);
+	return 0;
+}
+#endif /* CONFIG_IPIPE */
+
 static void register_decrementer_clockevent(int cpu)
 {
 	struct clock_event_device *dec = &per_cpu(decrementers, cpu);
@@ -831,6 +890,13 @@ static void register_decrementer_clockevent(int cpu)
 
 	printk_once(KERN_DEBUG "clockevent: %s mult[%x] shift[%d] cpu[%d]\n",
 		    dec->name, dec->mult, dec->shift, cpu);
+
+#ifdef CONFIG_IPIPE
+	dec->ipipe_timer = &per_cpu(itimers, cpu);
+	dec->ipipe_timer->irq = IPIPE_TIMER_VIRQ;
+	dec->ipipe_timer->set = itimer_set;
+	dec->ipipe_timer->min_delay_ticks = 3;
+#endif /* CONFIG_IPIPE */
 
 	clockevents_register_device(dec);
 }
