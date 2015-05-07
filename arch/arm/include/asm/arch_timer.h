@@ -110,6 +110,9 @@ static inline void arch_counter_set_user_access(void)
 			| ARCH_TIMER_VIRT_EVT_EN
 			| ARCH_TIMER_USR_VCT_ACCESS_EN
 			| ARCH_TIMER_USR_PCT_ACCESS_EN);
+#ifdef CONFIG_IPIPE
+	cntkctl |= ARCH_TIMER_USR_PCT_ACCESS_EN;
+#endif
 	arch_timer_set_cntkctl(cntkctl);
 }
 
