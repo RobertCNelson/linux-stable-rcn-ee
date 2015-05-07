@@ -19,6 +19,7 @@
 #include <linux/audit.h>
 #include <linux/seccomp.h>
 #include <linux/signal.h>
+#include <linux/unistd.h>
 #include <linux/perf_event.h>
 #include <linux/hw_breakpoint.h>
 #include <linux/rcupdate.h>
@@ -1506,6 +1507,10 @@ void syscall_trace_leave(struct pt_regs *regs)
 	 */
 	user_exit();
 
+#ifdef CONFIG_IPIPE
+	if (syscall_get_nr(current, regs) >= NR_syscalls)
+		return;
+#endif
 	audit_syscall_exit(regs);
 
 	if (unlikely(test_thread_flag(TIF_SYSCALL_TRACEPOINT)))

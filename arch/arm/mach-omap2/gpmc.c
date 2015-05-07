@@ -35,6 +35,8 @@
 
 #include <linux/platform_data/mtd-nand-omap2.h>
 
+#include <linux/ipipe.h>
+
 #include <asm/mach-types.h>
 
 #include "soc.h"
@@ -1845,7 +1847,7 @@ static irqreturn_t gpmc_handle_irq(int irq, void *dev)
 
 	for (i = 0; i < GPMC_NR_IRQ; i++)
 		if (regval & gpmc_client_irq[i].bitmask)
-			generic_handle_irq(gpmc_client_irq[i].irq);
+			ipipe_handle_demuxed_irq(gpmc_client_irq[i].irq);
 
 	gpmc_write_reg(GPMC_IRQSTATUS, regval);
 
