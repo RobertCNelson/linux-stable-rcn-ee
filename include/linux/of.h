@@ -1485,6 +1485,8 @@ int of_overlay_create(struct device_node *tree);
 int of_overlay_destroy(int id);
 int of_overlay_destroy_all(void);
 
+int of_overlay_create_target_index(struct device_node *tree, int index);
+
 #else
 
 static inline int of_overlay_create(struct device_node *tree)
@@ -1498,6 +1500,12 @@ static inline int of_overlay_destroy(int id)
 }
 
 static inline int of_overlay_destroy_all(void)
+{
+	return -ENOTSUPP;
+}
+
+static inline int of_overlay_create_target_index(struct device_node *tree,
+		int index)
 {
 	return -ENOTSUPP;
 }
