@@ -16,10 +16,14 @@
 #include <linux/tick.h>
 #include <linux/cpu.h>
 #include <linux/notifier.h>
+#include <linux/interrupt.h>
 #include <asm/processor.h>
 
 
 static DEFINE_PER_CPU(struct llist_head, irq_work_list);
+#ifdef CONFIG_PREEMPT_RT_FULL
+static DEFINE_PER_CPU(struct llist_head, hirq_work_list);
+#endif
 static DEFINE_PER_CPU(int, irq_work_raised);
 
 /*
@@ -70,8 +74,12 @@ void irq_work_queue(struct irq_work *work)
 	/* Queue the entry and raise the IPI if needed. */
 	preempt_disable();
 
-	llist_add(&work->llnode, &__get_cpu_var(irq_work_list));
-
+#ifdef CONFIG_PREEMPT_RT_FULL
+	if (work->flags & IRQ_WORK_HARD_IRQ)
+		llist_add(&work->llnode, &__get_cpu_var(hirq_work_list));
+	else
+#endif
+		llist_add(&work->llnode, &__get_cpu_var(irq_work_list));
 	/*
 	 * If the work is not "lazy" or the tick is stopped, raise the irq
 	 * work interrupt (if supported by the arch), otherwise, just wait
@@ -115,12 +123,18 @@ static void __irq_work_run(void)
 	__this_cpu_write(irq_work_raised, 0);
 	barrier();
 
-	this_list = &__get_cpu_var(irq_work_list);
+#ifdef CONFIG_PREEMPT_RT_FULL
+	if (in_irq())
+		this_list = &__get_cpu_var(hirq_work_list);
+	else
+#endif
+		this_list = &__get_cpu_var(irq_work_list);
 	if (llist_empty(this_list))
 		return;
 
+#ifndef CONFIG_PREEMPT_RT_FULL
 	BUG_ON(!irqs_disabled());
-
+#endif
 	llnode = llist_del_all(this_list);
 	while (llnode != NULL) {
 		work = llist_entry(llnode, struct irq_work, llnode);
@@ -152,7 +166,9 @@ static void __irq_work_run(void)
  */
 void irq_work_run(void)
 {
+#ifndef CONFIG_PREEMPT_RT_FULL
 	BUG_ON(!in_irq());
+#endif
 	__irq_work_run();
 }
 EXPORT_SYMBOL_GPL(irq_work_run);
