@@ -1154,6 +1154,7 @@ static int etnaviv_gpu_hw_suspend(struct etnaviv_gpu *gpu)
 	return etnaviv_gpu_clk_disable(gpu);
 }
 
+#ifdef CONFIG_PM
 static int etnaviv_gpu_hw_resume(struct etnaviv_gpu *gpu)
 {
 	struct drm_device *drm = gpu->drm;
@@ -1176,6 +1177,7 @@ static int etnaviv_gpu_hw_resume(struct etnaviv_gpu *gpu)
 
 	return 0;
 }
+#endif
 
 static int etnaviv_gpu_bind(struct device *dev, struct device *master,
 	void *data)
