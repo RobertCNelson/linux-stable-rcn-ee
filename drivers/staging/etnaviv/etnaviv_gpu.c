@@ -1157,7 +1157,7 @@ static void etnaviv_gpu_unbind(struct device *dev, struct device *master,
 #endif
 
 	if (gpu->buffer) {
-		drm_gem_object_unreference(gpu->buffer);
+		drm_gem_object_unreference_unlocked(gpu->buffer);
 		gpu->buffer = NULL;
 	}
 
