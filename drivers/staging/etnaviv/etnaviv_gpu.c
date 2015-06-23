@@ -1046,7 +1046,7 @@ static irqreturn_t irq_handler(int irq, void *data)
 	return ret;
 }
 
-static int etnaviv_gpu_resume(struct etnaviv_gpu *gpu)
+static int etnaviv_gpu_clk_enable(struct etnaviv_gpu *gpu)
 {
 	int ret;
 
@@ -1063,10 +1063,23 @@ static int etnaviv_gpu_resume(struct etnaviv_gpu *gpu)
 	return 0;
 }
 
-static int etnaviv_gpu_suspend(struct etnaviv_gpu *gpu)
+static int etnaviv_gpu_clk_disable(struct etnaviv_gpu *gpu)
 {
 	int ret;
 
+	ret = disable_axi(gpu);
+	if (ret)
+		return ret;
+
+	ret = disable_clk(gpu);
+	if (ret)
+		return ret;
+
+	return 0;
+}
+
+static int etnaviv_gpu_suspend(struct etnaviv_gpu *gpu)
+{
 	if (gpu->buffer) {
 		unsigned long timeout;
 
@@ -1096,15 +1109,7 @@ static int etnaviv_gpu_suspend(struct etnaviv_gpu *gpu)
 		} while (1);
 	}
 
-	ret = disable_axi(gpu);
-	if (ret)
-		return ret;
-
-	ret = disable_clk(gpu);
-	if (ret)
-		return ret;
-
-	return 0;
+	return etnaviv_gpu_clk_disable(gpu);
 }
 
 static int etnaviv_gpu_bind(struct device *dev, struct device *master,
@@ -1118,7 +1123,7 @@ static int etnaviv_gpu_bind(struct device *dev, struct device *master,
 #ifdef CONFIG_PM
 	ret = pm_runtime_get_sync(gpu->dev);
 #else
-	ret = etnaviv_gpu_resume(gpu);
+	ret = etnaviv_gpu_clk_enable(gpu);
 #endif
 	if (ret < 0)
 		return ret;
@@ -1300,7 +1305,7 @@ static int etnaviv_gpu_rpm_resume(struct device *dev)
 	if (drm && WARN_ON_ONCE(mutex_is_locked(&drm->struct_mutex)))
 		return -EDEADLK;
 
-	ret = etnaviv_gpu_resume(gpu);
+	ret = etnaviv_gpu_clk_enable(gpu);
 	if (ret)
 		return ret;
 
@@ -1308,7 +1313,7 @@ static int etnaviv_gpu_rpm_resume(struct device *dev)
 	if (drm && gpu->buffer) {
 		ret = mutex_lock_killable(&drm->struct_mutex);
 		if (ret) {
-			etnaviv_gpu_suspend(gpu);
+			etnaviv_gpu_clk_disable(gpu);
 			return ret;
 		}
 		etnaviv_gpu_hw_init(gpu);
