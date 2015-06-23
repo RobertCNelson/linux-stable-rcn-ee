@@ -1021,10 +1021,8 @@ static irqreturn_t irq_handler(int irq, void *data)
 			 * - event 1 and event 0 complete
 			 * we can end up processing event 0 first, then 1.
 			 */
-			if (fence_after(gpu->event[event].fence, gpu->retired_fence)) {
+			if (fence_after(gpu->event[event].fence, gpu->retired_fence))
 				gpu->retired_fence = gpu->event[event].fence;
-				gpu->last_ring_pos = gpu->event[event].ring_pos;
-			}
 			event_free(gpu, event);
 
 			/*
