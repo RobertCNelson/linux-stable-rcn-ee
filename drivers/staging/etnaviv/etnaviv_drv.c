@@ -583,7 +583,7 @@ static struct drm_driver etnaviv_drm_driver = {
 	.fops               = &fops,
 	.name               = "etnaviv",
 	.desc               = "etnaviv DRM",
-	.date               = "20130625",
+	.date               = "20150910",
 	.major              = 1,
 	.minor              = 0,
 };
@@ -669,7 +669,7 @@ static struct platform_driver etnaviv_platform_driver = {
 	.remove     = etnaviv_pdev_remove,
 	.driver     = {
 		.owner  = THIS_MODULE,
-		.name   = "vivante",
+		.name   = "etnaviv",
 		.of_match_table = dt_match,
 	},
 };
@@ -697,8 +697,9 @@ static void __exit etnaviv_exit(void)
 }
 module_exit(etnaviv_exit);
 
-MODULE_AUTHOR("Rob Clark <robdclark@gmail.com");
+MODULE_AUTHOR("Christian Gmeiner <christian.gmeiner@gmail.com>");
+MODULE_AUTHOR("Russell King <rmk+kernel@arm.linux.org.uk>");
+MODULE_AUTHOR("Lucas Stach <l.stach@pengutronix.de>");
 MODULE_DESCRIPTION("etnaviv DRM Driver");
-MODULE_LICENSE("GPL");
-MODULE_ALIAS("platform:vivante");
-MODULE_DEVICE_TABLE(of, dt_match);
+MODULE_LICENSE("GPL v2");
+MODULE_ALIAS("platform:etnaviv");
