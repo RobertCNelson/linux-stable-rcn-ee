@@ -35,8 +35,7 @@ static const struct platform_device_id gpu_ids[] = {
  * Driver functions:
  */
 
-int etnaviv_gpu_get_param(struct etnaviv_gpu *gpu, uint32_t param,
-	uint64_t *value)
+int etnaviv_gpu_get_param(struct etnaviv_gpu *gpu, u32 param, u64 *value)
 {
 	switch (param) {
 	case ETNAVIV_PARAM_GPU_MODEL:
@@ -728,7 +727,7 @@ static void recover_worker(struct work_struct *work)
 	mutex_unlock(&dev->struct_mutex);
 
 	/* Retire the buffer objects in a work */
-	etnaviv_queue_work(gpu->dev, &gpu->retire_work);
+	etnaviv_queue_work(gpu->drm, &gpu->retire_work);
 }
 
 static void hangcheck_timer_reset(struct etnaviv_gpu *gpu)
@@ -741,7 +740,7 @@ static void hangcheck_timer_reset(struct etnaviv_gpu *gpu)
 static void hangcheck_handler(unsigned long data)
 {
 	struct etnaviv_gpu *gpu = (struct etnaviv_gpu *)data;
-	uint32_t fence = gpu->retired_fence;
+	u32 fence = gpu->retired_fence;
 	bool progress = false;
 
 	if (fence != gpu->hangcheck_fence) {
@@ -750,7 +749,7 @@ static void hangcheck_handler(unsigned long data)
 	}
 
 	if (!progress) {
-		uint32_t dma_addr = gpu_read(gpu, VIVS_FE_DMA_ADDRESS);
+		u32 dma_addr = gpu_read(gpu, VIVS_FE_DMA_ADDRESS);
 		int change = dma_addr - gpu->hangcheck_dma_addr;
 
 		if (change < 0 || change > 16) {
@@ -764,7 +763,7 @@ static void hangcheck_handler(unsigned long data)
 		dev_err(gpu->dev, "     completed fence: %u\n", fence);
 		dev_err(gpu->dev, "     submitted fence: %u\n",
 			gpu->submitted_fence);
-		etnaviv_queue_work(gpu->dev, &gpu->recover_work);
+		etnaviv_queue_work(gpu->drm, &gpu->recover_work);
 	}
 
 	/* if still more pending work, reset the hangcheck timer: */
@@ -835,7 +834,7 @@ static void retire_worker(struct work_struct *work)
 	struct etnaviv_gpu *gpu = container_of(work, struct etnaviv_gpu,
 					       retire_work);
 	struct drm_device *dev = gpu->drm;
-	uint32_t fence = gpu->retired_fence;
+	u32 fence = gpu->retired_fence;
 
 	mutex_lock(&dev->struct_mutex);
 
@@ -864,7 +863,7 @@ static void retire_worker(struct work_struct *work)
 }
 
 int etnaviv_gpu_wait_fence_interruptible(struct etnaviv_gpu *gpu,
-	uint32_t fence, struct timespec *timeout)
+	u32 fence, struct timespec *timeout)
 {
 	int ret;
 
@@ -963,7 +962,7 @@ int etnaviv_gpu_submit(struct etnaviv_gpu *gpu,
 		WARN_ON(is_active(etnaviv_obj) && (etnaviv_obj->gpu != gpu));
 
 		if (!is_active(etnaviv_obj)) {
-			uint32_t iova;
+			u32 iova;
 
 			/* ring takes a reference to the bo and iova: */
 			drm_gem_object_reference(&etnaviv_obj->base);
@@ -1036,7 +1035,7 @@ static irqreturn_t irq_handler(int irq, void *data)
 		}
 
 		/* Retire the buffer objects in a work */
-		etnaviv_queue_work(gpu->dev, &gpu->retire_work);
+		etnaviv_queue_work(gpu->drm, &gpu->retire_work);
 
 		ret = IRQ_HANDLED;
 	}
