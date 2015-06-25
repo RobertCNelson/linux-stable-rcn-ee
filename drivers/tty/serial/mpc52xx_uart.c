@@ -1895,6 +1895,40 @@ mpc52xx_uart_of_enumerate(void)
 	}
 }
 
+#if defined(CONFIG_SERIAL_MPC52xx_CONSOLE) && defined(CONFIG_IPIPE_DEBUG)
+
+#include <stdarg.h>
+
+void __ipipe_serial_debug(const char *fmt, ...)
+{
+	struct uart_port *port = &mpc52xx_uart_ports[0];
+        unsigned int count, n;
+        unsigned long flags;
+        char buf[128], *s;
+        va_list ap;
+
+	if (psc_ops == NULL)
+		return;
+
+        va_start(ap, fmt);
+        vsprintf(buf, fmt, ap);
+        va_end(ap);
+        count = strlen(buf);
+
+        flags = hard_local_irq_save();
+
+	/* Write all the chars */
+	for (n = 0, s = buf; n < count; n++, s++) {
+		if (*s == '\n')
+			psc_ops->write_char(port, '\r');
+		psc_ops->write_char(port, *s);
+	}
+
+        hard_local_irq_restore(flags);
+}
+
+#endif
+
 MODULE_DEVICE_TABLE(of, mpc52xx_uart_of_match);
 
 static struct platform_driver mpc52xx_uart_of_driver = {

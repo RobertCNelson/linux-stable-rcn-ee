@@ -481,7 +481,13 @@ static inline void apic_set_eoi_write(void (*eoi_write)(u32 reg, u32 v)) {}
 
 #endif /* CONFIG_X86_LOCAL_APIC */
 
+#ifdef CONFIG_IPIPE
+#define ack_APIC_irq() do { } while(0)
+static inline void __ack_APIC_irq(void)
+#else /* !CONFIG_IPIPE */
+#define __ack_APIC_irq() ack_APIC_irq()
 static inline void ack_APIC_irq(void)
+#endif /* CONFIG_IPIPE */
 {
 	/*
 	 * ack_APIC_irq() actually gets compiled as a single instruction
