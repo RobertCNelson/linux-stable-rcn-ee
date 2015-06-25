@@ -89,7 +89,7 @@ extern void update_vsyscall_tz(void);
 #elif defined(CONFIG_GENERIC_TIME_VSYSCALL_OLD)
 
 extern void update_vsyscall_old(struct timespec *ts, struct timespec *wtm,
-				struct clocksource *c, u32 mult);
+				struct clocksource *c, u32 mult, u32 shift);
 extern void update_vsyscall_tz(void);
 
 static inline void update_vsyscall(struct timekeeper *tk)
@@ -97,7 +97,7 @@ static inline void update_vsyscall(struct timekeeper *tk)
 	struct timespec xt;
 
 	xt = tk_xtime(tk);
-	update_vsyscall_old(&xt, &tk->wall_to_monotonic, tk->clock, tk->mult);
+	update_vsyscall_old(&xt, &tk->wall_to_monotonic, tk->clock, tk->mult, tk->shift);
 }
 
 #else
