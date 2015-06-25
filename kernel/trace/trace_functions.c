@@ -105,7 +105,7 @@ function_stack_trace_call(unsigned long ip, unsigned long parent_ip,
 	 * Need to use raw, since this must be called before the
 	 * recursive protection is performed.
 	 */
-	local_irq_save(flags);
+	flags = hard_local_irq_save();
 	cpu = raw_smp_processor_id();
 	data = per_cpu_ptr(tr->trace_buffer.data, cpu);
 	disabled = atomic_inc_return(&data->disabled);
@@ -125,7 +125,7 @@ function_stack_trace_call(unsigned long ip, unsigned long parent_ip,
 	}
 
 	atomic_dec(&data->disabled);
-	local_irq_restore(flags);
+	hard_local_irq_restore(flags);
 }
 
 
