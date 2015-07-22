@@ -974,3 +974,7 @@
 	clock-names = "ext-clk", "int-clk";
 	status = "okay";
 };
+
+&cpu {
+	cpu0-supply = <&dcdc2>;
+};
