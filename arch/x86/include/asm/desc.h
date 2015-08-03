@@ -4,6 +4,7 @@
 #include <asm/desc_defs.h>
 #include <asm/ldt.h>
 #include <asm/mmu.h>
+#include <asm/hw_irq.h>
 
 #include <linux/smp.h>
 #include <linux/percpu.h>
@@ -376,11 +377,16 @@ static inline void _set_gate(int gate, unsigned type, void *addr,
  * Pentium F0 0F bugfix can have resulted in the mapped
  * IDT being write-protected.
  */
-#define set_intr_gate(n, addr)						\
+#define __set_intr_gate(n, addr)					\
 	do {								\
 		BUG_ON((unsigned)n > 0xFF);				\
 		_set_gate(n, GATE_INTERRUPT, (void *)addr, 0, 0,	\
 			  __KERNEL_CS);					\
+	} while (0)
+
+#define set_intr_gate(n, addr)						\
+	do {								\
+		__set_intr_gate(n, addr);				\
 		_trace_set_gate(n, GATE_INTERRUPT, (void *)trace_##addr,\
 				0, 0, __KERNEL_CS);			\
 	} while (0)
@@ -392,6 +398,13 @@ extern unsigned long used_vectors[];
 static inline void alloc_system_vector(int vector)
 {
 	if (!test_bit(vector, used_vectors)) {
+#if defined(CONFIG_X86_LOCAL_APIC) && defined(CONFIG_IPIPE)
+		unsigned cpu;
+
+		for_each_possible_cpu(cpu)
+			per_cpu(vector_irq, cpu)[vector] =
+				ipipe_apic_vector_irq(vector);
+#endif
 		set_bit(vector, used_vectors);
 		if (first_system_vector > vector)
 			first_system_vector = vector;
@@ -399,6 +412,12 @@ static inline void alloc_system_vector(int vector)
 		BUG();
 	}
 }
+
+#define __alloc_intr_gate(n, addr)				\
+	do {							\
+		alloc_system_vector(n);				\
+		__set_intr_gate(n, addr);			\
+	} while (0)
 
 #define alloc_intr_gate(n, addr)				\
 	do {							\
@@ -445,7 +464,7 @@ static inline void set_system_intr_gate_ist(int n, void *addr, unsigned ist)
 	_set_gate(n, GATE_INTERRUPT, addr, 0x3, ist, __KERNEL_CS);
 }
 
-#ifdef CONFIG_X86_64
+#if defined(CONFIG_X86_64) && !defined(CONFIG_IPIPE)
 DECLARE_PER_CPU(u32, debug_idt_ctr);
 static inline bool is_debug_idt_enabled(void)
 {

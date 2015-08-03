@@ -58,6 +58,14 @@
 #endif
 
 /*
+ * Limit the stack by to some sane default: root can always
+ * increase this limit if needed..  8MB seems reasonable.
+ */
+#ifndef _STK_LIM
+# define _STK_LIM		(8*1024*1024)
+#endif
+
+/*
  * RLIMIT_STACK default maximum - some architectures override it:
  */
 #ifndef _STK_LIM_MAX
