@@ -198,7 +198,7 @@ static long native_hpte_insert(unsigned long hpte_group, unsigned long vpn,
 			unsigned long vflags, int psize, int apsize, int ssize)
 {
 	struct hash_pte *hptep = htab_address + hpte_group;
-	unsigned long hpte_v, hpte_r;
+	unsigned long hpte_v, hpte_r, flags;
 	int i;
 
 	if (!(vflags & HPTE_V_BOLTED)) {
@@ -206,6 +206,8 @@ static long native_hpte_insert(unsigned long hpte_group, unsigned long vpn,
 			" rflags=%lx, vflags=%lx, psize=%d)\n",
 			hpte_group, vpn, pa, rflags, vflags, psize);
 	}
+
+	flags = hard_local_irq_save();
 
 	for (i = 0; i < HPTES_PER_GROUP; i++) {
 		if (! (be64_to_cpu(hptep->v) & HPTE_V_VALID)) {
@@ -219,8 +221,28 @@ static long native_hpte_insert(unsigned long hpte_group, unsigned long vpn,
 		hptep++;
 	}
 
-	if (i == HPTES_PER_GROUP)
+	if (i == HPTES_PER_GROUP) {
+		hard_local_irq_restore(flags);
 		return -1;
+	}
+
+#ifdef CONFIG_PPC_PASEMI_A2_WORKAROUNDS
+	/* Workaround for bug 4910: No non-guarded access over IOB */
+	if (pa >= 0x80000000 && pa < 0x100000000)
+		rflags |= _PAGE_GUARDED;
+#endif
+
+#ifdef CONFIG_PPC_PASEMI_A2_WORKAROUNDS
+	/* Workaround for bug 4910: No non-guarded access over IOB */
+	if (pa >= 0x80000000 && pa < 0x100000000)
+		rflags |= _PAGE_GUARDED;
+#endif
+
+#ifdef CONFIG_PPC_PASEMI_A2_WORKAROUNDS
+	/* Workaround for bug 4910: No non-guarded access over IOB */
+	if (pa >= 0x80000000 && pa < 0x100000000)
+		rflags |= _PAGE_GUARDED;
+#endif
 
 	hpte_v = hpte_encode_v(vpn, psize, apsize, ssize) | vflags | HPTE_V_VALID;
 	hpte_r = hpte_encode_r(pa, psize, apsize) | rflags;
@@ -239,6 +261,8 @@ static long native_hpte_insert(unsigned long hpte_group, unsigned long vpn,
 	 */
 	hptep->v = cpu_to_be64(hpte_v);
 
+	hard_local_irq_restore(flags);
+
 	__asm__ __volatile__ ("ptesync" : : : "memory");
 
 	return i | (!!(vflags & HPTE_V_SECONDARY) << 3);
@@ -249,12 +273,14 @@ static long native_hpte_remove(unsigned long hpte_group)
 	struct hash_pte *hptep;
 	int i;
 	int slot_offset;
-	unsigned long hpte_v;
+	unsigned long hpte_v, flags;
 
 	DBG_LOW("    remove(group=%lx)\n", hpte_group);
 
 	/* pick a random entry to start at */
 	slot_offset = mftb() & 0x7;
+
+	flags = hard_local_irq_save();
 
 	for (i = 0; i < HPTES_PER_GROUP; i++) {
 		hptep = htab_address + hpte_group + slot_offset;
@@ -274,11 +300,15 @@ static long native_hpte_remove(unsigned long hpte_group)
 		slot_offset &= 0x7;
 	}
 
-	if (i == HPTES_PER_GROUP)
+	if (i == HPTES_PER_GROUP) {
+		hard_local_irq_restore(flags);
 		return -1;
+	}
 
 	/* Invalidate the hpte. NOTE: this also unlocks it */
 	hptep->v = 0;
+
+	hard_local_irq_restore(flags);
 
 	return i;
 }
@@ -288,13 +318,15 @@ static long native_hpte_updatepp(unsigned long slot, unsigned long newpp,
 				 int apsize, int ssize, int local)
 {
 	struct hash_pte *hptep = htab_address + slot;
-	unsigned long hpte_v, want_v;
+	unsigned long hpte_v, want_v, flags;
 	int ret = 0;
 
 	want_v = hpte_encode_avpn(vpn, bpsize, ssize);
 
 	DBG_LOW("    update(vpn=%016lx, avpnv=%016lx, group=%lx, newpp=%lx)",
 		vpn, want_v & HPTE_V_AVPN, slot, newpp);
+
+	flags = hard_local_irq_save();
 
 	native_lock_hpte(hptep);
 
@@ -316,6 +348,8 @@ static long native_hpte_updatepp(unsigned long slot, unsigned long newpp,
 			(newpp & (HPTE_R_PP | HPTE_R_N | HPTE_R_C)));
 	}
 	native_unlock_hpte(hptep);
+
+	hard_local_irq_restore(flags);
 
 	/* Ensure it is out of the tlb too. */
 	tlbie(vpn, bpsize, apsize, ssize, local);

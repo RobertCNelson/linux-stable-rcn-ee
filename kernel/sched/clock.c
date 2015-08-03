@@ -295,6 +295,10 @@ u64 sched_clock_cpu(int cpu)
 	struct sched_clock_data *scd;
 	u64 clock;
 
+#ifndef CONFIG_IPIPE
+	WARN_ON_ONCE(!irqs_disabled());
+#endif
+
 	if (sched_clock_stable())
 		return sched_clock();
 

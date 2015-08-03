@@ -203,7 +203,6 @@ static int __init omap_l2_cache_init(void)
 	 * Way size - 16KB (am43xx)
 	 */
 	aux_ctrl = ((1 << L2X0_AUX_CTRL_ASSOCIATIVITY_SHIFT) |
-			(0x1 << 25) |
 			(0x1 << L2X0_AUX_CTRL_NS_LOCKDOWN_SHIFT) |
 			(0x1 << L2X0_AUX_CTRL_NS_INT_CTRL_SHIFT));
 	if (soc_is_am43xx()) {
@@ -219,6 +218,8 @@ static int __init omap_l2_cache_init(void)
 			(1 << L2X0_AUX_CTRL_DATA_PREFETCH_SHIFT) |
 			(1 << L2X0_AUX_CTRL_INSTR_PREFETCH_SHIFT) |
 			(1 << L2X0_AUX_CTRL_EARLY_BRESP_SHIFT));
+		if (l2x0_wa == 0)
+			aux_ctrl |= (1 << 23);
 	}
 	if (soc_is_am43xx() || omap_rev() != OMAP4430_REV_ES1_0)
 		omap_smc1(0x109, aux_ctrl);
