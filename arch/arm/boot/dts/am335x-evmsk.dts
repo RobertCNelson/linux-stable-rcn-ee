@@ -716,3 +716,7 @@
 
 	blue-and-red-wiring = "crossed";
 };
+
+&sgx {
+	status = "okay";
+};
