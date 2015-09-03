@@ -1,7 +1,7 @@
 /*
  * Legacy platform_data quirks
  *
- * Copyright (C) 2013 Texas Instruments
+ * Copyright (C) 2013-2015 Texas Instruments
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -24,6 +24,7 @@
 #include <linux/platform_data/hsmmc-omap.h>
 #include <linux/platform_data/iommu-omap.h>
 #include <linux/platform_data/wkup_m3.h>
+#include <linux/platform_data/sgx-omap.h>
 #include <linux/platform_data/pwm_omap_dmtimer.h>
 #include <linux/platform_data/media/ir-rx51.h>
 #include <linux/platform_data/asoc-ti-mcbsp.h>
@@ -48,6 +49,14 @@ struct pdata_init {
 
 static struct of_dev_auxdata omap_auxdata_lookup[];
 static struct twl4030_gpio_platform_data twl_gpio_auxdata;
+
+#if defined(CONFIG_SOC_AM33XX) || defined(CONFIG_SOC_AM43XX)
+static struct gfx_sgx_platform_data sgx_pdata = {
+	.reset_name = "gfx",
+	.assert_reset = omap_device_assert_hardreset,
+	.deassert_reset = omap_device_deassert_hardreset,
+};
+#endif
 
 #ifdef CONFIG_MACH_NOKIA_N8X0
 static void __init omap2420_n8x0_legacy_init(void)
@@ -548,10 +557,14 @@ static struct of_dev_auxdata omap_auxdata_lookup[] __initdata = {
 #ifdef CONFIG_SOC_AM33XX
 	OF_DEV_AUXDATA("ti,am3352-wkup-m3", 0x44d00000, "44d00000.wkup_m3",
 		       &wkup_m3_data),
+	OF_DEV_AUXDATA("ti,am3352-sgx530", 0x56000000, "56000000.sgx",
+		       &sgx_pdata),
 #endif
 #ifdef CONFIG_SOC_AM43XX
 	OF_DEV_AUXDATA("ti,am4372-wkup-m3", 0x44d00000, "44d00000.wkup_m3",
 		       &wkup_m3_data),
+	OF_DEV_AUXDATA("ti,am4376-sgx530", 0x56000000, "56000000.sgx",
+		       &sgx_pdata),
 #endif
 #if IS_ENABLED(CONFIG_OMAP_DM_TIMER)
 	OF_DEV_AUXDATA("ti,omap-dmtimer-pwm", 0, NULL, &pwm_dmtimer_pdata),
