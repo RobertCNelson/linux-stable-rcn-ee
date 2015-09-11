@@ -20,15 +20,10 @@
 #include <linux/slab.h>
 #include <linux/dma-mapping.h>
 #include <linux/bitops.h>
-#include <linux/version.h>
 
 #include "etnaviv_gpu.h"
 #include "etnaviv_iommu.h"
 #include "state_hi.xml.h"
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,1,0)
-#define OLD_IOMMU
-#endif
 
 #define PT_SIZE		SZ_2M
 #define PT_ENTRIES	(PT_SIZE / sizeof(u32))
@@ -124,28 +119,16 @@ static int __etnaviv_iommu_init(struct etnaviv_iommu_domain *etnaviv_domain)
 	return 0;
 }
 
-static void __etnaviv_iommu_free(struct etnaviv_iommu_domain *etnaviv_domain)
+static void etnaviv_domain_free(struct iommu_domain *domain)
 {
-	pgtable_free(&etnaviv_domain->pgtable, PT_SIZE);
+	struct etnaviv_iommu_domain *etnaviv_domain = to_etnaviv_domain(domain);
 
+	pgtable_free(&etnaviv_domain->pgtable, PT_SIZE);
 	dma_free_coherent(etnaviv_domain->dev, SZ_4K,
 			  etnaviv_domain->bad_page_cpu,
 			  etnaviv_domain->bad_page_dma);
-
 	kfree(etnaviv_domain);
 }
-
-#ifdef OLD_IOMMU
-static void etnaviv_iommu_domain_destroy(struct iommu_domain *domain)
-{
-	__etnaviv_iommu_free(to_etnaviv_domain(domain));
-}
-#else
-static void etnaviv_domain_free(struct iommu_domain *domain)
-{
-	__etnaviv_iommu_free(to_etnaviv_domain(domain));
-}
-#endif
 
 static int etnaviv_iommu_map(struct iommu_domain *domain, unsigned long iova,
 	   phys_addr_t paddr, size_t size, int prot)
@@ -187,11 +170,7 @@ static phys_addr_t etnaviv_iommu_iova_to_phys(struct iommu_domain *domain,
 }
 
 static struct iommu_ops etnaviv_iommu_ops = {
-#ifdef OLD_IOMMU
-		.domain_destroy = etnaviv_iommu_domain_destroy,
-#else
 		.domain_free = etnaviv_domain_free,
-#endif
 		.map = etnaviv_iommu_map,
 		.unmap = etnaviv_iommu_unmap,
 		.iova_to_phys = etnaviv_iommu_iova_to_phys,
@@ -225,9 +204,7 @@ struct iommu_domain *etnaviv_iommu_domain_alloc(struct etnaviv_gpu *gpu)
 
 	etnaviv_domain->dev = gpu->dev;
 
-#ifndef OLD_IOMMU
 	etnaviv_domain->domain.type = __IOMMU_DOMAIN_PAGING;
-#endif
 	etnaviv_domain->domain.ops = &etnaviv_iommu_ops;
 	etnaviv_domain->domain.geometry.aperture_start = GPU_MEM_START;
 	etnaviv_domain->domain.geometry.aperture_end = GPU_MEM_START + PT_ENTRIES * SZ_4K - 1;
