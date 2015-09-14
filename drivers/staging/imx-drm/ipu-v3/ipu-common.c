@@ -902,7 +902,7 @@ static void ipu_irq_handle(struct ipu_soc *ipu, const int *regs, int num_regs)
 		for_each_set_bit(bit, &status, 32) {
 			irq = irq_linear_revmap(ipu->domain, regs[i] * 32 + bit);
 			if (irq)
-				generic_handle_irq(irq);
+				ipipe_handle_demuxed_irq(irq);
 		}
 	}
 }

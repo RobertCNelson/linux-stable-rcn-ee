@@ -10,6 +10,7 @@ menuconfig PLAT_SPEAR
 	select CLKSRC_MMIO
 	select COMMON_CLK
 	select GENERIC_CLOCKEVENTS
+	select IPIPE_ARM_KUSER_TSC if IPIPE
 
 if PLAT_SPEAR
 

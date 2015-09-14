@@ -150,12 +150,14 @@ struct pt_regs *save_v86_state(struct kernel_vm86_regs *regs)
 		do_exit(SIGSEGV);
 	}
 
+	hard_cond_local_irq_disable();
 	tss = &per_cpu(init_tss, get_cpu());
 	current->thread.sp0 = current->thread.saved_sp0;
 	current->thread.sysenter_cs = __KERNEL_CS;
 	load_sp0(tss, &current->thread);
 	current->thread.saved_sp0 = 0;
 	put_cpu();
+	hard_cond_local_irq_enable();
 
 	ret = KVM86->regs32;
 
@@ -318,12 +320,14 @@ static void do_sys_vm86(struct kernel_vm86_struct *info, struct task_struct *tsk
 	tsk->thread.saved_fs = info->regs32->fs;
 	tsk->thread.saved_gs = get_user_gs(info->regs32);
 
+	hard_cond_local_irq_disable();
 	tss = &per_cpu(init_tss, get_cpu());
 	tsk->thread.sp0 = (unsigned long) &info->VM86_TSS_ESP0;
 	if (cpu_has_sep)
 		tsk->thread.sysenter_cs = 0;
 	load_sp0(tss, &tsk->thread);
 	put_cpu();
+	hard_cond_local_irq_enable();
 
 	tsk->thread.screen_bitmap = info->screen_bitmap;
 	if (info->flags & VM86_SCREEN_BITMAP)

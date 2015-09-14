@@ -102,9 +102,9 @@ extern int panic_on_unrecovered_nmi;
 void math_error(struct pt_regs *, int, int);
 void math_emulate(struct math_emu_info *);
 #ifndef CONFIG_X86_32
-asmlinkage void smp_thermal_interrupt(void);
 asmlinkage void mce_threshold_interrupt(void);
 #endif
+asmlinkage void smp_thermal_interrupt(void);
 
 /* Interrupts/Exceptions */
 enum {

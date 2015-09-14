@@ -345,6 +345,7 @@ static void __init at91sam9263_initialize(void)
  * The default interrupt priority levels (0 = lowest, 7 = highest).
  */
 static unsigned int at91sam9263_default_irq_priority[NR_AIC_IRQS] __initdata = {
+#ifndef CONFIG_IPIPE
 	7,	/* Advanced Interrupt Controller (FIQ) */
 	7,	/* System Peripherals */
 	1,	/* Parallel IO Controller A */
@@ -377,6 +378,42 @@ static unsigned int at91sam9263_default_irq_priority[NR_AIC_IRQS] __initdata = {
 	2,	/* USB Host port */
 	0,	/* Advanced Interrupt Controller (IRQ0) */
 	0,	/* Advanced Interrupt Controller (IRQ1) */
+#else /* CONFIG_IPIPE */
+/* Give the highest priority to TC, since they are used as timer interrupt by
+   I-pipe. */
+	7,	/* Advanced Interrupt Controller (FIQ) */
+	6,	/* System Peripherals */
+	0,	/* Parallel IO Controller A */
+	0,	/* Parallel IO Controller B */
+	0,	/* Parallel IO Controller C, D and E */
+	0,
+	0,
+	5,	/* USART 0 */
+	5,	/* USART 1 */
+	5,	/* USART 2 */
+	0,	/* Multimedia Card Interface 0 */
+	0,	/* Multimedia Card Interface 1 */
+	3,	/* CAN */
+	0,	/* Two-Wire Interface */
+	5,	/* Serial Peripheral Interface 0 */
+	5,	/* Serial Peripheral Interface 1 */
+	4,	/* Serial Synchronous Controller 0 */
+	4,	/* Serial Synchronous Controller 1 */
+	5,	/* AC97 Controller */
+	7,	/* Timer Counter 0, 1 and 2 */
+	0,	/* Pulse Width Modulation Controller */
+	2,	/* Ethernet */
+	0,
+	0,	/* 2D Graphic Engine */
+	2,	/* USB Device Port */
+	0,	/* Image Sensor Interface */
+	2,	/* LDC Controller */
+	0,	/* DMA Controller */
+	0,
+	2,	/* USB Host port */
+	0,	/* Advanced Interrupt Controller (IRQ0) */
+	0,	/* Advanced Interrupt Controller (IRQ1) */
+#endif /*CONFIG_IPIPE */
 };
 
 AT91_SOC_START(at91sam9263)
