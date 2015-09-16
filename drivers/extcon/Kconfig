@@ -35,6 +35,26 @@ config EXTCON_AXP288
 	  Say Y here to enable support for USB peripheral detection
 	  and USB MUX switching by X-Power AXP288 PMIC.
 
+config EXTCON_DT_CON
+	tristate "Device Tree Overlay based connector"
+	depends on OF || COMPILE_TEST
+	depends on OF_OVERLAY
+	help
+	  Say Y here to enable Device Tree Overlay based connector
+
+config EXTCON_DT_CON_PROXY
+	tristate "Device Tree Connector Generic proxy driver"
+	select EXTCONF_DT_CON
+	help
+	  Say Y here to enable Device Tree generic proxy connector driver
+
+config EXTCON_DT_CON_GPIO
+	tristate "Device Tree Connector GPIO proxy driver"
+	depends on GPIOLIB && OF_GPIO
+	select EXTCONF_DT_GPIO
+	help
+	  Say Y here to enable Device Tree GPIO proxy connector driver
+
 config EXTCON_GPIO
 	tristate "GPIO extcon support"
 	depends on GPIOLIB || COMPILE_TEST
