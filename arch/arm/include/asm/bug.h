@@ -2,6 +2,7 @@
 #define _ASMARM_BUG_H
 
 #include <linux/linkage.h>
+#include <linux/kernel.h>	/* For BUILD_BUG_ON */
 
 #ifdef CONFIG_BUG
 

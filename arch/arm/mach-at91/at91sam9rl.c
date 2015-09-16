@@ -28,6 +28,17 @@
 #include "clock.h"
 #include "sam9_smc.h"
 
+static struct map_desc at91sam9rl_io_desc[] __initdata = {
+#ifdef CONFIG_IPIPE
+	{
+		.virtual	= AT91_VA_BASE_TCB0,
+		.pfn		= __phys_to_pfn(AT91_BASE_TCB0),
+		.length		= SZ_16K,
+		.type		= MT_DEVICE,
+	},
+#endif /* CONFIG_IPIPE */
+};
+
 /* --------------------------------------------------------------------
  *  Clocks
  * -------------------------------------------------------------------- */
@@ -276,6 +287,9 @@ static void __init at91sam9rl_map_io(void)
 
 	/* Map SRAM */
 	at91_init_sram(0, AT91SAM9RL_SRAM_BASE, sram_size);
+#ifdef CONFIG_IPIPE
+	iotable_init(at91sam9rl_io_desc, ARRAY_SIZE(at91sam9rl_io_desc));
+#endif /* CONFIG_IPIPE */
 }
 
 static void __init at91sam9rl_ioremap_registers(void)
@@ -306,6 +320,7 @@ static void __init at91sam9rl_initialize(void)
  * The default interrupt priority levels (0 = lowest, 7 = highest).
  */
 static unsigned int at91sam9rl_default_irq_priority[NR_AIC_IRQS] __initdata = {
+#ifndef CONFIG_IPIPE
 	7,	/* Advanced Interrupt Controller */
 	7,	/* System Peripherals */
 	1,	/* Parallel IO Controller A */
@@ -338,6 +353,42 @@ static unsigned int at91sam9rl_default_irq_priority[NR_AIC_IRQS] __initdata = {
 	0,
 	0,
 	0,	/* Advanced Interrupt Controller */
+#else /* CONFIG_IPIPE */
+/* Give the highest priority to TC, since they are used as timer interrupt by
+   I-pipe. */
+	7,	/* Advanced Interrupt Controller */
+	6,	/* System Peripherals */
+	1,	/* Parallel IO Controller A */
+	1,	/* Parallel IO Controller B */
+	1,	/* Parallel IO Controller C */
+	1,	/* Parallel IO Controller D */
+	4,	/* USART 0 */
+	4,	/* USART 1 */
+	4,	/* USART 2 */
+	4,	/* USART 3 */
+	0,	/* Multimedia Card Interface */
+	5,	/* Two-Wire Interface 0 */
+	5,	/* Two-Wire Interface 1 */
+	4,	/* Serial Peripheral Interface */
+	3,	/* Serial Synchronous Controller 0 */
+	3,	/* Serial Synchronous Controller 1 */
+	7,	/* Timer Counter 0 */
+	7,	/* Timer Counter 1 */
+	7,	/* Timer Counter 2 */
+	0,
+	0,	/* Touch Screen Controller */
+	0,	/* DMA Controller */
+	2,	/* USB Device High speed port */
+	2,	/* LCD Controller */
+	5,	/* AC97 Controller */
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,
+	0,	/* Advanced Interrupt Controller */
+#endif /*CONFIG_IPIPE */
 };
 
 AT91_SOC_START(sam9rl)

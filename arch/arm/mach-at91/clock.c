@@ -897,6 +897,8 @@ late_initcall(at91_clock_reset);
 
 void at91sam9_idle(void)
 {
+	hard_local_irq_disable();
 	at91_pmc_write(AT91_PMC_SCDR, AT91_PMC_PCK);
 	cpu_do_idle();
+	hard_local_irq_enable();
 }

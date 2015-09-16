@@ -27,6 +27,7 @@
 #include <mach/hardware.h>
 #include <asm/mach/time.h>
 
+#include "at91_ipipe.h"
 #include "at91_tc.h"
 
 #define at91_tc_read(field) \
@@ -49,6 +50,7 @@ static unsigned long at91x40_gettimeoffset(void)
 
 static irqreturn_t at91x40_timer_interrupt(int irq, void *dev_id)
 {
+	__ipipe_tsc_update();
 	at91_tc_read(AT91_TC_CLK1BASE + AT91_TC_SR);
 	timer_tick();
 	return IRQ_HANDLED;
@@ -84,4 +86,3 @@ struct sys_timer at91x40_timer = {
 	.init	= at91x40_timer_init,
 	.offset	= at91x40_gettimeoffset,
 };
-
