@@ -27,6 +27,43 @@
 #define __pgd_free(pgd)	free_pages((unsigned long)pgd, 2)
 #endif
 
+#define FIRST_KERNEL_PGD_NR	(FIRST_USER_PGD_NR + USER_PTRS_PER_PGD)
+
+#ifdef CONFIG_IPIPE
+/* Copied from arch/i386/mm/pgdtable.c, maintains the list of pgds for the
+   implementation of ipipe_pin_range_globally in arch/arm/mm/fault.c. */
+DEFINE_SPINLOCK(pgd_lock);
+struct page *pgd_list;
+
+#define pgd_list_lock(flags) spin_lock_irqsave(&pgd_lock, flags)
+#define pgd_list_unlock(flags) spin_unlock_irqrestore(&pgd_lock, flags)
+
+static inline void pgd_list_add(pgd_t *pgd)
+{
+	struct page *page = virt_to_page(pgd);
+	page->index = (unsigned long)pgd_list;
+	if (pgd_list)
+		set_page_private(pgd_list, (unsigned long)&page->index);
+	pgd_list = page;
+	set_page_private(page, (unsigned long)&pgd_list);
+}
+
+static inline void pgd_list_del(pgd_t *pgd)
+{
+	struct page *next, **pprev, *page = virt_to_page(pgd);
+	next = (struct page *)page->index;
+	pprev = (struct page **)page_private(page);
+	*pprev = next;
+	if (next)
+		set_page_private(next, (unsigned long)pprev);
+}
+#else /* !CONFIG_IPIPE */
+#define pgd_list_lock(flags) ((void) (flags))
+#define pgd_list_unlock(flags) ((void) (flags))
+#define pgd_list_add(pgd) do { } while (0)
+#define pgd_list_del(pgd) do { } while (0)
+#endif /* !CONFIG_IPIPE */
+
 /*
  * need to get a 16k page for level 1
  */
@@ -36,6 +73,7 @@ pgd_t *pgd_alloc(struct mm_struct *mm)
 	pud_t *new_pud, *init_pud;
 	pmd_t *new_pmd, *init_pmd;
 	pte_t *new_pte, *init_pte;
+	unsigned long flags;
 
 	new_pgd = __pgd_alloc();
 	if (!new_pgd)
@@ -47,8 +85,11 @@ pgd_t *pgd_alloc(struct mm_struct *mm)
 	 * Copy over the kernel and IO PGD entries
 	 */
 	init_pgd = pgd_offset_k(0);
+	pgd_list_lock(flags);
 	memcpy(new_pgd + USER_PTRS_PER_PGD, init_pgd + USER_PTRS_PER_PGD,
 		       (PTRS_PER_PGD - USER_PTRS_PER_PGD) * sizeof(pgd_t));
+	pgd_list_add(new_pgd);
+	pgd_list_unlock(flags);
 
 	clean_dcache_area(new_pgd, PTRS_PER_PGD * sizeof(pgd_t));
 
@@ -67,6 +108,11 @@ pgd_t *pgd_alloc(struct mm_struct *mm)
 #endif
 
 	if (!vectors_high()) {
+#ifdef CONFIG_ARM_FCSE
+		/* FCSE does not work without high vectors. */
+		BUG();
+#endif /* CONFIG_ARM_FCSE */
+
 		/*
 		 * On ARM, first page must always be allocated since it
 		 * contains the machine vectors. The vectors are always high
@@ -106,6 +152,7 @@ no_pgd:
 
 void pgd_free(struct mm_struct *mm, pgd_t *pgd_base)
 {
+	unsigned long flags;
 	pgd_t *pgd;
 	pud_t *pud;
 	pmd_t *pmd;
@@ -118,7 +165,7 @@ void pgd_free(struct mm_struct *mm, pgd_t *pgd_base)
 	if (pgd_none_or_clear_bad(pgd))
 		goto no_pgd;
 
-	pud = pud_offset(pgd, 0);
+	pud = pud_offset(pgd + pgd_index(fcse_va_to_mva(mm, 0)), 0);
 	if (pud_none_or_clear_bad(pud))
 		goto no_pud;
 
@@ -136,6 +183,9 @@ no_pud:
 	pgd_clear(pgd);
 	pud_free(mm, pud);
 no_pgd:
+	pgd_list_lock(flags);
+	pgd_list_del(pgd);
+	pgd_list_unlock(flags);
 #ifdef CONFIG_ARM_LPAE
 	/*
 	 * Free modules/pkmap or identity pmd tables.
@@ -153,6 +203,7 @@ no_pgd:
 		pmd_free(mm, pmd);
 		pgd_clear(pgd);
 		pud_free(mm, pud);
+
 	}
 #endif
 	__pgd_free(pgd_base);

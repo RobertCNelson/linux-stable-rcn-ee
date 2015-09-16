@@ -443,7 +443,14 @@ int __init mx6q_clocks_init(void)
 	base = of_iomap(np, 0);
 	WARN_ON(!base);
 	irq = irq_of_parse_and_map(np, 0);
-	mxc_timer_init(base, irq);
+	{
+		struct resource res;
+
+		if (of_address_to_resource(np, 0, &res))
+			res.start = 0;
+
+		mxc_timer_init(base, res.start, irq);
+	}
 
 	return 0;
 }

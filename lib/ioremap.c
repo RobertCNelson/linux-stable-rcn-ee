@@ -86,8 +86,8 @@ int ioremap_page_range(unsigned long addr,
 		if (err)
 			break;
 	} while (pgd++, addr = next, addr != end);
-
-	flush_cache_vmap(start, end);
+	__ipipe_pin_range_globally(start, end);
+ 	flush_cache_vmap(start, end);
 
 	return err;
 }

@@ -17,7 +17,6 @@ generic-y += msgbuf.h
 generic-y += param.h
 generic-y += parport.h
 generic-y += poll.h
-generic-y += resource.h
 generic-y += sections.h
 generic-y += segment.h
 generic-y += sembuf.h
