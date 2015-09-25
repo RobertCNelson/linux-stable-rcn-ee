@@ -1,4 +1,3 @@
-
 #include <linux/module.h>
 #include <linux/io.h>
 
@@ -43,3 +42,4 @@ void __init imx_set_aips(void __iomem *base)
 	reg = __raw_readl(base + 0x50) & 0x00FFFFFF;
 	__raw_writel(reg, base + 0x50);
 }
+

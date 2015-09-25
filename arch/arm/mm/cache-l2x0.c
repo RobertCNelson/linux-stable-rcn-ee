@@ -22,17 +22,26 @@
 #include <linux/io.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
+#include <linux/ipipe.h>
 
 #include <asm/cacheflush.h>
 #include <asm/hardware/cache-l2x0.h>
 #include "cache-aurora-l2.h"
 
+#ifndef CONFIG_IPIPE
+#define SPINLOCK_SECTION_LEN	4096UL
+#else /* CONFIG_IPIPE */
+#define SPINLOCK_SECTION_LEN	512UL
+#endif /* CONFIG_IPIPE */
+
 #define CACHE_LINE_SIZE		32
 
 static void __iomem *l2x0_base;
-static DEFINE_RAW_SPINLOCK(l2x0_lock);
+static IPIPE_DEFINE_RAW_SPINLOCK(l2x0_lock);
 static u32 l2x0_way_mask;	/* Bitmask of active ways */
 static u32 l2x0_size;
+static u32 l2x0_ways;
+static u32 l2x0_lines;
 static unsigned long sync_reg_offset = L2X0_CACHE_SYNC;
 
 /* Aurora don't have the cache ID register available, so we have to
@@ -146,6 +155,7 @@ static void __l2x0_flush_all(void)
 	debug_writel(0x00);
 }
 
+#ifndef CONFIG_IPIPE
 static void l2x0_flush_all(void)
 {
 	unsigned long flags;
@@ -155,6 +165,40 @@ static void l2x0_flush_all(void)
 	__l2x0_flush_all();
 	raw_spin_unlock_irqrestore(&l2x0_lock, flags);
 }
+#else
+static void l2x0_clean_inv_line_idx(unsigned line, unsigned way)
+{
+	void __iomem *base = l2x0_base;
+
+	writel_relaxed((way << 28) | (line << 5),
+		       base + L2X0_CLEAN_INV_LINE_IDX);
+	cache_wait(base + L2X0_CLEAN_INV_LINE_IDX, 1);
+}
+
+static void l2x0_flush_way(unsigned way, unsigned len, unsigned lines)
+{
+	unsigned long flags;
+	unsigned line, i;
+
+	for (line = 0; line < lines; line += len ) {
+		raw_spin_lock_irqsave(&l2x0_lock, flags);
+		debug_writel(0x03);
+		for (i = 0; i < len && line + i < lines; i++)
+			l2x0_clean_inv_line_idx(line + i, way);
+		cache_sync();
+		debug_writel(0x00);
+		raw_spin_unlock_irqrestore(&l2x0_lock, flags);
+	}
+}
+
+static void l2x0_flush_all(void)
+{
+	unsigned way, len = SPINLOCK_SECTION_LEN / CACHE_LINE_SIZE;
+
+	for (way = 0; way < l2x0_ways; way++)
+		l2x0_flush_way(way, len, l2x0_lines);
+}
+#endif
 
 static void l2x0_clean_all(void)
 {
@@ -202,9 +246,12 @@ static void l2x0_inv_range(unsigned long start, unsigned long end)
 		l2x0_flush_line(end);
 		debug_writel(0x00);
 	}
+	raw_spin_unlock_irqrestore(&l2x0_lock, flags);
 
+	raw_spin_lock_irqsave(&l2x0_lock, flags);
 	while (start < end) {
-		unsigned long blk_end = start + min(end - start, 4096UL);
+		unsigned long blk_end =
+			start + min(end - start, SPINLOCK_SECTION_LEN);
 
 		while (start < blk_end) {
 			l2x0_inv_line(start);
@@ -234,7 +281,8 @@ static void l2x0_clean_range(unsigned long start, unsigned long end)
 	raw_spin_lock_irqsave(&l2x0_lock, flags);
 	start &= ~(CACHE_LINE_SIZE - 1);
 	while (start < end) {
-		unsigned long blk_end = start + min(end - start, 4096UL);
+		unsigned long blk_end =
+			start + min(end - start, SPINLOCK_SECTION_LEN);
 
 		while (start < blk_end) {
 			l2x0_clean_line(start);
@@ -264,7 +312,8 @@ static void l2x0_flush_range(unsigned long start, unsigned long end)
 	raw_spin_lock_irqsave(&l2x0_lock, flags);
 	start &= ~(CACHE_LINE_SIZE - 1);
 	while (start < end) {
-		unsigned long blk_end = start + min(end - start, 4096UL);
+		unsigned long blk_end =
+			start + min(end - start, SPINLOCK_SECTION_LEN);
 
 		debug_writel(0x03);
 		while (start < blk_end) {
@@ -375,6 +424,7 @@ void __init l2x0_init(void __iomem *base, u32 aux_val, u32 aux_mask)
 	}
 
 	l2x0_way_mask = (1 << ways) - 1;
+	l2x0_ways = ways;
 
 	/*
 	 * L2 cache Size =  Way size * Number of ways
@@ -383,6 +433,7 @@ void __init l2x0_init(void __iomem *base, u32 aux_val, u32 aux_mask)
 	way_size = 1 << (way_size + way_size_shift);
 
 	l2x0_size = ways * way_size * SZ_1K;
+	l2x0_lines = way_size * SZ_1K / CACHE_LINE_SIZE;
 
 	/*
 	 * Check if l2x0 controller is already enabled.

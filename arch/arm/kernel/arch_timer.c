@@ -19,6 +19,8 @@
 #include <linux/interrupt.h>
 #include <linux/of_irq.h>
 #include <linux/io.h>
+#include <linux/ipipe.h>
+#include <linux/ipipe_tickdev.h>
 
 #include <asm/cputype.h>
 #include <asm/delay.h>
@@ -146,14 +148,54 @@ static inline cycle_t arch_counter_get_cntvct(void)
 	return arch_timer_counter_read(ARCH_TIMER_VIRT_ACCESS);
 }
 
-static irqreturn_t inline timer_handler(const int access,
-					struct clock_event_device *evt)
+static int arch_timer_ack(const int access)
 {
 	unsigned long ctrl;
 	ctrl = arch_timer_reg_read(access, ARCH_TIMER_REG_CTRL);
 	if (ctrl & ARCH_TIMER_CTRL_IT_STAT) {
 		ctrl |= ARCH_TIMER_CTRL_IT_MASK;
 		arch_timer_reg_write(access, ARCH_TIMER_REG_CTRL, ctrl);
+		return 1;
+	}
+	return 0;
+}
+
+#ifdef CONFIG_IPIPE
+static DEFINE_PER_CPU(struct ipipe_timer, arch_itimer);
+static struct __ipipe_tscinfo tsc_info = {
+	.type = IPIPE_TSC_TYPE_FREERUNNING_ARCH,
+	.u = {
+		{
+			.mask = 0xffffffffffffffff,
+		},
+	},
+};
+
+static void arch_itimer_ack_phys(void)
+{
+	arch_timer_ack(ARCH_TIMER_PHYS_ACCESS);
+}
+
+static void arch_itimer_ack_virt(void)
+{
+	arch_timer_ack(ARCH_TIMER_VIRT_ACCESS);
+}
+#endif /* CONFIG_IPIPE */
+
+static irqreturn_t inline timer_handler(int irq, const int access,
+					struct clock_event_device *evt)
+{
+	if (clockevent_ipipe_stolen(evt))
+		goto stolen;
+
+	if (arch_timer_ack(access)) {
+#ifdef CONFIG_IPIPE
+		struct ipipe_timer *itimer = __this_cpu_ptr(&arch_itimer);
+		if (itimer->irq != irq)
+			itimer->irq = irq;
+#endif /* CONFIG_IPIPE */
+	  stolen:
+		__ipipe_tsc_update();
 		evt->event_handler(evt);
 		return IRQ_HANDLED;
 	}
@@ -165,14 +207,14 @@ static irqreturn_t arch_timer_handler_virt(int irq, void *dev_id)
 {
 	struct clock_event_device *evt = *(struct clock_event_device **)dev_id;
 
-	return timer_handler(ARCH_TIMER_VIRT_ACCESS, evt);
+	return timer_handler(irq, ARCH_TIMER_VIRT_ACCESS, evt);
 }
 
 static irqreturn_t arch_timer_handler_phys(int irq, void *dev_id)
 {
 	struct clock_event_device *evt = *(struct clock_event_device **)dev_id;
 
-	return timer_handler(ARCH_TIMER_PHYS_ACCESS, evt);
+	return timer_handler(irq, ARCH_TIMER_PHYS_ACCESS, evt);
 }
 
 static inline void timer_set_mode(const int access, int mode)
@@ -242,6 +284,30 @@ static int __cpuinit arch_timer_setup(struct clock_event_device *clk)
 	}
 
 	clk->set_mode(CLOCK_EVT_MODE_SHUTDOWN, NULL);
+
+#ifdef CONFIG_IPIPE
+	clk->ipipe_timer = __this_cpu_ptr(&arch_itimer);
+	if (arch_timer_use_virtual) {
+		clk->ipipe_timer->irq = arch_timer_ppi[VIRT_PPI];
+		clk->ipipe_timer->ack = arch_itimer_ack_virt;
+	} else {
+		clk->ipipe_timer->irq = arch_timer_ppi[PHYS_SECURE_PPI];
+		clk->ipipe_timer->ack = arch_itimer_ack_phys;
+	}
+	clk->ipipe_timer->freq = arch_timer_rate;
+
+	/* 
+	 * Change CNTKCTL to give access to the physical counter to
+	 * user-space, this has to be done once for each core.
+	 */
+	{
+		unsigned ctl;
+		asm volatile("mrc p15, 0, %0, c14, c1, 0" : "=r" (ctl));
+		ctl |= 1;				    /* PL0PCTEN */
+		asm volatile("mcr p15, 0, %0, c14, c1, 0" : : "r"(ctl));
+		isb();
+	}
+#endif
 
 	clockevents_config_and_register(clk, arch_timer_rate,
 					0xf, 0x7fffffff);
@@ -396,6 +462,11 @@ static int __init arch_timer_register(void)
 		err = -ENOMEM;
 		goto out;
 	}
+
+#ifdef CONFIG_IPIPE
+	tsc_info.freq = arch_timer_rate;
+	__ipipe_tsc_register(&tsc_info);
+#endif /* CONFIG_IPIPE */
 
 	clocksource_register_hz(&clocksource_counter, arch_timer_rate);
 	cyclecounter.mult = clocksource_counter.mult;
