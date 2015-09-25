@@ -15,6 +15,8 @@
 #include <linux/timex.h>
 #include <linux/clockchips.h>
 #include <linux/sched_clock.h>
+#include <linux/ipipe.h>
+#include <linux/ipipe_tickdev.h>
 
 #include <asm/mach/time.h>
 #include <mach/hardware.h>
@@ -27,13 +29,34 @@ static u64 notrace sa1100_read_sched_clock(void)
 
 #define MIN_OSCR_DELTA 2
 
+#ifdef CONFIG_IPIPE
+static struct __ipipe_tscinfo tsc_info = {
+	.type = IPIPE_TSC_TYPE_FREERUNNING,
+	.freq = CLOCK_TICK_RATE,
+	.counter_vaddr = io_p2v(0x90000010UL),
+	.u = {
+		{
+			.counter_paddr = 0x90000010UL,
+			.mask = 0xffffffff,
+		},
+	},
+};
+#endif /* CONFIG_IPIPE */
+
+static inline void sa1100_ost0_ack(void)
+{
+	/* Disarm the compare/match, signal the event. */
+	writel_relaxed(readl_relaxed(OIER) & ~OIER_E0, OIER);
+	writel_relaxed(OSSR_M0, OSSR);
+}
+
 static irqreturn_t sa1100_ost0_interrupt(int irq, void *dev_id)
 {
 	struct clock_event_device *c = dev_id;
 
-	/* Disarm the compare/match, signal the event. */
-	writel_relaxed(readl_relaxed(OIER) & ~OIER_E0, OIER);
-	writel_relaxed(OSSR_M0, OSSR);
+	if (clockevent_ipipe_stolen(c) == 0)
+		sa1100_ost0_ack();
+
 	c->event_handler(c);
 
 	return IRQ_HANDLED;
@@ -100,14 +123,23 @@ static void sa1100_timer_resume(struct clock_event_device *cedev)
 #define sa1100_timer_resume NULL
 #endif
 
+#ifdef CONFIG_IPIPE
+static struct ipipe_timer sa1100_osmr0_itimer = {
+	.irq = IRQ_OST0,
+	.ack = sa1100_ost0_ack,
+	.min_delay_ticks = MIN_OSCR_DELTA,
+};
+#endif /* CONFIG_IPIPE */
+
 static struct clock_event_device ckevt_sa1100_osmr0 = {
 	.name		= "osmr0",
 	.features	= CLOCK_EVT_FEAT_ONESHOT,
 	.rating		= 200,
 	.set_next_event	= sa1100_osmr0_set_next_event,
 	.set_mode	= sa1100_osmr0_set_mode,
-	.suspend	= sa1100_timer_suspend,
-	.resume		= sa1100_timer_resume,
+#ifdef CONFIG_IPIPE
+	.ipipe_timer    = &sa1100_osmr0_itimer,
+#endif /* CONFIG_IPIPE */
 };
 
 static struct irqaction sa1100_timer_irq = {
@@ -130,6 +162,10 @@ void __init sa1100_timer_init(void)
 
 	clocksource_mmio_init(OSCR, "oscr", CLOCK_TICK_RATE, 200, 32,
 		clocksource_mmio_readl_up);
+#ifdef CONFIG_IPIPE
+	__ipipe_tsc_register(&tsc_info);
+#endif /* CONFIG_IPIPE */
+
 	clockevents_config_and_register(&ckevt_sa1100_osmr0, 3686400,
 					MIN_OSCR_DELTA * 2, 0x7fffffff);
 }
