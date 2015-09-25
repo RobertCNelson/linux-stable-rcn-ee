@@ -136,6 +136,8 @@ struct l2x0_regs {
 
 extern struct l2x0_regs l2x0_saved_regs;
 
+extern int l2x0_wa;
+
 #endif /* __ASSEMBLY__ */
 
 #endif

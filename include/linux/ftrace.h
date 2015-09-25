@@ -103,6 +103,7 @@ enum {
 	FTRACE_OPS_FL_RECURSION_SAFE		= 1 << 6,
 	FTRACE_OPS_FL_STUB			= 1 << 7,
 	FTRACE_OPS_FL_INITIALIZED		= 1 << 8,
+	FTRACE_OPS_FL_IPIPE_EXCLUSIVE		= 1 << 9,
 };
 
 struct ftrace_ops {

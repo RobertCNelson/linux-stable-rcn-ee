@@ -350,6 +350,7 @@ static void __init at91rm9200_initialize(void)
  * The default interrupt priority levels (0 = lowest, 7 = highest).
  */
 static unsigned int at91rm9200_default_irq_priority[NR_AIC_IRQS] __initdata = {
+#ifndef CONFIG_IPIPE
 	7,	/* Advanced Interrupt Controller (FIQ) */
 	7,	/* System Peripherals */
 	1,	/* Parallel IO Controller A */
@@ -382,6 +383,42 @@ static unsigned int at91rm9200_default_irq_priority[NR_AIC_IRQS] __initdata = {
 	0,	/* Advanced Interrupt Controller (IRQ4) */
 	0,	/* Advanced Interrupt Controller (IRQ5) */
 	0	/* Advanced Interrupt Controller (IRQ6) */
+#else /* CONFIG_IPIPE */
+/* Give the highest priority to TC, since they are used as timer interrupt by
+   I-pipe. */
+	7,	/* Advanced Interrupt Controller */
+	6,	/* System Peripheral */
+	0,	/* Parallel IO Controller A */
+	0,	/* Parallel IO Controller B */
+	0,	/* Parallel IO Controller C */
+	0,	/* Parallel IO Controller D */
+	5,	/* USART 0 */
+	5,	/* USART 1 */
+	5,	/* USART 2 */
+	5,	/* USART 3 */
+	0,	/* Multimedia Card Interface */
+	3,	/* USB Device Port */
+	0,	/* Two-Wire Interface */
+	5,	/* Serial Peripheral Interface */
+	4,	/* Serial Synchronous Controller */
+	4,	/* Serial Synchronous Controller */
+	4,	/* Serial Synchronous Controller */
+	7,	/* Timer Counter 0 */
+	7,	/* Timer Counter 1 */
+	7,	/* Timer Counter 2 */
+	0,	/* Timer Counter 3 */
+	0,	/* Timer Counter 4 */
+	0,	/* Timer Counter 5 */
+	2,	/* USB Host port */
+	2,	/* Ethernet MAC */
+	0,	/* Advanced Interrupt Controller */
+	0,	/* Advanced Interrupt Controller */
+	0,	/* Advanced Interrupt Controller */
+	0,	/* Advanced Interrupt Controller */
+	0,	/* Advanced Interrupt Controller */
+	0,	/* Advanced Interrupt Controller */
+	0	/* Advanced Interrupt Controller */
+#endif /*CONFIG_IPIPE */
 };
 
 AT91_SOC_START(at91rm9200)

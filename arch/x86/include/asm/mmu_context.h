@@ -30,11 +30,14 @@ static inline void enter_lazy_tlb(struct mm_struct *mm, struct task_struct *tsk)
 #endif
 }
 
-static inline void switch_mm(struct mm_struct *prev, struct mm_struct *next,
-			     struct task_struct *tsk)
+static inline void __switch_mm(struct mm_struct *prev, struct mm_struct *next,
+			       struct task_struct *tsk)
 {
 	unsigned cpu = smp_processor_id();
 
+#ifdef CONFIG_IPIPE_DEBUG_INTERNAL
+	WARN_ON_ONCE(!hard_irqs_disabled());
+#endif
 	if (likely(prev != next)) {
 #ifdef CONFIG_SMP
 		this_cpu_write(cpu_tlbstate.state, TLBSTATE_OK);
@@ -77,10 +80,22 @@ static inline void switch_mm(struct mm_struct *prev, struct mm_struct *next,
 #endif
 }
 
+static inline void switch_mm(struct mm_struct *prev, struct mm_struct *next,
+			     struct task_struct *tsk)
+{
+	unsigned long flags;
+	flags = hard_cond_local_irq_save();
+	__switch_mm(prev, next, tsk);
+	hard_cond_local_irq_restore(flags);
+}
+
+#define ipipe_switch_mm_head(prev, next, tsk) \
+	__switch_mm(prev, next, tsk)
+
 #define activate_mm(prev, next)			\
 do {						\
 	paravirt_activate_mm((prev), (next));	\
-	switch_mm((prev), (next), NULL);	\
+	__switch_mm((prev), (next), NULL);	\
 } while (0);
 
 #ifdef CONFIG_X86_32
