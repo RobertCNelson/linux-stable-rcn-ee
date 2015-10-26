@@ -310,6 +310,9 @@
 	 */
 	ti,pmic-shutdown-controller;
 
+	interrupt-parent = <&intc>;
+	interrupts = <7>;	/* NNMI */
+
 	regulators {
 		#address-cells = <1>;
 		#size-cells = <0>;
