@@ -22,6 +22,7 @@ user-trap-objs := user-trap.o
 
 # Try to match the kernel target.
 ifndef CONFIG_64BIT
+ifndef CONFIG_ARM
 
 # s390 has -m31 flag to build 31 bit binaries
 ifndef CONFIG_S390
@@ -41,4 +42,5 @@ HOSTLDLIBS_dropper += $(MFLAG)
 HOSTLDLIBS_user-trap += $(MFLAG)
 endif
 always := $(hostprogs-y)
+endif
 endif
