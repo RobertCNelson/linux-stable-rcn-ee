@@ -88,6 +88,15 @@
 			0x06c (PIN_INPUT_PULLDOWN | MUX_MODE7)	/* gpmc_a11.GPIO1_27 */
 		>;
 	};
+
+	bb_spi0_pins: pinmux_bb_spi0_pins {
+		pinctrl-single,pins = <
+			0x150 0x30	/* spi0_sclk.spi0_sclk, INPUT_PULLUP | MODE0 */
+			0x154 0x30	/* spi0_d0.spi0_d0, INPUT_PULLUP | MODE0 */
+			0x158 0x10	/* spi0_d1.spi0_d1, OUTPUT_PULLUP | MODE0 */
+			0x15c 0x10	/* spi0_cs0.spi0_cs0, OUTPUT_PULLUP | MODE0 */
+		>;
+	};
 };
 
 &lcdc {
@@ -126,6 +135,25 @@
 		>;
 	tx-num-evt = <1>;
 	rx-num-evt = <1>;
+};
+
+&spi0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&bb_spi0_pins>;
+	status = "okay";
+
+	channel@0 {
+		compatible = "spidev";
+		spi-max-frequency = <16000000>;
+		reg = <0>;
+		spi-cpha;
+	};
+
+	channel@1 {
+		compatible = "spidev";
+		spi-max-frequency = <16000000>;
+		reg = <1>;
+	};
 };
 
 / {
