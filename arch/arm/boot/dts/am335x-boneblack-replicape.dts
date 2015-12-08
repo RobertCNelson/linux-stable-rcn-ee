@@ -15,10 +15,6 @@
 	compatible = "ti,am335x-bone-black", "ti,am335x-bone", "ti,am33xx";
 };
 
-/* Max Core Speed */
-#include "am335x-boneblack-1ghz.dtsi"
-/* #include "am335x-boneblack-800mhz.dtsi" */
-
 &ldo3_reg {
 	regulator-min-microvolt = <1800000>;
 	regulator-max-microvolt = <1800000>;
@@ -34,6 +30,10 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&emmc_pins>;
 	bus-width = <8>;
+	status = "okay";
+};
+
+&sgx {
 	status = "okay";
 };
 
@@ -93,8 +93,4 @@
 		pinctrl-1 = <&nxp_hdmi_bonelt_off_pins>;
 		status = "okay";
 	};
-};
-
-&rtc {
-	system-power-controller;
 };
