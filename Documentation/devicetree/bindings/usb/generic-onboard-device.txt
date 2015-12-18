@@ -1,0 +1,31 @@
+Generic Onboard USB Device
+
+The node should be located at USB host controller's node or
+any USB HUB's node.
+
+Required properties:
+- compatible: should be "generic-onboard-device"
+
+Optional properties:
+- clocks: the input clock for USB device.
+- clock-frequency: the frequency for device's clock.
+- reset-gpios: Should specify the GPIO for reset.
+- reset-duration-us: the duration for assert reset signal, the time unit
+  is microsecond.
+
+Example:
+
+&usbh1 {
+	vbus-supply = <&reg_usb_h1_vbus>;
+        status = "okay";
+
+	#address-cells = <1>;
+	#size-cells = <0>;
+	hub: usb2415@01 {
+	       compatible = "generic-onboard-device";
+	       reg = <0x01>;
+	       clocks = <&clks IMX6QDL_CLK_CKO>;
+	       reset-gpios = <&gpio7 12 GPIO_ACTIVE_LOW>;
+	       reset-duration-us = <10>;
+	};
+};
