@@ -268,3 +268,13 @@ config USB_CHAOSKEY
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called chaoskey.
+
+config USB_ONBOARD_DEVICE
+	tristate "Generic USB Onboard Device"
+	help
+	  depends on OF
+	  Say Y here if your board has an onboard device, and this device
+	  needs to control its PHY clock and reset pin through external
+	  signals. If you are not sure, say N.
+
+	  To compile this driver as a module, choose M here.
