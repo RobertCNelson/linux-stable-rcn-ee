@@ -26,6 +26,7 @@
 #include <linux/mutex.h>
 #include <linux/random.h>
 #include <linux/pm_qos.h>
+#include <linux/of_platform.h>
 
 #include <asm/uaccess.h>
 #include <asm/byteorder.h>
@@ -1264,6 +1265,34 @@ static int hub_post_reset(struct usb_interface *intf)
 	return 0;
 }
 
+static int hub_of_children_register(struct usb_device *hdev)
+{
+	struct device *dev;
+
+	if (hdev->parent)
+		dev = &hdev->dev;
+	else
+		dev = bus_to_hcd(hdev->bus)->self.controller;
+
+	if (!dev->of_node)
+		return 0;
+
+	return of_platform_populate(dev->of_node, NULL, NULL, dev);
+}
+
+static void hub_of_children_unregister(struct usb_device *hdev)
+{
+	struct device *dev;
+
+	if (hdev->parent)
+		dev = &hdev->dev;
+	else
+		dev = bus_to_hcd(hdev->bus)->self.controller;
+
+	if (dev->of_node)
+		of_platform_depopulate(dev);
+}
+
 static int hub_configure(struct usb_hub *hub,
 	struct usb_endpoint_descriptor *endpoint)
 {
@@ -1607,6 +1636,7 @@ static void hub_disconnect(struct usb_interface *intf)
 	usb_set_intfdata(intf, NULL);
 	spin_unlock_irq(&device_state_lock);
 
+	hub_of_children_unregister(hdev);
 	for (; port1 > 0; --port1)
 		usb_hub_remove_port_device(hub, port1);
 
@@ -1631,6 +1661,7 @@ static int hub_probe(struct usb_interface *intf, const struct usb_device_id *id)
 	struct usb_endpoint_descriptor *endpoint;
 	struct usb_device *hdev;
 	struct usb_hub *hub;
+	int ret;
 
 	desc = intf->cur_altsetting;
 	hdev = interface_to_usbdev(intf);
@@ -1749,6 +1780,12 @@ descriptor_error:
 
 	if (id->driver_info & HUB_QUIRK_CHECK_PORT_AUTOSUSPEND)
 		hub->quirk_check_port_auto_suspend = 1;
+
+	ret = hub_of_children_register(hdev);
+	if (ret) {
+		dev_err(&hdev->dev, "Failed to register child device\n");
+		return ret;
+	}
 
 	if (hub_configure(hub, endpoint) >= 0)
 		return 0;
