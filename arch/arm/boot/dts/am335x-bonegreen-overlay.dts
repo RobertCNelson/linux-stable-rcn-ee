@@ -26,27 +26,14 @@
 	vmmc-supply = <&vmmcsd_fixed>;
 };
 
-&mmc2 {
-	vmmc-supply = <&vmmcsd_fixed>;
-	pinctrl-names = "default";
-	pinctrl-0 = <&emmc_pins>;
-	bus-width = <8>;
-	status = "okay";
-};
-
-&am33xx_pinmux {
-	uart2_pins: uart2_pins {
-		pinctrl-single,pins = <
-			AM33XX_IOPAD(0x950, PIN_INPUT | MUX_MODE1)	/* spi0_sclk.uart2_rxd */
-			AM33XX_IOPAD(0x954, PIN_OUTPUT | MUX_MODE1)	/* spi0_d0.uart2_txd */
-		>;
+/* EMMC in reset */
+&gpio1 {
+	emmc_rst {
+		gpio-hog;
+		gpios = <20 0>;
+		output-high;
+		line-name = "EMMC ResetN";
 	};
-};
-
-&uart2 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&uart2_pins>;
-	status = "okay";
 };
 
 &rtc {
