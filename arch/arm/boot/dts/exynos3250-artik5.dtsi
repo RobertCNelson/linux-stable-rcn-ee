@@ -48,6 +48,12 @@
 	};
 };
 
+&adc {
+	vdd-supply = <&ldo7_reg>;
+	assigned-clocks = <&cmu CLK_SCLK_TSADC>;
+	assigned-clock-rates = <6000000>;
+};
+
 &cpu0 {
 	cpu0-supply = <&buck2_reg>;
 };
@@ -316,6 +322,12 @@
 };
 
 &tmu {
+	status = "okay";
+};
+
+&rtc {
+	clocks = <&cmu CLK_RTC>, <&s2mps14_osc S2MPS11_CLK_AP>;
+	clock-names = "rtc", "rtc_src";
 	status = "okay";
 };
 
