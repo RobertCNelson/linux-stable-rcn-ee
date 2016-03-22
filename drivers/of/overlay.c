@@ -514,6 +514,101 @@ static int of_free_overlay_info(struct of_overlay *ov)
 	return 0;
 }
 
+static int of_overlay_add_symbols(
+		struct device_node *tree,
+		struct of_overlay *ov)
+{
+	struct of_overlay_info *ovinfo;
+	struct device_node *root_sym = NULL;
+	struct device_node *child = NULL;
+	struct property *prop;
+	const char *path, *s;
+	char *new_path;
+	int i, len, err;
+
+	/* this may fail (if no fixups are required) */
+	root_sym = of_find_node_by_path("/__symbols__");
+
+	/* do nothing if no root symbols */
+	if (!root_sym)
+		return 0;
+
+	/* locate the symbols & fixups nodes on resolve */
+	for_each_child_of_node(tree, child) {
+		if (of_node_cmp(child->name, "__symbols__") == 0)
+			goto found;
+	}
+	/* no symbols, no problem */
+	of_node_put(root_sym);
+	return 0;
+
+found:
+	err = -EINVAL;
+	for_each_property_of_node(child, prop) {
+
+		/* skip properties added automatically */
+		if (of_prop_cmp(prop->name, "name") == 0)
+			continue;
+
+		err = of_property_read_string(child,
+				prop->name, &path);
+		if (err != 0) {
+			pr_err("%s: Could not find symbol '%s'\n",
+					__func__, prop->name);
+			continue;
+		}
+
+
+		/* now find fragment index */
+		s = path;
+
+		/* compare paths to find fragment index */
+		ovinfo = NULL;
+		len = -1;
+		for (i = 0; i < ov->count; i++) {
+			ovinfo = &ov->ovinfo_tab[i];
+
+			pr_debug("%s: #%d: overlay->name=%s target->name=%s\n",
+					__func__, i, ovinfo->overlay->full_name,
+					ovinfo->target->full_name);
+
+			len = strlen(ovinfo->overlay->full_name);
+			if (strncasecmp(path, ovinfo->overlay->full_name,
+						len) == 0 && path[len] == '/')
+				break;
+		}
+
+		if (i >= ov->count)
+			continue;
+
+		pr_debug("%s: found target at #%d\n", __func__, i);
+		new_path = kasprintf(GFP_KERNEL, "%s%s",
+				ovinfo->target->full_name,
+				path + len);
+		if (!new_path) {
+			pr_err("%s: Failed to allocate propname for \"%s\"\n",
+					__func__, prop->name);
+			continue;
+		}
+
+		err = of_changeset_add_property_string(&ov->cset, root_sym,
+				prop->name, new_path);
+
+		/* free always */
+		kfree(new_path);
+
+		if (err) {
+			pr_err("%s: Failed to add property for \"%s\"\n",
+					__func__, prop->name);
+		}
+	}
+
+	of_node_put(child);
+	of_node_put(root_sym);
+
+	return 0;
+}
+
 static LIST_HEAD(ov_list);
 static DEFINE_IDR(ov_idr);
 
@@ -638,6 +733,13 @@ static int __of_overlay_create(struct device_node *tree,
 	err = of_overlay_apply(ov);
 	if (err) {
 		pr_err("%s: of_overlay_apply() failed for tree@%s\n",
+				__func__, tree->full_name);
+		goto err_abort_trans;
+	}
+
+	err = of_overlay_add_symbols(tree, ov);
+	if (err) {
+		pr_err("%s: of_overlay_add_symbols() failed for tree@%s\n",
 				__func__, tree->full_name);
 		goto err_abort_trans;
 	}
