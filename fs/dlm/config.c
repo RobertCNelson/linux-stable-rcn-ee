@@ -346,6 +346,7 @@ static struct config_group *make_cluster(struct config_group *g,
 	void *gps = NULL;
 
 	cl = kzalloc(sizeof(struct dlm_cluster), GFP_NOFS);
+	gps = kcalloc(3, sizeof(struct config_group *), GFP_NOFS);
 	sps = kzalloc(sizeof(struct dlm_spaces), GFP_NOFS);
 	cms = kzalloc(sizeof(struct dlm_comms), GFP_NOFS);
 
@@ -356,8 +357,10 @@ static struct config_group *make_cluster(struct config_group *g,
 	config_group_init_type_name(&sps->ss_group, "spaces", &spaces_type);
 	config_group_init_type_name(&cms->cs_group, "comms", &comms_type);
 
-	configfs_add_default_group(&sps->ss_group, &cl->group);
-	configfs_add_default_group(&cms->cs_group, &cl->group);
+	cl->group.default_groups = gps;
+	cl->group.default_groups[0] = &sps->ss_group;
+	cl->group.default_groups[1] = &cms->cs_group;
+	cl->group.default_groups[2] = NULL;
 
 	cl->cl_tcp_port = dlm_config.ci_tcp_port;
 	cl->cl_buffer_size = dlm_config.ci_buffer_size;
@@ -380,6 +383,7 @@ static struct config_group *make_cluster(struct config_group *g,
 
  fail:
 	kfree(cl);
+	kfree(gps);
 	kfree(sps);
 	kfree(cms);
 	return ERR_PTR(-ENOMEM);
@@ -388,8 +392,14 @@ static struct config_group *make_cluster(struct config_group *g,
 static void drop_cluster(struct config_group *g, struct config_item *i)
 {
 	struct dlm_cluster *cl = config_item_to_cluster(i);
+	struct config_item *tmp;
+	int j;
 
-	configfs_remove_default_groups(&cl->group);
+	for (j = 0; cl->group.default_groups[j]; j++) {
+		tmp = &cl->group.default_groups[j]->cg_item;
+		cl->group.default_groups[j] = NULL;
+		config_item_put(tmp);
+	}
 
 	space_list = NULL;
 	comm_list = NULL;
@@ -400,6 +410,7 @@ static void drop_cluster(struct config_group *g, struct config_item *i)
 static void release_cluster(struct config_item *i)
 {
 	struct dlm_cluster *cl = config_item_to_cluster(i);
+	kfree(cl->group.default_groups);
 	kfree(cl);
 }
 
@@ -407,17 +418,21 @@ static struct config_group *make_space(struct config_group *g, const char *name)
 {
 	struct dlm_space *sp = NULL;
 	struct dlm_nodes *nds = NULL;
+	void *gps = NULL;
 
 	sp = kzalloc(sizeof(struct dlm_space), GFP_NOFS);
+	gps = kcalloc(2, sizeof(struct config_group *), GFP_NOFS);
 	nds = kzalloc(sizeof(struct dlm_nodes), GFP_NOFS);
 
-	if (!sp || !nds)
+	if (!sp || !gps || !nds)
 		goto fail;
 
 	config_group_init_type_name(&sp->group, name, &space_type);
-
 	config_group_init_type_name(&nds->ns_group, "nodes", &nodes_type);
-	configfs_add_default_group(&nds->ns_group, &sp->group);
+
+	sp->group.default_groups = gps;
+	sp->group.default_groups[0] = &nds->ns_group;
+	sp->group.default_groups[1] = NULL;
 
 	INIT_LIST_HEAD(&sp->members);
 	mutex_init(&sp->members_lock);
@@ -426,6 +441,7 @@ static struct config_group *make_space(struct config_group *g, const char *name)
 
  fail:
 	kfree(sp);
+	kfree(gps);
 	kfree(nds);
 	return ERR_PTR(-ENOMEM);
 }
@@ -433,16 +449,24 @@ static struct config_group *make_space(struct config_group *g, const char *name)
 static void drop_space(struct config_group *g, struct config_item *i)
 {
 	struct dlm_space *sp = config_item_to_space(i);
+	struct config_item *tmp;
+	int j;
 
 	/* assert list_empty(&sp->members) */
 
-	configfs_remove_default_groups(&sp->group);
+	for (j = 0; sp->group.default_groups[j]; j++) {
+		tmp = &sp->group.default_groups[j]->cg_item;
+		sp->group.default_groups[j] = NULL;
+		config_item_put(tmp);
+	}
+
 	config_item_put(i);
 }
 
 static void release_space(struct config_item *i)
 {
 	struct dlm_space *sp = config_item_to_space(i);
+	kfree(sp->group.default_groups);
 	kfree(sp);
 }
 
