@@ -8,6 +8,7 @@
 /dts-v1/;
 
 #include "am33xx.dtsi"
+#include "am33xx-es2.dtsi"
 #include "am335x-bone-common.dtsi"
 #include "am33xx-overlay-edma-fix.dtsi"
 #include <dt-bindings/interrupt-controller/irq.h>
@@ -198,8 +199,4 @@
 		interrupts = <2 IRQ_TYPE_EDGE_RISING>;
 		//orientation = <0xff 0 0 0 1 0 0 0 0xff>;
 	};
-};
-
-&rtc {
-	system-power-controller;
 };
