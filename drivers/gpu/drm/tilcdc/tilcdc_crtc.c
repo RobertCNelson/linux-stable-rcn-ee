@@ -718,13 +718,18 @@ irqreturn_t tilcdc_crtc_irq(struct drm_crtc *crtc)
 			tilcdc_crtc->frame_intact = true;
 	}
 
-	if (priv->rev == 2) {
-		if (stat & LCDC_FRAME_DONE) {
-			tilcdc_crtc->frame_done = true;
-			wake_up(&tilcdc_crtc->frame_done_wq);
-		}
-		tilcdc_write(dev, LCDC_END_OF_INT_IND_REG, 0);
+	if (priv->rev == 1)
+		return IRQ_HANDLED;
+	/* The rest is for revision 2 only */
+
+	if (stat & LCDC_FRAME_DONE) {
+		tilcdc_crtc->frame_done = true;
+		wake_up(&tilcdc_crtc->frame_done_wq);
 	}
+
+	if (stat & LCDC_FIFO_UNDERFLOW)
+		dev_err_ratelimited(dev->dev, "%s(0x%08x): FIFO underfow",
+				    __func__, stat);
 
 	if (stat & LCDC_SYNC_LOST) {
 		dev_err_ratelimited(dev->dev, "%s(0x%08x): Sync lost",
@@ -739,9 +744,10 @@ irqreturn_t tilcdc_crtc_irq(struct drm_crtc *crtc)
 		}
 	}
 
-	if (stat & LCDC_FIFO_UNDERFLOW)
-		dev_err_ratelimited(dev->dev, "%s(0x%08x): FIFO underfow",
-				    __func__, stat);
+	/* Indicate to LCDC that the interrupt service routine has
+	 * completed, see 13.3.6.1.6 in AM335x TRM.
+	 */
+	tilcdc_write(dev, LCDC_END_OF_INT_IND_REG, 0);
 
 	return IRQ_HANDLED;
 }
