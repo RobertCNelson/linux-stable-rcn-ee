@@ -74,7 +74,7 @@ static void fpga_irq_handle(unsigned int irq, struct irq_desc *desc)
 	do {
 		irq = ffs(status) - 1;
 		status &= ~(1 << irq);
-		generic_handle_irq(irq_find_mapping(f->domain, irq));
+		ipipe_handle_demuxed_irq(irq_find_mapping(f->domain, irq));
 	} while (status);
 }
 
@@ -91,7 +91,7 @@ static int handle_one_fpga(struct fpga_irq_data *f, struct pt_regs *regs)
 
 	while ((status  = readl(f->base + IRQ_STATUS))) {
 		irq = ffs(status) - 1;
-		handle_IRQ(irq_find_mapping(f->domain, irq), regs);
+		ipipe_handle_multi_irq(irq_find_mapping(f->domain, irq), regs);
 		handled = 1;
 	}
 
@@ -147,6 +147,9 @@ void __init fpga_irq_init(void __iomem *base, const char *name, int irq_start,
 	f->chip.name = name;
 	f->chip.irq_ack = fpga_irq_mask;
 	f->chip.irq_mask = fpga_irq_mask;
+#ifdef CONFIG_IPIPE
+	f->chip.irq_mask_ack = fpga_irq_mask;
+#endif
 	f->chip.irq_unmask = fpga_irq_unmask;
 	f->valid = valid;
 

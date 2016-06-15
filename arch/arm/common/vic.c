@@ -30,6 +30,7 @@
 #include <linux/syscore_ops.h>
 #include <linux/device.h>
 #include <linux/amba/bus.h>
+#include <linux/ipipe.h>
 
 #include <asm/exception.h>
 #include <asm/mach/irq.h>
@@ -253,7 +254,7 @@ static void vic_unmask_irq(struct irq_data *d)
 #if defined(CONFIG_PM)
 static struct vic_device *vic_from_irq(unsigned int irq)
 {
-        struct vic_device *v = vic_devices;
+	struct vic_device *v = vic_devices;
 	unsigned int base_irq = irq & ~31;
 	int id;
 
@@ -292,6 +293,9 @@ static struct irq_chip vic_chip = {
 	.name		= "VIC",
 	.irq_ack	= vic_ack_irq,
 	.irq_mask	= vic_mask_irq,
+#ifdef CONFIG_IPIPE
+	.irq_mask_ack   = vic_ack_irq,
+#endif /* CONFIG_IPIPE */
 	.irq_unmask	= vic_unmask_irq,
 	.irq_set_wake	= vic_set_wake,
 };

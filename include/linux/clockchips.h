@@ -107,6 +107,15 @@ struct clock_event_device {
 	int			irq;
 	const struct cpumask	*cpumask;
 	struct list_head	list;
+
+#ifdef CONFIG_IPIPE
+	struct ipipe_timer      *ipipe_timer;
+	unsigned                ipipe_stolen;
+
+#define clockevent_ipipe_stolen(evt) ((evt)->ipipe_stolen)
+#else
+#define clockevent_ipipe_stolen(evt) (0)
+#endif /* !CONFIG_IPIPE */
 } ____cacheline_aligned;
 
 /*

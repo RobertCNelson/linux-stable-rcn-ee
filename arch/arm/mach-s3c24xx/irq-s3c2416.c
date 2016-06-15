@@ -28,6 +28,7 @@
 #include <linux/device.h>
 #include <linux/io.h>
 #include <linux/syscore_ops.h>
+#include <linux/ipipe.h>
 
 #include <mach/hardware.h>
 #include <asm/irq.h>
@@ -62,7 +63,7 @@ static inline void s3c2416_irq_demux(unsigned int irq, unsigned int len)
 
 	for (; irq < end && subsrc; irq++) {
 		if (subsrc & 1)
-			generic_handle_irq(irq);
+			ipipe_handle_demuxed_irq(irq);
 
 		subsrc >>= 1;
 	}

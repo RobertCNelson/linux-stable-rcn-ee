@@ -137,7 +137,7 @@ static void mxs_gpio_irq_handler(u32 irq, struct irq_desc *desc)
 
 	while (irq_stat != 0) {
 		int irqoffset = fls(irq_stat) - 1;
-		generic_handle_irq(irq_find_mapping(port->domain, irqoffset));
+		ipipe_handle_demuxed_irq(irq_find_mapping(port->domain, irqoffset));
 		irq_stat &= ~(1 << irqoffset);
 	}
 }

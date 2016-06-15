@@ -242,7 +242,9 @@ u64 sched_clock_cpu(int cpu)
 	struct sched_clock_data *scd;
 	u64 clock;
 
+#ifndef CONFIG_IPIPE
 	WARN_ON_ONCE(!irqs_disabled());
+#endif
 
 	if (sched_clock_stable)
 		return sched_clock();
@@ -319,9 +321,9 @@ u64 cpu_clock(int cpu)
 	u64 clock;
 	unsigned long flags;
 
-	local_irq_save(flags);
+	flags = hard_local_irq_save_notrace();
 	clock = sched_clock_cpu(cpu);
-	local_irq_restore(flags);
+	hard_local_irq_restore_notrace(flags);
 
 	return clock;
 }
@@ -338,9 +340,9 @@ u64 local_clock(void)
 	u64 clock;
 	unsigned long flags;
 
-	local_irq_save(flags);
+	flags = hard_local_irq_save_notrace();
 	clock = sched_clock_cpu(smp_processor_id());
-	local_irq_restore(flags);
+	hard_local_irq_restore_notrace(flags);
 
 	return clock;
 }
