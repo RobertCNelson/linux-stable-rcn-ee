@@ -544,6 +544,7 @@ vfs_readf_t vfs_readf(struct file *file)
 		return new_sync_read;
 	return ERR_PTR(-ENOSYS);
 }
+EXPORT_SYMBOL_GPL(vfs_readf);
 
 vfs_writef_t vfs_writef(struct file *file)
 {
@@ -555,6 +556,7 @@ vfs_writef_t vfs_writef(struct file *file)
 		return new_sync_write;
 	return ERR_PTR(-ENOSYS);
 }
+EXPORT_SYMBOL_GPL(vfs_writef);
 
 ssize_t __kernel_write(struct file *file, const char *buf, size_t count, loff_t *pos)
 {
