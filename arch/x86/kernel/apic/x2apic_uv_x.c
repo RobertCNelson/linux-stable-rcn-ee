@@ -755,7 +755,7 @@ static void uv_heartbeat(unsigned long ignored)
 	uv_set_scir_bits(bits);
 
 	/* enable next timer period */
-	mod_timer_pinned(timer, jiffies + SCIR_CPU_HB_INTERVAL);
+	mod_timer(timer, jiffies + SCIR_CPU_HB_INTERVAL);
 }
 
 static void uv_heartbeat_enable(int cpu)
@@ -764,7 +764,7 @@ static void uv_heartbeat_enable(int cpu)
 		struct timer_list *timer = &uv_cpu_hub_info(cpu)->scir.timer;
 
 		uv_set_cpu_scir_bits(cpu, SCIR_CPU_HEARTBEAT|SCIR_CPU_ACTIVITY);
-		setup_timer(timer, uv_heartbeat, cpu);
+		setup_pinned_timer(timer, uv_heartbeat, cpu);
 		timer->expires = jiffies + SCIR_CPU_HB_INTERVAL;
 		add_timer_on(timer, cpu);
 		uv_cpu_hub_info(cpu)->scir.enabled = 1;
@@ -950,7 +950,7 @@ void __init uv_system_init(void)
 			uv_blade_info[blade].pnode = pnode;
 			uv_blade_info[blade].nr_possible_cpus = 0;
 			uv_blade_info[blade].nr_online_cpus = 0;
-			spin_lock_init(&uv_blade_info[blade].nmi_lock);
+			raw_spin_lock_init(&uv_blade_info[blade].nmi_lock);
 			min_pnode = min(pnode, min_pnode);
 			max_pnode = max(pnode, max_pnode);
 			blade++;
