@@ -4184,7 +4184,7 @@ mem_cgroup_css_alloc(struct cgroup_subsys_state *parent_css)
 	return &memcg->css;
 fail:
 	mem_cgroup_free(memcg);
-	return ERR_PTR(-ENOMEM);
+	return NULL;
 }
 
 static int
