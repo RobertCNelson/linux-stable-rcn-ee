@@ -52,6 +52,8 @@ static DEFINE_MUTEX(sysfs_lock);
  *      * is read/write as zero/nonzero
  *      * also affects existing and subsequent "falling" and "rising"
  *        /edge configuration
+ *   /label
+ *      * descriptor label
  */
 
 static ssize_t direction_show(struct device *dev,
@@ -351,6 +353,23 @@ static ssize_t active_low_store(struct device *dev,
 }
 static DEVICE_ATTR_RW(active_low);
 
+static ssize_t label_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct gpiod_data *data = dev_get_drvdata(dev);
+	struct gpio_desc *desc = data->desc;
+	ssize_t			status;
+
+	mutex_lock(&data->mutex);
+
+	status = sprintf(buf, "%s\n", desc->label);
+
+	mutex_unlock(&data->mutex);
+
+	return status;
+}
+static DEVICE_ATTR_RO(label);
+
 static umode_t gpio_is_visible(struct kobject *kobj, struct attribute *attr,
 			       int n)
 {
@@ -378,6 +397,7 @@ static struct attribute *gpio_attrs[] = {
 	&dev_attr_edge.attr,
 	&dev_attr_value.attr,
 	&dev_attr_active_low.attr,
+	&dev_attr_label.attr,
 	NULL,
 };
 
@@ -390,6 +410,10 @@ static const struct attribute_group *gpio_groups[] = {
 	&gpio_group,
 	NULL
 };
+
+/* bwlegh, a second device in the same file... get out of my namespace! */
+#define dev_attr_label dev_attr_chip_label
+#define label_show chip_label_show
 
 /*
  * /sys/class/gpio/gpiochipN/
