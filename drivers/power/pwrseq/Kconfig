@@ -1,0 +1,45 @@
+#
+# Power Sequence library
+#
+
+config POWER_SEQUENCE
+	bool
+
+menu "Power Sequence Support"
+
+config PWRSEQ_GENERIC
+	bool "Generic power sequence control"
+	depends on OF
+	select POWER_SEQUENCE
+	help
+	   It is used for drivers which needs to do power sequence
+	   (eg, turn on clock, toggle reset gpio) before the related
+	   devices can be found by hardware. This generic one can be
+	   used for common power sequence control.
+
+config PWRSEQ_GENERIC_INSTANCE_NUMBER
+	int "Number of Generic Power Sequence Instance"
+	depends on PWRSEQ_GENERIC
+	range 1 10
+	default 2
+	help
+	   Usually, there are not so many devices needs power sequence, we set two
+	   as default value.
+
+config PWRSEQ_SAMPLE
+	bool "sample power sequence control using compatible string"
+	depends on OF
+	select POWER_SEQUENCE
+	help
+	   It is a sample library which implements power sequence for device id,
+	   it is an example purpose.
+
+config PWRSEQ_SAMPLE_INSTANCE_NUMBER
+	int "Number of Sample Power Sequence Instance"
+	depends on PWRSEQ_SAMPLE
+	range 1 5
+	default 1
+	help
+	   Usually, this file is special for certain device, so the default for this number
+	   is 1.
+endmenu
