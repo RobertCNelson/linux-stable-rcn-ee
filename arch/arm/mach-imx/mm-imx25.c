@@ -100,6 +100,13 @@ void __init imx25_soc_init(void)
 	pinctrl_provide_dummies();
 	/* i.mx25 has the i.mx35 type sdma */
 	imx_add_imx_sdma("imx35-sdma", MX25_SDMA_BASE_ADDR, MX25_INT_SDMA, &imx25_sdma_pdata);
+
+#ifdef CONFIG_IPIPE
+	/* Setup AIPS registers */
+	imx_set_aips(MX25_IO_ADDRESS(MX25_AIPS1_BASE_ADDR));
+	imx_set_aips(MX25_IO_ADDRESS(MX25_AIPS1_BASE_ADDR));
+#endif
+
 	/* i.mx25 has the i.mx31 type audmux */
 	platform_device_register_simple("imx31-audmux", 0, imx25_audmux_res,
 					ARRAY_SIZE(imx25_audmux_res));

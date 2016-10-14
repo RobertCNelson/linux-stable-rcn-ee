@@ -26,6 +26,8 @@
 #include <linux/clockchips.h>
 #include <linux/clk.h>
 #include <linux/err.h>
+#include <linux/ipipe.h>
+#include <linux/ipipe_tickdev.h>
 
 #include <asm/sched_clock.h>
 #include <asm/mach/time.h>
@@ -227,12 +229,8 @@ static void mxc_set_mode(enum clock_event_mode mode,
 	}
 }
 
-/*
- * IRQ handler for the timer
- */
-static irqreturn_t mxc_timer_interrupt(int irq, void *dev_id)
+static inline void mxc_timer_ack(void)
 {
-	struct clock_event_device *evt = &clockevent_mxc;
 	uint32_t tstat;
 
 	if (timer_is_v2())
@@ -241,11 +239,39 @@ static irqreturn_t mxc_timer_interrupt(int irq, void *dev_id)
 		tstat = __raw_readl(timer_base + MX1_2_TSTAT);
 
 	gpt_irq_acknowledge();
+}
+
+/*
+ * IRQ handler for the timer
+ */
+static irqreturn_t mxc_timer_interrupt(int irq, void *dev_id)
+{
+	struct clock_event_device *evt = &clockevent_mxc;
+
+	if (!clockevent_ipipe_stolen(evt))
+		mxc_timer_ack();
+
+	__ipipe_tsc_update();
 
 	evt->event_handler(evt);
 
 	return IRQ_HANDLED;
 }
+
+#ifdef CONFIG_IPIPE
+static struct __ipipe_tscinfo tsc_info = {
+       .type = IPIPE_TSC_TYPE_FREERUNNING,
+       .u = {
+	       {
+		       .mask = 0xffffffff,
+	       },
+       },
+};
+
+static struct ipipe_timer mxc_itimer = {
+	.ack = mxc_timer_ack,
+};
+#endif
 
 static struct irqaction mxc_timer_irq = {
 	.name		= "i.MX Timer Tick",
@@ -260,6 +286,9 @@ static struct clock_event_device clockevent_mxc = {
 	.set_mode	= mxc_set_mode,
 	.set_next_event	= mx1_2_set_next_event,
 	.rating		= 200,
+#ifdef CONFIG_IPIPE
+	.ipipe_timer    = &mxc_itimer,
+#endif
 };
 
 static int __init mxc_clockevent_init(struct clk *timer_clk)
@@ -283,7 +312,8 @@ static int __init mxc_clockevent_init(struct clk *timer_clk)
 	return 0;
 }
 
-void __init mxc_timer_init(void __iomem *base, int irq)
+void __init
+mxc_timer_init(void __iomem *base, unsigned long phys, int irq)
 {
 	uint32_t tctl_val;
 	struct clk *timer_clk;
@@ -319,8 +349,29 @@ void __init mxc_timer_init(void __iomem *base, int irq)
 
 	/* init and register the timer to the framework */
 	mxc_clocksource_init(timer_clk);
+
+#ifdef CONFIG_IPIPE
+	if (num_online_cpus() == 1) {
+		tsc_info.freq = clk_get_rate(timer_clk);
+
+		if (timer_is_v1()) {
+			tsc_info.u.counter_paddr = phys + MX1_2_TCN;
+			tsc_info.counter_vaddr =(unsigned long)(timer_base + MX1_2_TCN);
+		} else {
+			tsc_info.u.counter_paddr = phys + V2_TCN;
+			tsc_info.counter_vaddr = (unsigned long)(timer_base + V2_TCN);
+		}
+		__ipipe_tsc_register(&tsc_info);
+	}
+
+	mxc_itimer.irq = irq;
+	mxc_itimer.freq = clk_get_rate(timer_clk);
+	mxc_itimer.min_delay_ticks = ipipe_timer_ns2ticks(&mxc_itimer, 2000);
+
+#endif /* CONFIG_IPIPE */
 	mxc_clockevent_init(timer_clk);
 
 	/* Make irqs happen */
 	setup_irq(irq, &mxc_timer_irq);
+
 }

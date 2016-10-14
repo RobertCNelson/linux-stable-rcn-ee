@@ -32,6 +32,7 @@
 #include <linux/list.h>
 #include <linux/hash.h>
 #include <linux/rcupdate.h>
+#include <linux/ipipe.h>
 
 #include <trace/events/sched.h>
 
@@ -237,9 +238,18 @@ static void update_global_ops(void)
 
 static void update_ftrace_function(void)
 {
+	struct ftrace_ops *ops;
 	ftrace_func_t func;
 
 	update_global_ops();
+
+	for (ops = ftrace_ops_list;
+	     ops != &ftrace_list_end; ops = ops->next)
+		if (ops->flags & FTRACE_OPS_FL_IPIPE_EXCLUSIVE) {
+			function_trace_op = ops;
+			ftrace_trace_function = ops->func;
+			return;
+		}
 
 	/*
 	 * If we are at the end of the list and this ops is
@@ -1963,6 +1973,9 @@ void __weak arch_ftrace_update_code(int command)
 
 static void ftrace_run_update_code(int command)
 {
+#ifdef CONFIG_IPIPE
+	unsigned long flags;
+#endif /* CONFIG_IPIPE */
 	int ret;
 
 	ret = ftrace_arch_code_modify_prepare();
@@ -1981,7 +1994,13 @@ static void ftrace_run_update_code(int command)
 	 * is safe. The stop_machine() is the safest, but also
 	 * produces the most overhead.
 	 */
+#ifdef CONFIG_IPIPE
+	flags = ipipe_critical_enter(NULL);
+	__ftrace_modify_code(&command);
+	ipipe_critical_exit(flags);
+#else  /* !CONFIG_IPIPE */
 	arch_ftrace_update_code(command);
+#endif /* !CONFIG_IPIPE */
 
 	function_trace_stop--;
 
@@ -3905,10 +3924,10 @@ static int ftrace_process_locs(struct module *mod,
 	 * reason to cause large interrupt latencies while we do it.
 	 */
 	if (!mod)
-		local_irq_save(flags);
+		flags = hard_local_irq_save();
 	ftrace_update_code(mod);
 	if (!mod)
-		local_irq_restore(flags);
+		hard_local_irq_restore(flags);
 	ret = 0;
  out:
 	mutex_unlock(&ftrace_lock);
@@ -4026,9 +4045,9 @@ void __init ftrace_init(void)
 	/* Keep the ftrace pointer to the stub */
 	addr = (unsigned long)ftrace_stub;
 
-	local_irq_save(flags);
+	flags = hard_local_irq_save_notrace();
 	ftrace_dyn_arch_init(&addr);
-	local_irq_restore(flags);
+	hard_local_irq_restore_notrace(flags);
 
 	/* ftrace_dyn_arch_init places the return code in addr */
 	if (addr)

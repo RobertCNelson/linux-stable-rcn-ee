@@ -156,6 +156,8 @@ config DEBUG_SECTION_MISMATCH
 	  - Enable verbose reporting from modpost in order to help resolve
 	    the section mismatches that are reported.
 
+source "kernel/ipipe/Kconfig.debug"
+
 config DEBUG_KERNEL
 	bool "Kernel debugging"
 	help

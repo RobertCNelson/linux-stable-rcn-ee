@@ -2,6 +2,7 @@
  *  linux/arch/arm/kernel/entry-common.S
  *
  *  Copyright (C) 2000 Russell King
+ *  Copyright (C) 2005 Stelian Pop.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -43,6 +44,15 @@ ret_fast_syscall:
 	arch_ret_to_user r1, lr
 
 	restore_user_regs fast = 1, offset = S_OFF
+
+#ifdef CONFIG_IPIPE
+__ipipe_ret_to_user:
+	disable_irq				@ disable interrupts
+ENTRY(__ipipe_ret_to_user_irqs_disabled)
+	slow_restore_user_regs
+ENDPROC(__ipipe_ret_to_user_irqs_disabled)
+#endif /* CONFIG_IPIPE */
+
  UNWIND(.fnend		)
 
 /*
@@ -74,10 +84,7 @@ no_work_pending:
 #if defined(CONFIG_IRQSOFF_TRACER)
 	asm_trace_hardirqs_on
 #endif
-	/* perform architecture specific actions before user return */
-	arch_ret_to_user r1, lr
-
-	restore_user_regs fast = 0, offset = 0
+	slow_restore_user_regs
 ENDPROC(ret_to_user_from_irq)
 ENDPROC(ret_to_user)
 
@@ -85,6 +92,7 @@ ENDPROC(ret_to_user)
  * This is how we return from a fork.
  */
 ENTRY(ret_from_fork)
+	enable_irq_cond
 	bl	schedule_tail
 	cmp	r5, #0
 	movne	r0, r4
@@ -350,6 +358,16 @@ ENTRY(vector_swi)
 	str	r8, [sp, #S_PSR]		@ Save CPSR
 	str	r0, [sp, #S_OLD_R0]		@ Save OLD_R0
 	zero_fp
+#ifdef CONFIG_IPIPE_TRACE_IRQSOFF
+	mov	r4, lr
+	mov	r0, #1		/* IPIPE_TRACE_BEGIN */
+	mov	r3, #0x90000000
+	sub	r2, lr, #4	/* calling PC */
+	mov	r1, pc
+	bl	ipipe_trace_asm
+	mov	lr, r4
+	ldm	sp, {r0 - r4}
+#endif /* CONFIG_IPIPE_TRACE_IRQSOFF */
 
 	/*
 	 * Get the system call number.
@@ -395,7 +413,9 @@ ENTRY(vector_swi)
 #endif
 	enable_irq
 
+#ifndef	CONFIG_IPIPE
 	get_thread_info tsk
+#endif /* !CONFIG_IPIPE */
 	adr	tbl, sys_call_table		@ load syscall table pointer
 
 #if defined(CONFIG_OABI_COMPAT)
@@ -413,6 +433,17 @@ ENTRY(vector_swi)
 	eor	scno, scno, #__NR_SYSCALL_BASE	@ check OS number
 #endif
 
+#ifdef CONFIG_IPIPE
+	mov	r1, sp
+	mov	r0, scno
+	bl	__ipipe_syscall_root
+	cmp	r0, #0
+	blt	__ipipe_ret_to_user
+	get_thread_info tsk
+	bgt	ret_slow_syscall
+	ldmia	sp, { r0 - r3 }
+#endif /* CONFIG_IPIPE */
+
 local_restart:
 	ldr	r10, [tsk, #TI_FLAGS]		@ check for syscall tracing
 	stmdb	sp!, {r4, r5}			@ push fifth and sixth args
@@ -428,7 +459,7 @@ local_restart:
 2:	mov	why, #0				@ no longer a real syscall
 	cmp	scno, #(__ARM_NR_BASE - __NR_SYSCALL_BASE)
 	eor	r0, scno, #__NR_SYSCALL_BASE	@ put OS number back
-	bcs	arm_syscall	
+	bcs	arm_syscall
 	b	sys_ni_syscall			@ not private func
 ENDPROC(vector_swi)
 
@@ -464,6 +495,9 @@ __sys_trace_return:
 	.type	__cr_alignment, #object
 __cr_alignment:
 	.word	cr_alignment
+#endif
+#ifdef CONFIG_IPIPE
+	.word	__ipipe_syscall_root
 #endif
 	.ltorg
 
@@ -599,3 +633,28 @@ ENTRY(sys_oabi_call_table)
 
 #endif
 
+
+#if defined(CONFIG_FRAME_POINTER) && (CONFIG_IPIPE_TRACE)
+
+	.text
+	.align 0
+	.type arm_return_addr %function
+	.global arm_return_addr
+
+arm_return_addr:
+	mov	ip, r0
+	mov	r0, fp
+3:
+	cmp	r0, #0
+	beq	1f		@ frame list hit end, bail
+	cmp	ip, #0
+	beq	2f		@ reached desired frame
+	ldr	r0, [r0, #-12]  @ else continue, get next fp
+	sub	ip, ip, #1
+	b	3b
+2:
+	ldr	r0, [r0, #-4]   @ get target return address
+1:
+	mov	pc, lr
+
+#endif

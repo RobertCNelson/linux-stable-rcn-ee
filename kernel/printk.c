@@ -1646,6 +1646,43 @@ asmlinkage int printk_emit(int facility, int level,
 }
 EXPORT_SYMBOL(printk_emit);
 
+#ifdef CONFIG_IPIPE
+
+extern int __ipipe_printk_bypass;
+
+static IPIPE_DEFINE_SPINLOCK(__ipipe_printk_lock);
+
+static int __ipipe_printk_fill;
+
+static char __ipipe_printk_buf[__LOG_BUF_LEN];
+
+void __ipipe_flush_printk (unsigned virq, void *cookie)
+{
+	char *p = __ipipe_printk_buf;
+	int len, lmax, out = 0;
+	unsigned long flags;
+
+	goto start;
+
+	do {
+		spin_unlock_irqrestore(&__ipipe_printk_lock, flags);
+ start:
+		lmax = __ipipe_printk_fill;
+		while (out < lmax) {
+			len = strlen(p) + 1;
+			printk("%s",p);
+			p += len;
+			out += len;
+		}
+		spin_lock_irqsave(&__ipipe_printk_lock, flags);
+	}
+	while (__ipipe_printk_fill != lmax);
+
+	__ipipe_printk_fill = 0;
+
+	spin_unlock_irqrestore(&__ipipe_printk_lock, flags);
+}
+
 /**
  * printk - print a kernel message
  * @fmt: format string
@@ -1669,6 +1706,59 @@ EXPORT_SYMBOL(printk_emit);
  */
 asmlinkage int printk(const char *fmt, ...)
 {
+	int sprintk = 1, cs = -1;
+	int r, fbytes, oldcount;
+	unsigned long flags;
+	va_list args;
+
+	va_start(args, fmt);
+
+	flags = hard_local_irq_save();
+
+	if (__ipipe_printk_bypass || oops_in_progress)
+		cs = ipipe_disable_context_check();
+	else if (__ipipe_current_domain == ipipe_root_domain) {
+		if (ipipe_head_domain != ipipe_root_domain && 
+		    (raw_irqs_disabled_flags(flags) ||
+		     test_bit(IPIPE_STALL_FLAG, &__ipipe_head_status)))
+			sprintk = 0;
+	} else
+		sprintk = 0;
+
+	hard_local_irq_restore(flags);
+
+	if (sprintk) {
+		r = vprintk(fmt, args);
+		if (cs != -1)
+			ipipe_restore_context_check(cs);
+		goto out;
+	}
+
+	spin_lock_irqsave(&__ipipe_printk_lock, flags);
+
+	oldcount = __ipipe_printk_fill;
+	fbytes = __LOG_BUF_LEN - oldcount;
+	if (fbytes > 1)	{
+		r = vscnprintf(__ipipe_printk_buf + __ipipe_printk_fill,
+			       fbytes, fmt, args) + 1;
+		__ipipe_printk_fill += r;
+	} else
+		r = 0;
+
+	spin_unlock_irqrestore(&__ipipe_printk_lock, flags);
+
+	if (oldcount == 0)
+		ipipe_raise_irq(__ipipe_printk_virq);
+out:
+	va_end(args);
+
+	return r;
+}
+
+#else /* !CONFIG_IPIPE */
+
+asmlinkage int printk(const char *fmt, ...)
+{
 	va_list args;
 	int r;
 
@@ -1686,6 +1776,8 @@ asmlinkage int printk(const char *fmt, ...)
 
 	return r;
 }
+#endif /* CONFIG_IPIPE */
+
 EXPORT_SYMBOL(printk);
 
 #else /* CONFIG_PRINTK */
@@ -2400,7 +2492,7 @@ EXPORT_SYMBOL(register_console);
 
 int unregister_console(struct console *console)
 {
-        struct console *a, *b;
+	struct console *a, *b;
 	int res = 1;
 
 #ifdef CONFIG_A11Y_BRAILLE_CONSOLE
