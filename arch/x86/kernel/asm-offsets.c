@@ -31,6 +31,7 @@ void common(void) {
 	BLANK();
 	OFFSET(TI_flags, thread_info, flags);
 	OFFSET(TI_status, thread_info, status);
+	OFFSET(TI_preempt_lazy_count, thread_info, preempt_lazy_count);
 
 	BLANK();
 	OFFSET(TASK_addr_limit, task_struct, thread.addr_limit);
@@ -88,4 +89,5 @@ void common(void) {
 
 	BLANK();
 	DEFINE(PTREGS_SIZE, sizeof(struct pt_regs));
+	DEFINE(_PREEMPT_ENABLED, PREEMPT_ENABLED);
 }
