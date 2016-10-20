@@ -47,22 +47,6 @@ extern struct list_head opp_tables;
  */
 
 /**
- * struct dev_pm_opp_supply - Power supply voltage/current values
- * @u_volt:	Target voltage in microvolts corresponding to this OPP
- * @u_volt_min:	Minimum voltage in microvolts corresponding to this OPP
- * @u_volt_max:	Maximum voltage in microvolts corresponding to this OPP
- * @u_amp:	Maximum current drawn by the device in microamperes
- *
- * This structure stores the voltage/current values for a single power supply.
- */
-struct dev_pm_opp_supply {
-	unsigned long u_volt;
-	unsigned long u_volt_min;
-	unsigned long u_volt_max;
-	unsigned long u_amp;
-};
-
-/**
  * struct dev_pm_opp - Generic OPP description structure
  * @node:	opp table node. The nodes are maintained throughout the lifetime
  *		of boot. It is expected only an optimal set of OPPs are
@@ -193,6 +177,8 @@ struct opp_table {
 	struct clk *clk;
 	struct regulator **regulators;
 	unsigned int regulator_count;
+
+	struct dev_pm_set_rate_data *set_rate_data;
 
 #ifdef CONFIG_DEBUG_FS
 	struct dentry *dentry;

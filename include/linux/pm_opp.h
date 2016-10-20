@@ -17,11 +17,42 @@
 #include <linux/err.h>
 #include <linux/notifier.h>
 
+struct clk;
 struct dev_pm_opp;
 struct device;
 
 enum dev_pm_opp_event {
 	OPP_EVENT_ADD, OPP_EVENT_REMOVE, OPP_EVENT_ENABLE, OPP_EVENT_DISABLE,
+};
+
+/**
+ * struct dev_pm_opp_supply - Power supply voltage/current values
+ * @u_volt:	Target voltage in microvolts corresponding to this OPP
+ * @u_volt_min:	Minimum voltage in microvolts corresponding to this OPP
+ * @u_volt_max:	Maximum voltage in microvolts corresponding to this OPP
+ * @u_amp:	Maximum current drawn by the device in microamperes
+ *
+ * This structure stores the voltage/current values for a single power supply.
+ */
+struct dev_pm_opp_supply {
+	unsigned long u_volt;
+	unsigned long u_volt_min;
+	unsigned long u_volt_max;
+	unsigned long u_amp;
+};
+
+struct dev_pm_opp_info {
+	unsigned long rate;
+	struct dev_pm_opp_supply *supplies;
+};
+
+struct dev_pm_set_rate_data {
+	struct dev_pm_opp_info old_opp;
+	struct dev_pm_opp_info new_opp;
+
+	struct regulator **regulators;
+	unsigned int regulator_count;
+	struct clk *clk;
 };
 
 #if defined(CONFIG_PM_OPP)
