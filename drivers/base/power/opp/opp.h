@@ -178,6 +178,7 @@ struct opp_table {
 	struct regulator **regulators;
 	unsigned int regulator_count;
 
+	int (*set_rate)(struct device *dev, struct dev_pm_set_rate_data *data);
 	struct dev_pm_set_rate_data *set_rate_data;
 
 #ifdef CONFIG_DEBUG_FS
