@@ -47,6 +47,22 @@ extern struct list_head opp_tables;
  */
 
 /**
+ * struct dev_pm_opp_supply - Power supply voltage/current values
+ * @u_volt:	Target voltage in microvolts corresponding to this OPP
+ * @u_volt_min:	Minimum voltage in microvolts corresponding to this OPP
+ * @u_volt_max:	Maximum voltage in microvolts corresponding to this OPP
+ * @u_amp:	Maximum current drawn by the device in microamperes
+ *
+ * This structure stores the voltage/current values for a single power supply.
+ */
+struct dev_pm_opp_supply {
+	unsigned long u_volt;
+	unsigned long u_volt_min;
+	unsigned long u_volt_max;
+	unsigned long u_amp;
+};
+
+/**
  * struct dev_pm_opp - Generic OPP description structure
  * @node:	opp table node. The nodes are maintained throughout the lifetime
  *		of boot. It is expected only an optimal set of OPPs are
@@ -61,10 +77,7 @@ extern struct list_head opp_tables;
  * @turbo:	true if turbo (boost) OPP
  * @suspend:	true if suspend OPP
  * @rate:	Frequency in hertz
- * @u_volt:	Target voltage in microvolts corresponding to this OPP
- * @u_volt_min:	Minimum voltage in microvolts corresponding to this OPP
- * @u_volt_max:	Maximum voltage in microvolts corresponding to this OPP
- * @u_amp:	Maximum current drawn by the device in microamperes
+ * @supply:	Power supply voltage/current values
  * @clock_latency_ns: Latency (in nanoseconds) of switching to this OPP's
  *		frequency from any other OPP's frequency.
  * @opp_table:	points back to the opp_table struct this opp belongs to
@@ -83,10 +96,8 @@ struct dev_pm_opp {
 	bool suspend;
 	unsigned long rate;
 
-	unsigned long u_volt;
-	unsigned long u_volt_min;
-	unsigned long u_volt_max;
-	unsigned long u_amp;
+	struct dev_pm_opp_supply supply;
+
 	unsigned long clock_latency_ns;
 
 	struct opp_table *opp_table;
