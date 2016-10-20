@@ -677,6 +677,7 @@ int dev_pm_opp_set_rate(struct device *dev, unsigned long target_freq)
 {
 	struct opp_table *opp_table;
 	unsigned long freq, old_freq;
+	int (*set_rate)(struct device *dev, struct dev_pm_set_rate_data *data);
 	struct dev_pm_opp *old_opp, *opp;
 	struct regulator **regulators;
 	struct dev_pm_set_rate_data *data;
@@ -738,6 +739,11 @@ int dev_pm_opp_set_rate(struct device *dev, unsigned long target_freq)
 		return _generic_opp_set_rate_clk_only(dev, clk, old_freq, freq);
 	}
 
+	if (opp_table->set_rate)
+		set_rate = opp_table->set_rate;
+	else
+		set_rate = _generic_opp_set_rate;
+
 	data = opp_table->set_rate_data;
 	data->regulators = regulators;
 	data->regulator_count = opp_table->regulator_count;
@@ -755,7 +761,7 @@ int dev_pm_opp_set_rate(struct device *dev, unsigned long target_freq)
 
 	rcu_read_unlock();
 
-	return _generic_opp_set_rate(dev, data);
+	return set_rate(dev, data);
 }
 EXPORT_SYMBOL_GPL(dev_pm_opp_set_rate);
 
@@ -887,6 +893,9 @@ static void _remove_opp_table(struct opp_table *opp_table)
 		return;
 
 	if (opp_table->regulators)
+		return;
+
+	if (opp_table->set_rate)
 		return;
 
 	/* Release clk */
@@ -1560,6 +1569,109 @@ unlock:
 	mutex_unlock(&opp_table_lock);
 }
 EXPORT_SYMBOL_GPL(dev_pm_opp_put_regulators);
+
+/**
+ * dev_pm_opp_register_set_rate_helper() - Register custom OPP set rate helper
+ * @dev: Device for which the helper is getting registered.
+ * @set_rate: Custom OPP set rate helper.
+ *
+ * This is useful to support complex platforms (like platforms with multiple
+ * regulators per device), instead of the generic OPP set rate helper.
+ *
+ * This must be called before any OPPs are initialized for the device.
+ *
+ * Locking: The internal opp_table and opp structures are RCU protected.
+ * Hence this function internally uses RCU updater strategy with mutex locks
+ * to keep the integrity of the internal data structures. Callers should ensure
+ * that this function is *NOT* called under RCU protection or in contexts where
+ * mutex cannot be locked.
+ */
+int dev_pm_opp_register_set_rate_helper(struct device *dev,
+	int (*set_rate)(struct device *dev, struct dev_pm_set_rate_data *data))
+{
+	struct opp_table *opp_table;
+	int ret;
+
+	if (!set_rate)
+		return -EINVAL;
+
+	mutex_lock(&opp_table_lock);
+
+	opp_table = _add_opp_table(dev);
+	if (!opp_table) {
+		ret = -ENOMEM;
+		goto unlock;
+	}
+
+	/* This should be called before OPPs are initialized */
+	if (WARN_ON(!list_empty(&opp_table->opp_list))) {
+		ret = -EBUSY;
+		goto err;
+	}
+
+	/* Already have custom set_rate helper */
+	if (WARN_ON(opp_table->set_rate)) {
+		ret = -EBUSY;
+		goto err;
+	}
+
+	opp_table->set_rate = set_rate;
+
+	mutex_unlock(&opp_table_lock);
+	return 0;
+
+err:
+	_remove_opp_table(opp_table);
+unlock:
+	mutex_unlock(&opp_table_lock);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(dev_pm_opp_register_set_rate_helper);
+
+/**
+ * dev_pm_opp_register_put_rate_helper() - Releases resources blocked for
+ *					   set_rate helper
+ * @dev: Device for which custom set_rate helper has to be cleared.
+ *
+ * Locking: The internal opp_table and opp structures are RCU protected.
+ * Hence this function internally uses RCU updater strategy with mutex locks
+ * to keep the integrity of the internal data structures. Callers should ensure
+ * that this function is *NOT* called under RCU protection or in contexts where
+ * mutex cannot be locked.
+ */
+void dev_pm_opp_register_put_rate_helper(struct device *dev)
+{
+	struct opp_table *opp_table;
+
+	mutex_lock(&opp_table_lock);
+
+	/* Check for existing table for 'dev' first */
+	opp_table = _find_opp_table(dev);
+	if (IS_ERR(opp_table)) {
+		dev_err(dev, "Failed to find opp_table: %ld\n",
+			PTR_ERR(opp_table));
+		goto unlock;
+	}
+
+	if (!opp_table->set_rate) {
+		dev_err(dev, "%s: Doesn't have custom set_rate helper set\n",
+			__func__);
+		goto unlock;
+	}
+
+	/* Make sure there are no concurrent readers while updating opp_table */
+	WARN_ON(!list_empty(&opp_table->opp_list));
+
+	opp_table->set_rate = NULL;
+
+	/* Try freeing opp_table if this was the last blocking resource */
+	_remove_opp_table(opp_table);
+
+unlock:
+	mutex_unlock(&opp_table_lock);
+}
+EXPORT_SYMBOL_GPL(dev_pm_opp_register_put_rate_helper);
 
 /**
  * dev_pm_opp_add()  - Add an OPP table from a table definitions
