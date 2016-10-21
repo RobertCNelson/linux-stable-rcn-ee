@@ -235,9 +235,9 @@ struct tps65217_bl_pdata {
 };
 
 enum tps65217_irq_type {
-	TPS65217_IRQ_PB,
-	TPS65217_IRQ_AC,
 	TPS65217_IRQ_USB,
+	TPS65217_IRQ_AC,
+	TPS65217_IRQ_PB,
 	TPS65217_NUM_IRQ
 };
 
