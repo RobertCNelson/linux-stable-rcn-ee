@@ -102,8 +102,8 @@
 };
 
 &mmc3 {
-	dmas = <&edma_xbar 12 0 1
-		&edma_xbar 13 0 2>;
+	dmas = <&edma 12
+		&edma 13>;
 	dma-names = "tx", "rx";
 	status = "okay";
 	vmmc-supply = <&wlan_en_reg>;
@@ -124,6 +124,10 @@
 		interrupt-parent = <&gpio0>;
 		interrupts = <29 IRQ_TYPE_EDGE_RISING>;
 	};
+};
+
+&edma {
+	ti,edma-xbar-event-map = /bits/ 16 <1 12 2 13>;
 };
 
 &uart3 {
