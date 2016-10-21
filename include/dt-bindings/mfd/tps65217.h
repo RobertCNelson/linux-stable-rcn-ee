@@ -1,0 +1,9 @@
+#ifndef __DT_BINDINGS_TPS65217_H
+#define __DT_BINDINGS_TPS65217_H
+
+#define TPS65217_IRQ_USB	0
+#define TPS65217_IRQ_AC		1
+#define TPS65217_IRQ_PB		2
+#define TPS65217_NUM_IRQ	3
+
+#endif /* __DT_BINDINGS_TPS65217_H */
