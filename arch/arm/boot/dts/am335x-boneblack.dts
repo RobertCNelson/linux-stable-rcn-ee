@@ -103,7 +103,3 @@
 		};
 	};
 };
-
-&rtc {
-	system-power-controller;
-};
