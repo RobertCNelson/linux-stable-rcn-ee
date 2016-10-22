@@ -49,7 +49,3 @@
 	pinctrl-0 = <&uart2_pins>;
 	status = "okay";
 };
-
-&rtc {
-	system-power-controller;
-};
