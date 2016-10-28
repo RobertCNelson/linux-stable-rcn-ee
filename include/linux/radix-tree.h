@@ -280,18 +280,28 @@ bool __radix_tree_delete_node(struct radix_tree_root *root,
 			      struct radix_tree_node *node);
 void *radix_tree_delete_item(struct radix_tree_root *, unsigned long, void *);
 void *radix_tree_delete(struct radix_tree_root *, unsigned long);
-struct radix_tree_node *radix_tree_replace_clear_tags(
-				struct radix_tree_root *root,
-				unsigned long index, void *entry);
+void radix_tree_clear_tags(struct radix_tree_root *root,
+			   struct radix_tree_node *node,
+			   void **slot);
 unsigned int radix_tree_gang_lookup(struct radix_tree_root *root,
 			void **results, unsigned long first_index,
 			unsigned int max_items);
 unsigned int radix_tree_gang_lookup_slot(struct radix_tree_root *root,
 			void ***results, unsigned long *indices,
 			unsigned long first_index, unsigned int max_items);
+#ifdef CONFIG_PREEMPT_RT_FULL
+static inline int radix_tree_preload(gfp_t gm) { return 0; }
+static inline int radix_tree_maybe_preload(gfp_t gfp_mask) { return 0; }
+static inline int radix_tree_maybe_preload_order(gfp_t gfp_mask, int order)
+{
+	return 0;
+};
+
+#else
 int radix_tree_preload(gfp_t gfp_mask);
 int radix_tree_maybe_preload(gfp_t gfp_mask);
 int radix_tree_maybe_preload_order(gfp_t gfp_mask, int order);
+#endif
 void radix_tree_init(void);
 void *radix_tree_tag_set(struct radix_tree_root *root,
 			unsigned long index, unsigned int tag);
@@ -316,7 +326,7 @@ unsigned long radix_tree_locate_item(struct radix_tree_root *root, void *item);
 
 static inline void radix_tree_preload_end(void)
 {
-	preempt_enable();
+	preempt_enable_nort();
 }
 
 /**
