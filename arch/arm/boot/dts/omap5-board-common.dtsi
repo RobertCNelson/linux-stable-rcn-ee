@@ -144,6 +144,10 @@
 	};
 };
 
+&bb2d {
+	status = "okay";
+};
+
 &gpio8 {
 	/* TI trees use GPIO instead of msecure, see also muxing */
 	p234 {
