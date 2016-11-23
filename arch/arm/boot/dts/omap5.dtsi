@@ -830,6 +830,16 @@
 			ti,hwmods = "dmm";
 		};
 
+		bb2d: bb2d@59000000 {
+			compatible = "ti,omap5-bb2d","vivante,gc";
+			reg = <0x59000000 0x0700>;
+			interrupts = <GIC_SPI 120 IRQ_TYPE_LEVEL_HIGH>;
+			ti,hwmods = "bb2d";
+			clocks = <&dpll_core_h24x2_ck>;
+			clock-names = "fclk";
+			status = "disabled";
+		};
+
 		emif1: emif@4c000000 {
 			compatible	= "ti,emif-4d5";
 			ti,hwmods	= "emif1";
@@ -1118,6 +1128,12 @@
 			1120000		0	0x4	0 0x02000000 0x01F00000
 			>;
 		};
+	};
+
+	gpu-subsystem {
+		compatible = "vivante,gc-gpu-subsystem";
+		cores = <&bb2d>;
+		status = "okay";
 	};
 };
 
