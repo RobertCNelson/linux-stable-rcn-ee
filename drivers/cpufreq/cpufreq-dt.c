@@ -187,7 +187,10 @@ static int cpufreq_init(struct cpufreq_policy *policy)
 	 */
 	name = find_supply_name(cpu_dev);
 	if (name) {
-		ret = dev_pm_opp_set_regulator(cpu_dev, name);
+		const char *names[] = {name};
+
+		ret = dev_pm_opp_set_regulators(cpu_dev, names,
+						ARRAY_SIZE(names));
 		if (ret) {
 			dev_err(cpu_dev, "Failed to set regulator for cpu%d: %d\n",
 				policy->cpu, ret);
@@ -288,7 +291,7 @@ out_free_opp:
 	kfree(priv);
 out_put_regulator:
 	if (name)
-		dev_pm_opp_put_regulator(cpu_dev);
+		dev_pm_opp_put_regulators(cpu_dev);
 out_put_clk:
 	clk_put(cpu_clk);
 
@@ -304,7 +307,7 @@ static int cpufreq_exit(struct cpufreq_policy *policy)
 	if (priv->have_static_opps)
 		dev_pm_opp_of_cpumask_remove_table(policy->related_cpus);
 	if (priv->reg_name)
-		dev_pm_opp_put_regulator(priv->cpu_dev);
+		dev_pm_opp_put_regulators(priv->cpu_dev);
 
 	clk_put(policy->clk);
 	kfree(priv);
