@@ -24,9 +24,14 @@
 #include <asm/types.h>
 
 #ifdef __KERNEL__
+#ifndef CONFIG_ARM_FCSE
 #define STACK_TOP	((current->personality & ADDR_LIMIT_32BIT) ? \
 			 TASK_SIZE : TASK_SIZE_26)
 #define STACK_TOP_MAX	TASK_SIZE
+#else /* CONFIG_ARM_FCSE */
+#define STACK_TOP	FCSE_TASK_SIZE
+#define STACK_TOP_MAX	FCSE_TASK_SIZE
+#endif /* CONFIG_ARM_FCSE */
 #endif
 
 struct debug_info {

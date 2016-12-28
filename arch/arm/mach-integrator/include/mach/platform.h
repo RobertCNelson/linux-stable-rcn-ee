@@ -390,7 +390,7 @@
  *  Timer definitions
  *
  *  Only use timer 1 & 2
- *  (both run at 24MHz and will need the clock divider set to 16).
+ *  (both run at 1MHZ on /CP and at 24MHz on /AP)
  *
  *  Timer 0 runs at bus frequency
  */

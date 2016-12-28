@@ -447,11 +447,11 @@ if (ARCH_AT91SAM9260 || ARCH_AT91SAM9G20)
 comment "AT91SAM9260/AT91SAM9G20 boards"
 
 config MACH_SNAPPER_9260
-        bool "Bluewater Systems Snapper 9260/9G20 module"
-        help
-          Select this if you are using the Bluewater Systems Snapper 9260 or
-          Snapper 9G20 modules.
-          <http://www.bluewatersys.com/>
+	bool "Bluewater Systems Snapper 9260/9G20 module"
+	help
+	  Select this if you are using the Bluewater Systems Snapper 9260 or
+	  Snapper 9G20 modules.
+	  <http://www.bluewatersys.com/>
 endif
 
 # ----------------------------------------------------------
@@ -505,6 +505,17 @@ config MACH_AT91SAM_DT
 	help
 	  Select this if you want to experiment device-tree with
 	  an Atmel Evaluation Kit.
+
+comment "Adeos I-pipe Options"
+
+config IPIPE_AT91_TC
+	depends on IPIPE
+	int "AT91 TC used as time base by Adeos I-pipe"
+	default 0
+	help
+	When Adeos interrupt pipeline is enabled, TC0 is used by default
+	as time base, but you can use TC1 or TC2 by setting this variable to 1
+	or 2. This should only be needed to avoid conflicts with other drivers.
 
 # ----------------------------------------------------------
 

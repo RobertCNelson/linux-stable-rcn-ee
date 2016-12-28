@@ -98,6 +98,7 @@ enum {
 	FTRACE_OPS_FL_SAVE_REGS			= 1 << 4,
 	FTRACE_OPS_FL_SAVE_REGS_IF_SUPPORTED	= 1 << 5,
 	FTRACE_OPS_FL_RECURSION_SAFE		= 1 << 6,
+	FTRACE_OPS_FL_IPIPE_EXCLUSIVE		= 1 << 7,
 };
 
 struct ftrace_ops {
