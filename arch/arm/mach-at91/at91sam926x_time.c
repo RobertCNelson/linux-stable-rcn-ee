@@ -19,6 +19,7 @@
 #include <linux/of_irq.h>
 
 #include <asm/mach/time.h>
+#include "at91_ipipe.h"
 
 #define AT91_PIT_MR		0x00			/* Mode Register */
 #define		AT91_PIT_PITIEN		(1 << 25)		/* Timer Interrupt Enable */
@@ -118,6 +119,8 @@ static struct clock_event_device pit_clkevt = {
  */
 static irqreturn_t at91sam926x_pit_interrupt(int irq, void *dev_id)
 {
+	__ipipe_tsc_update();
+
 	/*
 	 * irqs should be disabled here, but as the irq is shared they are only
 	 * guaranteed to be off if the timer irq is registered first.
@@ -247,6 +250,7 @@ static void __init at91sam926x_pit_init(void)
 	/* Set up and register clockevents */
 	pit_clkevt.mult = div_sc(pit_rate, NSEC_PER_SEC, pit_clkevt.shift);
 	pit_clkevt.cpumask = cpumask_of(0);
+	at91_ipipe_init(&pit_clkevt);
 	clockevents_register_device(&pit_clkevt);
 }
 

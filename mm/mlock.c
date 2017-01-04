@@ -617,3 +617,21 @@ void user_shm_unlock(size_t size, struct user_struct *user)
 	spin_unlock(&shmlock_user_lock);
 	free_uid(user);
 }
+
+#ifdef CONFIG_IPIPE
+int __ipipe_pin_vma(struct mm_struct *mm, struct vm_area_struct *vma)
+{
+	int ret;
+
+	if (vma->vm_flags & (VM_IO | VM_PFNMAP))
+		return 0;
+
+	if (!((vma->vm_flags & VM_DONTEXPAND) ||
+	    is_vm_hugetlb_page(vma) || vma == get_gate_vma(mm))) {
+		ret = __mlock_vma_pages_range(vma, vma->vm_start, vma->vm_end,
+					      NULL);
+		return (ret < 0) ? ret : 0;
+	} else
+		return make_pages_present(vma->vm_start, vma->vm_end);
+}
+#endif
