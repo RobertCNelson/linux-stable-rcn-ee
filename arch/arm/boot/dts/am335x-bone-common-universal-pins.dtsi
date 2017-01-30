@@ -131,6 +131,10 @@
 		pinctrl-single,pins = <0x03c  0x26>; };     /* Mode 6, Pull-Down, RxActive */
 	P8_15_qep_pin: pinmux_P8_15_qep_pin {
 		pinctrl-single,pins = <0x03c  0x24>; };     /* Mode 4, Pull-Down, RxActive */
+	P8_15_pru_pin_35: pinmux_P8_15_pru_pin_35 {
+		pinctrl-single,pins = <0x03c  0x35>; };     /* P8_15,ArduPilot */
+	P8_15_pru_pin_36: pinmux_P8_15_pru_pin_36 {
+		pinctrl-single,pins = <0x03c  0x36>; };     /* P8_15,PRU0_r31_15,MODE6 */
 
 	/* P8_16 (ZCZ ball V13) */
 	P8_16_default_pin: pinmux_P8_16_default_pin {

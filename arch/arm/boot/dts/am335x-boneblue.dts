@@ -232,6 +232,15 @@
 		status = "okay";
 	};
 
+	/* PRU encoder input */
+	P8_15_pinmux {
+		compatible = "bone-pinmux-helper";
+		status = "okay";
+		pinctrl-names = "p8_15_pru_36", "p8_15_pru_35";
+		pinctrl-0 = <&P8_15_pru_pin_36>;
+		pinctrl-1 = <&P8_15_pru_pin_35>;
+	};
+
 	/* UART4 RX DSM */
 	P9_11_pinmux {
 		compatible = "bone-pinmux-helper";
