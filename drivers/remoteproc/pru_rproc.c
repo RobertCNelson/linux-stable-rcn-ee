@@ -398,6 +398,54 @@ void pru_rproc_put(struct rproc *rproc)
 }
 EXPORT_SYMBOL_GPL(pru_rproc_put);
 
+/**
+ * pru_rproc_set_ctable() - set the constant table index for the PRU
+ * @rproc: the rproc instance of the PRU
+ * @c: constant table index to set
+ * @addr: physical address to set it to
+ */
+int pru_rproc_set_ctable(struct rproc *rproc, enum pru_ctable_idx c, u32 addr)
+{
+	struct pru_rproc *pru = rproc->priv;
+	unsigned int reg;
+	u32 mask, set;
+	u16 idx;
+	u16 idx_mask;
+
+	/* pointer is 16 bit and index is 8-bit so mask out the rest */
+	idx_mask = (c >= PRU_C28) ? 0xFFFF : 0xFF;
+
+	/* ctable uses bit 8 and upwards only */
+	idx = (addr >> 8) & idx_mask;
+
+	/* configurable ctable (i.e. C24) starts at PRU_CTRL_CTBIR0 */
+	reg = PRU_CTRL_CTBIR0 + 4 * (c >> 1);
+	mask = idx_mask << (16 * (c & 1));
+	set = idx << (16 * (c & 1));
+
+	regmap_update_bits(pru->ctrl_regmap, reg, mask, set);
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(pru_rproc_set_ctable);
+
+/**
+ * pru_rproc_set_gpimode() - set the GPI mode for the PRU
+ * @rproc: the rproc instance of the PRU
+ * @mode: GPI mode to set
+ *
+ * Returns 0 on success, negative error value otherwise.
+ */
+int pru_rproc_set_gpimode(struct rproc *rproc, enum pruss_gpi_mode mode)
+{
+	struct pru_rproc *pru = rproc->priv;
+
+	return regmap_update_bits(pru->cfg, pru->gpcfg_reg,
+				  PRUSS_GPCFG_PRU_GPI_MODE_MASK,
+				  mode << PRUSS_GPCFG_PRU_GPI_MODE_SHIFT);
+}
+EXPORT_SYMBOL_GPL(pru_rproc_set_gpimode);
+
 /*
  * Control PRU single-step mode
  *
