@@ -24,6 +24,7 @@
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/partitions.h>
 #include <linux/pwm_backlight.h>
+#include <linux/ipipe.h>
 
 #include <asm/types.h>
 #include <asm/setup.h>
@@ -129,7 +130,7 @@ static void lpd270_irq_handler(unsigned int irq, struct irq_desc *desc)
 		desc->irq_data.chip->irq_ack(&desc->irq_data);
 		if (likely(pending)) {
 			irq = LPD270_IRQ(0) + __ffs(pending);
-			generic_handle_irq(irq);
+			ipipe_handle_demuxed_irq(irq);
 
 			pending = __raw_readw(LPD270_INT_STATUS) &
 						lpd270_irq_enabled;

@@ -66,7 +66,23 @@ enum ipi_msg_type {
 	IPI_CALL_FUNC,
 	IPI_CALL_FUNC_SINGLE,
 	IPI_CPU_STOP,
+	IPI_CPU_DUMP,
+#ifdef CONFIG_IPIPE
+	IPI_IPIPE_FIRST,
+#endif /* CONFIG_IPIPE */
 };
+
+#ifdef CONFIG_IPIPE
+#define noipipe_irq_enter()			\
+	do {					\
+	} while(0)
+#define noipipe_irq_exit()			\
+	do {					\
+	} while(0)
+#else /* !CONFIG_IPIPE */
+#define noipipe_irq_enter() irq_enter()
+#define noipipe_irq_exit() irq_exit()
+#endif /* !CONFIG_IPIPE */
 
 static DECLARE_COMPLETION(cpu_running);
 
@@ -301,9 +317,16 @@ asmlinkage void __cpuinit secondary_start_kernel(void)
 	 * The identity mapping is uncached (strongly ordered), so
 	 * switch away from it before attempting any exclusive accesses.
 	 */
-	cpu_switch_mm(mm->pgd, mm);
+	cpu_switch_mm(mm->pgd, mm, 1);
 	enter_lazy_tlb(mm, current);
 	local_flush_tlb_all();
+#ifdef CONFIG_IPIPE
+	/*
+	 * With CONFIG_IPIPE debug_smp_processor_id requires access
+	 * to percpu data.
+	 */
+	set_my_cpu_offset(per_cpu_offset(ipipe_processor_id()));
+#endif
 
 	/*
 	 * All kernel threads share the same mm context; grab a
@@ -478,8 +501,89 @@ static DEFINE_PER_CPU(struct clock_event_device, percpu_clockevent);
 static void ipi_timer(void)
 {
 	struct clock_event_device *evt = &__get_cpu_var(percpu_clockevent);
+
+#ifdef CONFIG_IPIPE
+#ifndef CONFIG_IPIPE_ARM_KUSER_TSC
+	__ipipe_mach_update_tsc();
+#else /* CONFIG_IPIPE_ARM_KUSER_TSC */
+	__ipipe_tsc_update();
+#endif /* CONFIG_IPIPE_ARM_KUSER_TSC */
+#endif /* CONFIG_IPIPE */
+
 	evt->event_handler(evt);
 }
+
+#ifdef CONFIG_IPIPE
+#define IPIPE_IPI_BASE	IPIPE_VIRQ_BASE
+
+unsigned __ipipe_first_ipi;
+EXPORT_SYMBOL_GPL(__ipipe_first_ipi);
+
+static void  __ipipe_do_IPI(unsigned virq, void *cookie)
+{
+	enum ipi_msg_type msg = virq - IPIPE_IPI_BASE;
+	handle_IPI(msg, __this_cpu_ptr(&ipipe_percpu.tick_regs));
+}
+
+void __ipipe_ipis_alloc(void)
+{
+	unsigned virq, _virq;
+	unsigned ipi_nr;
+
+	if (__ipipe_first_ipi)
+		return;
+
+	/* __ipipe_first_ipi is 0 here  */
+	ipi_nr = IPI_IPIPE_FIRST + IPIPE_LAST_IPI + 1;
+
+	for (virq = IPIPE_IPI_BASE; virq < IPIPE_IPI_BASE + ipi_nr; virq++) {
+		_virq = ipipe_alloc_virq();
+		if (virq != _virq)
+			panic("I-pipe: cannot reserve virq #%d (got #%d)\n",
+			      virq, _virq);
+
+		if (virq - IPIPE_IPI_BASE == IPI_IPIPE_FIRST)
+			__ipipe_first_ipi = virq;
+	}
+}
+
+void __ipipe_ipis_request(void)
+{
+	unsigned virq;
+
+	for (virq = IPIPE_IPI_BASE; virq < __ipipe_first_ipi; virq++)
+		ipipe_request_irq(ipipe_root_domain,
+				  virq,
+				  (ipipe_irq_handler_t)__ipipe_do_IPI,
+				  NULL, NULL);
+}
+void ipipe_send_ipi(unsigned ipi, cpumask_t cpumask)
+{
+	enum ipi_msg_type msg = ipi - IPIPE_IPI_BASE;
+	smp_cross_call(&cpumask, msg);
+}
+EXPORT_SYMBOL_GPL(ipipe_send_ipi);
+
+ /* hw IRQs off */
+asmlinkage void __exception __ipipe_grab_ipi(unsigned svc, struct pt_regs *regs)
+{
+	int virq = IPIPE_IPI_BASE + svc;
+
+	/*
+	 * Virtual NMIs ignore the root domain's stall
+	 * bit. When caught over high priority
+	 * domains, virtual VMIs are pipelined the
+	 * usual way as normal interrupts.
+	 */
+	if (virq == IPIPE_SERVICE_VNMI && __ipipe_root_p)
+		__ipipe_do_vnmi(IPIPE_SERVICE_VNMI, NULL);
+	else
+		__ipipe_dispatch_irq(virq, IPIPE_IRQF_NOACK);
+
+	__ipipe_exit_irq(regs);
+}
+
+#endif /* CONFIG_IPIPE */
 
 #ifdef CONFIG_GENERIC_CLOCKEVENTS_BROADCAST
 static void smp_timer_broadcast(const struct cpumask *mask)
@@ -597,9 +701,9 @@ void handle_IPI(int ipinr, struct pt_regs *regs)
 		break;
 
 	case IPI_TIMER:
-		irq_enter();
+		noipipe_irq_enter();
 		ipi_timer();
-		irq_exit();
+		noipipe_irq_exit();
 		break;
 
 	case IPI_RESCHEDULE:
@@ -607,21 +711,21 @@ void handle_IPI(int ipinr, struct pt_regs *regs)
 		break;
 
 	case IPI_CALL_FUNC:
-		irq_enter();
+		noipipe_irq_enter();
 		generic_smp_call_function_interrupt();
-		irq_exit();
+		noipipe_irq_exit();
 		break;
 
 	case IPI_CALL_FUNC_SINGLE:
-		irq_enter();
+		noipipe_irq_enter();
 		generic_smp_call_function_single_interrupt();
-		irq_exit();
+		noipipe_irq_exit();
 		break;
 
 	case IPI_CPU_STOP:
-		irq_enter();
+		noipipe_irq_enter();
 		ipi_cpu_stop(cpu);
-		irq_exit();
+		noipipe_irq_exit();
 		break;
 
 	default:

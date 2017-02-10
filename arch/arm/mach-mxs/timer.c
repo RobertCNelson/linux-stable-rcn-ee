@@ -22,6 +22,8 @@
 
 #include <linux/err.h>
 #include <linux/interrupt.h>
+#include <linux/ipipe_tickdev.h>
+#include <linux/ipipe.h>
 #include <linux/irq.h>
 #include <linux/clockchips.h>
 #include <linux/clk.h>
@@ -74,6 +76,11 @@
 #define BP_TIMROT_TIMCTRLn_SELECT	0
 #define BV_TIMROTv1_TIMCTRLn_SELECT__32KHZ_XTAL	0x8
 #define BV_TIMROTv2_TIMCTRLn_SELECT__32KHZ_XTAL	0xb
+#define BV_TIMROTv2_TIMCTRLn_SELECT_ALWAYS	0xf
+
+#define IPIPE_DIV_ORDER			0 /* APBX clock prescaler order */
+#define IPIPE_DIV			(1 << IPIPE_DIV_ORDER)
+#define BV_TIMROTv2_TIMCTRLn_PRESCALE	(1 << 4)
 
 static struct clock_event_device mxs_clockevent_device;
 static enum clock_event_mode mxs_clockevent_mode = CLOCK_EVT_MODE_UNUSED;
@@ -127,7 +134,11 @@ static irqreturn_t mxs_timer_interrupt(int irq, void *dev_id)
 {
 	struct clock_event_device *evt = dev_id;
 
-	timrot_irq_acknowledge();
+	if (!clockevent_ipipe_stolen(evt))
+		timrot_irq_acknowledge();
+
+	__ipipe_tsc_update();
+
 	evt->event_handler(evt);
 
 	return IRQ_HANDLED;
@@ -192,6 +203,21 @@ static void mxs_set_mode(enum clock_event_mode mode,
 	}
 }
 
+#ifdef CONFIG_IPIPE
+static struct ipipe_timer mxs_itimer = {
+	.ack = 	timrot_irq_acknowledge,
+};
+
+static struct __ipipe_tscinfo __maybe_unused tsc_info = {
+	.type = IPIPE_TSC_TYPE_FREERUNNING_COUNTDOWN,
+	.u = {
+		{
+			.mask = 0xffffffff,
+		},
+	},
+};
+#endif /* CONFIG_IPIPE */
+
 static struct clock_event_device mxs_clockevent_device = {
 	.name		= "mxs_timrot",
 	.features	= CLOCK_EVT_FEAT_ONESHOT,
@@ -199,11 +225,18 @@ static struct clock_event_device mxs_clockevent_device = {
 	.set_mode	= mxs_set_mode,
 	.set_next_event	= timrotv2_set_next_event,
 	.rating		= 200,
+#ifdef CONFIG_IPIPE
+	.ipipe_timer	= &mxs_itimer,
+#endif /* CONFIG_IPIPE */
 };
 
 static int __init mxs_clockevent_init(struct clk *timer_clk)
 {
 	unsigned int c = clk_get_rate(timer_clk);
+
+#ifdef CONFIG_IPIPE
+	c /= IPIPE_DIV;
+#endif /* CONFIG_IPIPE */
 
 	mxs_clockevent_device.mult =
 		div_sc(c, NSEC_PER_SEC, mxs_clockevent_device.shift);
@@ -243,11 +276,19 @@ static int __init mxs_clocksource_init(struct clk *timer_clk)
 {
 	unsigned int c = clk_get_rate(timer_clk);
 
-	if (timrot_is_v1())
+	if (timrot_is_v1()) {
 		clocksource_register_hz(&clocksource_mxs, c);
-	else {
+	} else {
+#ifndef CONFIG_IPIPE
 		clocksource_mmio_init(mxs_timrot_base + HW_TIMROT_RUNNING_COUNTn(1),
 			"mxs_timer", c, 200, 32, clocksource_mmio_readl_down);
+#else /* CONFIG_IPIPE */
+		c /= IPIPE_DIV;
+		tsc_info.freq = c;
+		tsc_info.counter_vaddr = (unsigned long)mxs_timrot_base + HW_TIMROT_RUNNING_COUNTn(1);
+		tsc_info.u.counter_paddr = MXS_TIMROT_BASE_ADDR + HW_TIMROT_RUNNING_COUNTn(1);
+		__ipipe_tsc_register(&tsc_info);
+#endif /* CONFIG_IPIPE */
 		setup_sched_clock(mxs_read_sched_clock_v2, 32, c);
 	}
 
@@ -258,6 +299,7 @@ void __init mxs_timer_init(void)
 {
 	struct device_node *np;
 	struct clk *timer_clk;
+	unsigned long xtal;
 	int irq;
 
 	np = of_find_compatible_node(NULL, NULL, "fsl,timrot");
@@ -285,20 +327,26 @@ void __init mxs_timer_init(void)
 						MX28_TIMROT_VERSION_OFFSET));
 	timrot_major_version >>= BP_TIMROT_MAJOR_VERSION;
 
+	if (timrot_is_v1())
+		xtal = BV_TIMROTv1_TIMCTRLn_SELECT__32KHZ_XTAL;
+	else {
+#ifndef CONFIG_IPIPE
+		xtal = BV_TIMROTv2_TIMCTRLn_SELECT__32KHZ_XTAL;
+#else
+		xtal = BV_TIMROTv2_TIMCTRLn_SELECT_ALWAYS |
+			(IPIPE_DIV_ORDER * BV_TIMROTv2_TIMCTRLn_PRESCALE);
+#endif
+	}
 	/* one for clock_event */
-	__raw_writel((timrot_is_v1() ?
-			BV_TIMROTv1_TIMCTRLn_SELECT__32KHZ_XTAL :
-			BV_TIMROTv2_TIMCTRLn_SELECT__32KHZ_XTAL) |
-			BM_TIMROT_TIMCTRLn_UPDATE |
-			BM_TIMROT_TIMCTRLn_IRQ_EN,
-			mxs_timrot_base + HW_TIMROT_TIMCTRLn(0));
+	__raw_writel(xtal |
+		     BM_TIMROT_TIMCTRLn_UPDATE |
+		     BM_TIMROT_TIMCTRLn_IRQ_EN,
+		     mxs_timrot_base + HW_TIMROT_TIMCTRLn(0));
 
 	/* another for clocksource */
-	__raw_writel((timrot_is_v1() ?
-			BV_TIMROTv1_TIMCTRLn_SELECT__32KHZ_XTAL :
-			BV_TIMROTv2_TIMCTRLn_SELECT__32KHZ_XTAL) |
-			BM_TIMROT_TIMCTRLn_RELOAD,
-			mxs_timrot_base + HW_TIMROT_TIMCTRLn(1));
+	__raw_writel(xtal |
+		     BM_TIMROT_TIMCTRLn_RELOAD,
+		     mxs_timrot_base + HW_TIMROT_TIMCTRLn(1));
 
 	/* set clocksource timer fixed count to the maximum */
 	if (timrot_is_v1())
@@ -315,4 +363,8 @@ void __init mxs_timer_init(void)
 	/* Make irqs happen */
 	irq = irq_of_parse_and_map(np, 0);
 	setup_irq(irq, &mxs_timer_irq);
+
+#ifdef CONFIG_IPIPE
+	mxs_itimer.irq = irq;
+#endif
 }

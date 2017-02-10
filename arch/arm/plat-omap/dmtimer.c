@@ -246,7 +246,6 @@ struct omap_dm_timer *omap_dm_timer_request_specific(int id)
 
 	return timer;
 }
-EXPORT_SYMBOL_GPL(omap_dm_timer_request_specific);
 
 /**
  * omap_dm_timer_request_by_cap - Request a timer by capability
@@ -332,6 +331,18 @@ int omap_dm_timer_get_irq(struct omap_dm_timer *timer)
 	return -EINVAL;
 }
 EXPORT_SYMBOL_GPL(omap_dm_timer_get_irq);
+
+#ifdef CONFIG_IPIPE
+unsigned long omap_dm_timer_get_phys_counter_addr(struct omap_dm_timer *timer)
+{
+	return timer->phys_base + (OMAP_TIMER_COUNTER_REG & 0xff);
+}
+
+unsigned long omap_dm_timer_get_virt_counter_addr(struct omap_dm_timer *timer)
+{
+	return (unsigned long)timer->io_base + (OMAP_TIMER_COUNTER_REG & 0xff);
+}
+#endif /* CONFIG_IPIPE */
 
 #if defined(CONFIG_ARCH_OMAP1)
 #include <mach/hardware.h>
@@ -544,7 +555,7 @@ EXPORT_SYMBOL_GPL(omap_dm_timer_set_load);
 
 /* Optimized set_load which removes costly spin wait in timer_start */
 int omap_dm_timer_set_load_start(struct omap_dm_timer *timer, int autoreload,
-                            unsigned int load)
+			    unsigned int load)
 {
 	u32 l;
 
@@ -808,6 +819,7 @@ static int omap_dm_timer_probe(struct platform_device *pdev)
 		return  -ENOMEM;
 	}
 
+	timer->phys_base = mem->start;
 	timer->io_base = devm_request_and_ioremap(dev, mem);
 	if (!timer->io_base) {
 		dev_err(dev, "%s: region already claimed.\n", __func__);

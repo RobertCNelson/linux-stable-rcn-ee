@@ -3,7 +3,7 @@
 extern struct amba_pl010_data ap_uart_data;
 #else
 /* Not used without Integrator/AP support anyway */
-struct amba_pl010_data ap_uart_data {};
+static struct amba_pl010_data ap_uart_data;
 #endif
 void integrator_init_early(void);
 int integrator_init(bool is_cp);

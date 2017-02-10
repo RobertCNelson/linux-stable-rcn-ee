@@ -170,7 +170,7 @@ at91_aic_handle_irq(struct pt_regs *regs)
 	if (!irqstat)
 		at91_aic_write(AT91_AIC_EOICR, 0);
 	else
-		handle_IRQ(irqnr, regs);
+		ipipe_handle_multi_irq(irqnr, regs);
 }
 
 asmlinkage void __exception_irq_entry
@@ -185,15 +185,25 @@ at91_aic5_handle_irq(struct pt_regs *regs)
 	if (!irqstat)
 		at91_aic_write(AT91_AIC5_EOICR, 0);
 	else
-		handle_IRQ(irqnr, regs);
+		ipipe_handle_multi_irq(irqnr, regs);
 }
 
-static void at91_aic_mask_irq(struct irq_data *d)
+static inline void at91_aic_hard_mask_irq(struct irq_data *d)
 {
 	/* Disable interrupt on AIC */
 	at91_aic_write(AT91_AIC_IDCR, 1 << d->hwirq);
 	/* Update ISR cache */
 	clear_backup(d->hwirq);
+}
+
+static void at91_aic_mask_irq(struct irq_data *d)
+{
+	unsigned long flags;
+
+	flags = hard_cond_local_irq_save();
+	at91_aic_hard_mask_irq(d);
+	ipipe_lock_irq(d->irq);
+	hard_cond_local_irq_restore(flags);
 }
 
 static void __maybe_unused at91_aic5_mask_irq(struct irq_data *d)
@@ -205,12 +215,22 @@ static void __maybe_unused at91_aic5_mask_irq(struct irq_data *d)
 	clear_backup(d->hwirq);
 }
 
-static void at91_aic_unmask_irq(struct irq_data *d)
+static inline void at91_aic_hard_unmask_irq(struct irq_data *d)
 {
 	/* Enable interrupt on AIC */
 	at91_aic_write(AT91_AIC_IECR, 1 << d->hwirq);
 	/* Update ISR cache */
 	set_backup(d->hwirq);
+}
+
+static void at91_aic_unmask_irq(struct irq_data *d)
+{
+	unsigned long flags;
+
+	flags = hard_cond_local_irq_save();
+	at91_aic_hard_unmask_irq(d);
+	ipipe_unlock_irq(d->irq);
+	hard_cond_local_irq_restore(flags);
 }
 
 static void __maybe_unused at91_aic5_unmask_irq(struct irq_data *d)
@@ -230,6 +250,19 @@ static void at91_aic_eoi(struct irq_data *d)
 	 */
 	at91_aic_write(AT91_AIC_EOICR, 0);
 }
+
+#ifdef CONFIG_IPIPE
+static void at91_aic_hold_irq(struct irq_data *d)
+{
+	at91_aic_hard_mask_irq(d);
+	at91_aic_eoi(d);
+}
+
+static void at91_aic_release_irq(struct irq_data *d)
+{
+	at91_aic_hard_unmask_irq(d);
+}
+#endif /* CONFIG_IPIPE */
 
 static void __maybe_unused at91_aic5_eoi(struct irq_data *d)
 {
@@ -300,6 +333,10 @@ static struct irq_chip at91_aic_chip = {
 	.irq_set_type	= at91_aic_set_type,
 	.irq_set_wake	= at91_aic_set_wake,
 	.irq_eoi	= at91_aic_eoi,
+#ifdef CONFIG_IPIPE
+	.irq_hold	= at91_aic_hold_irq,
+	.irq_release	= at91_aic_release_irq,
+#endif
 };
 
 static void __init at91_aic_hw_init(unsigned int spu_vector)

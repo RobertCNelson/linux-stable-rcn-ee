@@ -30,6 +30,7 @@
 #include <linux/i2c/pxa-i2c.h>
 #include <linux/slab.h>
 #include <linux/leds.h>
+#include <linux/ipipe.h>
 
 #include <asm/types.h>
 #include <asm/setup.h>
@@ -153,7 +154,7 @@ static void mainstone_irq_handler(unsigned int irq, struct irq_desc *desc)
 		desc->irq_data.chip->irq_ack(&desc->irq_data);
 		if (likely(pending)) {
 			irq = MAINSTONE_IRQ(0) + __ffs(pending);
-			generic_handle_irq(irq);
+			ipipe_handle_demuxed_irq(irq);
 		}
 		pending = MST_INTSETCLR & mainstone_irq_enabled;
 	} while (pending);
@@ -387,7 +388,7 @@ static struct pxafb_mode_info toshiba_ltm035a776c_mode = {
 };
 
 static struct pxafb_mach_info mainstone_pxafb_info = {
-	.num_modes      	= 1,
+	.num_modes		= 1,
 	.lcd_conn		= LCD_COLOR_TFT_16BPP | LCD_PCLK_EDGE_FALL,
 };
 
