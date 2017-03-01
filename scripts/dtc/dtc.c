@@ -216,7 +216,7 @@ int main(int argc, char *argv[])
 			alignsize = strtol(optarg, NULL, 0);
 			if (!is_power_of_2(alignsize))
 				die("Invalid argument \"%d\" to -a option\n",
-				    optarg);
+				    alignsize);
 			break;
 		case 'f':
 			force = true;
@@ -308,6 +308,8 @@ int main(int argc, char *argv[])
 		dti = dt_from_blob(arg);
 	else
 		die("Unknown input format \"%s\"\n", inform);
+
+	dti->outname = outname;
 
 	if (depfile) {
 		fputc('\n', depfile);
