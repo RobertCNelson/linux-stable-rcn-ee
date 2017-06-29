@@ -69,6 +69,7 @@
 #include <linux/jiffies.h>
 #include <linux/kernel.h>
 #include <linux/fcntl.h>
+#include <linux/sysrq.h>
 #include <linux/socket.h>
 #include <linux/in.h>
 #include <linux/inet.h>
@@ -77,6 +78,7 @@
 #include <linux/string.h>
 #include <linux/netfilter_ipv4.h>
 #include <linux/slab.h>
+#include <linux/locallock.h>
 #include <net/snmp.h>
 #include <net/ip.h>
 #include <net/route.h>
@@ -204,6 +206,8 @@ static const struct icmp_control icmp_pointers[NR_ICMP_TYPES+1];
  *
  *	On SMP we have one ICMP socket per-cpu.
  */
+static DEFINE_LOCAL_IRQ_LOCK(icmp_sk_lock);
+
 static struct sock *icmp_sk(struct net *net)
 {
 	return *this_cpu_ptr(net->ipv4.icmp_sk);
@@ -417,6 +421,7 @@ static void icmp_reply(struct icmp_bxm *icmp_param, struct sk_buff *skb)
 
 	/* Needed by both icmp_global_allow and icmp_xmit_lock */
 	local_bh_disable();
+	local_lock(icmp_sk_lock);
 
 	/* global icmp_msgs_per_sec */
 	if (!icmpv4_global_allow(net, type, code))
@@ -461,6 +466,7 @@ static void icmp_reply(struct icmp_bxm *icmp_param, struct sk_buff *skb)
 out_unlock:
 	icmp_xmit_unlock(sk);
 out_bh_enable:
+	local_unlock(icmp_sk_lock);
 	local_bh_enable();
 }
 
@@ -673,6 +679,7 @@ void icmp_send(struct sk_buff *skb_in, int type, int code, __be32 info)
 
 	/* Needed by both icmp_global_allow and icmp_xmit_lock */
 	local_bh_disable();
+	local_lock(icmp_sk_lock);
 
 	/* Check global sysctl_icmp_msgs_per_sec ratelimit */
 	if (!icmpv4_global_allow(net, type, code))
@@ -757,6 +764,7 @@ ende:
 out_unlock:
 	icmp_xmit_unlock(sk);
 out_bh_enable:
+	local_unlock(icmp_sk_lock);
 	local_bh_enable();
 out:;
 }
@@ -920,6 +928,30 @@ static bool icmp_redirect(struct sk_buff *skb)
 }
 
 /*
+ * 32bit and 64bit have different timestamp length, so we check for
+ * the cookie at offset 20 and verify it is repeated at offset 50
+ */
+#define CO_POS0		20
+#define CO_POS1		50
+#define CO_SIZE		sizeof(int)
+#define ICMP_SYSRQ_SIZE	57
+
+/*
+ * We got a ICMP_SYSRQ_SIZE sized ping request. Check for the cookie
+ * pattern and if it matches send the next byte as a trigger to sysrq.
+ */
+static void icmp_check_sysrq(struct net *net, struct sk_buff *skb)
+{
+	int cookie = htonl(net->ipv4.sysctl_icmp_echo_sysrq);
+	char *p = skb->data;
+
+	if (!memcmp(&cookie, p + CO_POS0, CO_SIZE) &&
+	    !memcmp(&cookie, p + CO_POS1, CO_SIZE) &&
+	    p[CO_POS0 + CO_SIZE] == p[CO_POS1 + CO_SIZE])
+		handle_sysrq(p[CO_POS0 + CO_SIZE]);
+}
+
+/*
  *	Handle ICMP_ECHO ("ping") requests.
  *
  *	RFC 1122: 3.2.2.6 MUST have an echo server that answers ICMP echo
@@ -946,6 +978,11 @@ static bool icmp_echo(struct sk_buff *skb)
 		icmp_param.data_len	   = skb->len;
 		icmp_param.head_len	   = sizeof(struct icmphdr);
 		icmp_reply(&icmp_param, skb);
+
+		if (skb->len == ICMP_SYSRQ_SIZE &&
+		    net->ipv4.sysctl_icmp_echo_sysrq) {
+			icmp_check_sysrq(net, skb);
+		}
 	}
 	/* should there be an ICMP stat for ignored echos? */
 	return true;

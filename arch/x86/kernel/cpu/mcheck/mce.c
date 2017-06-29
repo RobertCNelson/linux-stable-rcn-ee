@@ -41,6 +41,8 @@
 #include <linux/debugfs.h>
 #include <linux/irq_work.h>
 #include <linux/export.h>
+#include <linux/jiffies.h>
+#include <linux/swork.h>
 #include <linux/jump_label.h>
 
 #include <asm/intel-family.h>
@@ -1315,7 +1317,7 @@ int memory_failure(unsigned long pfn, int vector, int flags)
 static unsigned long check_interval = INITIAL_CHECK_INTERVAL;
 
 static DEFINE_PER_CPU(unsigned long, mce_next_interval); /* in jiffies */
-static DEFINE_PER_CPU(struct timer_list, mce_timer);
+static DEFINE_PER_CPU(struct hrtimer, mce_timer);
 
 static unsigned long mce_adjust_timer_default(unsigned long interval)
 {
@@ -1324,26 +1326,18 @@ static unsigned long mce_adjust_timer_default(unsigned long interval)
 
 static unsigned long (*mce_adjust_timer)(unsigned long interval) = mce_adjust_timer_default;
 
-static void __start_timer(struct timer_list *t, unsigned long interval)
+static void __start_timer(struct hrtimer *t, unsigned long iv)
 {
-	unsigned long when = jiffies + interval;
-	unsigned long flags;
+	if (!iv)
+		return;
 
-	local_irq_save(flags);
-
-	if (!timer_pending(t) || time_before(when, t->expires))
-		mod_timer(t, round_jiffies(when));
-
-	local_irq_restore(flags);
+	hrtimer_start_range_ns(t, ns_to_ktime(jiffies_to_usecs(iv) * 1000ULL),
+			       0, HRTIMER_MODE_REL_PINNED);
 }
 
-static void mce_timer_fn(unsigned long data)
+static  enum hrtimer_restart mce_timer_fn(struct hrtimer *timer)
 {
-	struct timer_list *t = this_cpu_ptr(&mce_timer);
-	int cpu = smp_processor_id();
 	unsigned long iv;
-
-	WARN_ON(cpu != data);
 
 	iv = __this_cpu_read(mce_next_interval);
 
@@ -1367,7 +1361,11 @@ static void mce_timer_fn(unsigned long data)
 
 done:
 	__this_cpu_write(mce_next_interval, iv);
-	__start_timer(t, iv);
+	if (!iv)
+		return HRTIMER_NORESTART;
+
+	hrtimer_forward_now(timer, ns_to_ktime(jiffies_to_nsecs(iv)));
+	return HRTIMER_RESTART;
 }
 
 /*
@@ -1375,7 +1373,7 @@ done:
  */
 void mce_timer_kick(unsigned long interval)
 {
-	struct timer_list *t = this_cpu_ptr(&mce_timer);
+	struct hrtimer *t = this_cpu_ptr(&mce_timer);
 	unsigned long iv = __this_cpu_read(mce_next_interval);
 
 	__start_timer(t, interval);
@@ -1390,7 +1388,7 @@ static void mce_timer_delete_all(void)
 	int cpu;
 
 	for_each_online_cpu(cpu)
-		del_timer_sync(&per_cpu(mce_timer, cpu));
+		hrtimer_cancel(&per_cpu(mce_timer, cpu));
 }
 
 static void mce_do_trigger(struct work_struct *work)
@@ -1400,6 +1398,56 @@ static void mce_do_trigger(struct work_struct *work)
 
 static DECLARE_WORK(mce_trigger_work, mce_do_trigger);
 
+static void __mce_notify_work(struct swork_event *event)
+{
+	/* Not more than two messages every minute */
+	static DEFINE_RATELIMIT_STATE(ratelimit, 60*HZ, 2);
+
+	/* wake processes polling /dev/mcelog */
+	wake_up_interruptible(&mce_chrdev_wait);
+
+	/*
+	 * There is no risk of missing notifications because
+	 * work_pending is always cleared before the function is
+	 * executed.
+	 */
+	if (mce_helper[0] && !work_pending(&mce_trigger_work))
+		schedule_work(&mce_trigger_work);
+
+	if (__ratelimit(&ratelimit))
+		pr_info(HW_ERR "Machine check events logged\n");
+}
+
+#ifdef CONFIG_PREEMPT_RT_FULL
+static bool notify_work_ready __read_mostly;
+static struct swork_event notify_work;
+
+static int mce_notify_work_init(void)
+{
+	int err;
+
+	err = swork_get();
+	if (err)
+		return err;
+
+	INIT_SWORK(&notify_work, __mce_notify_work);
+	notify_work_ready = true;
+	return 0;
+}
+
+static void mce_notify_work(void)
+{
+	if (notify_work_ready)
+		swork_queue(&notify_work);
+}
+#else
+static void mce_notify_work(void)
+{
+	__mce_notify_work(NULL);
+}
+static inline int mce_notify_work_init(void) { return 0; }
+#endif
+
 /*
  * Notify the user(s) about new machine check events.
  * Can be called from interrupt context, but not from machine check/NMI
@@ -1407,19 +1455,8 @@ static DECLARE_WORK(mce_trigger_work, mce_do_trigger);
  */
 int mce_notify_irq(void)
 {
-	/* Not more than two messages every minute */
-	static DEFINE_RATELIMIT_STATE(ratelimit, 60*HZ, 2);
-
 	if (test_and_clear_bit(0, &mce_need_notify)) {
-		/* wake processes polling /dev/mcelog */
-		wake_up_interruptible(&mce_chrdev_wait);
-
-		if (mce_helper[0])
-			schedule_work(&mce_trigger_work);
-
-		if (__ratelimit(&ratelimit))
-			pr_info(HW_ERR "Machine check events logged\n");
-
+		mce_notify_work();
 		return 1;
 	}
 	return 0;
@@ -1725,7 +1762,7 @@ static void __mcheck_cpu_clear_vendor(struct cpuinfo_x86 *c)
 	}
 }
 
-static void mce_start_timer(struct timer_list *t)
+static void mce_start_timer(struct hrtimer *t)
 {
 	unsigned long iv = check_interval * HZ;
 
@@ -1738,18 +1775,19 @@ static void mce_start_timer(struct timer_list *t)
 
 static void __mcheck_cpu_setup_timer(void)
 {
-	struct timer_list *t = this_cpu_ptr(&mce_timer);
-	unsigned int cpu = smp_processor_id();
+	struct hrtimer *t = this_cpu_ptr(&mce_timer);
 
-	setup_pinned_timer(t, mce_timer_fn, cpu);
+	hrtimer_init(t, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+	t->function = mce_timer_fn;
 }
 
 static void __mcheck_cpu_init_timer(void)
 {
-	struct timer_list *t = this_cpu_ptr(&mce_timer);
-	unsigned int cpu = smp_processor_id();
+	struct hrtimer *t = this_cpu_ptr(&mce_timer);
 
-	setup_pinned_timer(t, mce_timer_fn, cpu);
+	hrtimer_init(t, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+	t->function = mce_timer_fn;
+
 	mce_start_timer(t);
 }
 
@@ -2509,7 +2547,7 @@ static int mce_cpu_dead(unsigned int cpu)
 
 static int mce_cpu_online(unsigned int cpu)
 {
-	struct timer_list *t = this_cpu_ptr(&mce_timer);
+	struct hrtimer *t = this_cpu_ptr(&mce_timer);
 	int ret;
 
 	mce_device_create(cpu);
@@ -2526,10 +2564,10 @@ static int mce_cpu_online(unsigned int cpu)
 
 static int mce_cpu_pre_down(unsigned int cpu)
 {
-	struct timer_list *t = this_cpu_ptr(&mce_timer);
+	struct hrtimer *t = this_cpu_ptr(&mce_timer);
 
 	mce_disable_cpu();
-	del_timer_sync(t);
+	hrtimer_cancel(t);
 	mce_threshold_remove_device(cpu);
 	mce_device_remove(cpu);
 	return 0;
@@ -2562,6 +2600,10 @@ static __init int mcheck_init_device(void)
 		err = -EIO;
 		goto err_out;
 	}
+
+	err = mce_notify_work_init();
+	if (err)
+		goto err_out;
 
 	if (!zalloc_cpumask_var(&mce_device_initialized, GFP_KERNEL)) {
 		err = -ENOMEM;
