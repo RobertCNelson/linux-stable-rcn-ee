@@ -11,6 +11,7 @@
 #include <linux/fs.h>
 #include <linux/atomic.h>
 #include <linux/page-flags.h>
+#include <linux/locallock.h>
 #include <asm/page.h>
 
 struct notifier_block;
@@ -254,7 +255,8 @@ struct swap_info_struct {
 void *workingset_eviction(struct address_space *mapping, struct page *page);
 bool workingset_refault(void *shadow);
 void workingset_activation(struct page *page);
-void workingset_update_node(struct radix_tree_node *node, void *private);
+void __workingset_update_node(struct radix_tree_node *node, void *private);
+DECLARE_LOCAL_IRQ_LOCK(shadow_nodes_lock);
 
 /* linux/mm/page_alloc.c */
 extern unsigned long totalram_pages;
@@ -267,6 +269,7 @@ extern unsigned long nr_free_pagecache_pages(void);
 
 
 /* linux/mm/swap.c */
+DECLARE_LOCAL_IRQ_LOCK(swapvec_lock);
 extern void lru_cache_add(struct page *);
 extern void lru_cache_add_anon(struct page *page);
 extern void lru_cache_add_file(struct page *page);
