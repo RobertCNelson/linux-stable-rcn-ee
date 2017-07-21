@@ -66,6 +66,73 @@ u64 tracing_map_read_sum(struct tracing_map_elt *elt, unsigned int i)
 	return (u64)atomic64_read(&elt->fields[i].sum);
 }
 
+/**
+ * tracing_map_set_var - Assign a tracing_map_elt's variable field
+ * @elt: The tracing_map_elt
+ * @i: The index of the given variable associated with the tracing_map_elt
+ * @n: The value to assign
+ *
+ * Assign n to variable i associated with the specified tracing_map_elt
+ * instance.  The index i is the index returned by the call to
+ * tracing_map_add_var() when the tracing map was set up.
+ */
+void tracing_map_set_var(struct tracing_map_elt *elt, unsigned int i, u64 n)
+{
+	atomic64_set(&elt->vars[i], n);
+	elt->var_set[i] = true;
+}
+
+/**
+ * tracing_map_var_set - Return whether or not a variable has been set
+ * @elt: The tracing_map_elt
+ * @i: The index of the given variable associated with the tracing_map_elt
+ *
+ * Return true if the variable has been set, false otherwise.  The
+ * index i is the index returned by the call to tracing_map_add_var()
+ * when the tracing map was set up.
+ */
+bool tracing_map_var_set(struct tracing_map_elt *elt, unsigned int i)
+{
+	return elt->var_set[i];
+}
+
+/**
+ * tracing_map_read_var - Return the value of a tracing_map_elt's variable field
+ * @elt: The tracing_map_elt
+ * @i: The index of the given variable associated with the tracing_map_elt
+ *
+ * Retrieve the value of the variable i associated with the specified
+ * tracing_map_elt instance.  The index i is the index returned by the
+ * call to tracing_map_add_var() when the tracing map was set
+ * up.
+ *
+ * Return: The variable value associated with field i for elt.
+ */
+u64 tracing_map_read_var(struct tracing_map_elt *elt, unsigned int i)
+{
+	return (u64)atomic64_read(&elt->vars[i]);
+}
+
+/**
+ * tracing_map_read_var_once - Return and reset a tracing_map_elt's variable field
+ * @elt: The tracing_map_elt
+ * @i: The index of the given variable associated with the tracing_map_elt
+ *
+ * Retrieve the value of the variable i associated with the specified
+ * tracing_map_elt instance, and reset the variable to the 'not set'
+ * state.  The index i is the index returned by the call to
+ * tracing_map_add_var() when the tracing map was set up.  The reset
+ * essentially makes the variable a read-once variable if it's only
+ * accessed using this function.
+ *
+ * Return: The variable value associated with field i for elt.
+ */
+u64 tracing_map_read_var_once(struct tracing_map_elt *elt, unsigned int i)
+{
+	elt->var_set[i] = false;
+	return (u64)atomic64_read(&elt->vars[i]);
+}
+
 int tracing_map_cmp_string(void *val_a, void *val_b)
 {
 	char *a = val_a;
@@ -168,6 +235,28 @@ static int tracing_map_add_field(struct tracing_map *map,
 int tracing_map_add_sum_field(struct tracing_map *map)
 {
 	return tracing_map_add_field(map, tracing_map_cmp_atomic64);
+}
+
+/**
+ * tracing_map_add_var - Add a field describing a tracing_map var
+ * @map: The tracing_map
+ *
+ * Add a var to the map and return the index identifying it in the map
+ * and associated tracing_map_elts.  This is the index used for
+ * instance to update a var for a particular tracing_map_elt using
+ * tracing_map_update_var() or reading it via tracing_map_read_var().
+ *
+ * Return: The index identifying the var in the map and associated
+ * tracing_map_elts, or -EINVAL on error.
+ */
+int tracing_map_add_var(struct tracing_map *map)
+{
+	int ret = -EINVAL;
+
+	if (map->n_vars < TRACING_MAP_VARS_MAX)
+		ret = map->n_vars++;
+
+	return ret;
 }
 
 /**
@@ -277,6 +366,11 @@ static void tracing_map_elt_clear(struct tracing_map_elt *elt)
 		if (elt->fields[i].cmp_fn == tracing_map_cmp_atomic64)
 			atomic64_set(&elt->fields[i].sum, 0);
 
+	for (i = 0; i < elt->map->n_vars; i++) {
+		atomic64_set(&elt->vars[i], 0);
+		elt->var_set[i] = false;
+	}
+
 	if (elt->map->ops && elt->map->ops->elt_clear)
 		elt->map->ops->elt_clear(elt);
 }
@@ -303,6 +397,8 @@ static void tracing_map_elt_free(struct tracing_map_elt *elt)
 	if (elt->map->ops && elt->map->ops->elt_free)
 		elt->map->ops->elt_free(elt);
 	kfree(elt->fields);
+	kfree(elt->vars);
+	kfree(elt->var_set);
 	kfree(elt->key);
 	kfree(elt);
 }
@@ -326,6 +422,18 @@ static struct tracing_map_elt *tracing_map_elt_alloc(struct tracing_map *map)
 
 	elt->fields = kcalloc(map->n_fields, sizeof(*elt->fields), GFP_KERNEL);
 	if (!elt->fields) {
+		err = -ENOMEM;
+		goto free;
+	}
+
+	elt->vars = kcalloc(map->n_vars, sizeof(*elt->vars), GFP_KERNEL);
+	if (!elt->vars) {
+		err = -ENOMEM;
+		goto free;
+	}
+
+	elt->var_set = kcalloc(map->n_vars, sizeof(*elt->var_set), GFP_KERNEL);
+	if (!elt->var_set) {
 		err = -ENOMEM;
 		goto free;
 	}
@@ -833,6 +941,11 @@ static struct tracing_map_elt *copy_elt(struct tracing_map_elt *elt)
 		dup_elt->fields[i].cmp_fn = elt->fields[i].cmp_fn;
 	}
 
+	for (i = 0; i < elt->map->n_vars; i++) {
+		atomic64_set(&dup_elt->vars[i], atomic64_read(&elt->vars[i]));
+		dup_elt->var_set[i] = elt->var_set[i];
+	}
+
 	return dup_elt;
 }
 
@@ -971,6 +1084,7 @@ static void sort_secondary(struct tracing_map *map,
  * @map: The tracing_map
  * @sort_key: The sort key to use for sorting
  * @sort_entries: outval: pointer to allocated and sorted array of entries
+ * @n_dups: outval: pointer to variable receiving a count of duplicates found
  *
  * tracing_map_sort_entries() sorts the current set of entries in the
  * map and returns the list of tracing_map_sort_entries containing
@@ -987,13 +1101,16 @@ static void sort_secondary(struct tracing_map *map,
  * The client should not hold on to the returned array but should use
  * it and call tracing_map_destroy_sort_entries() when done.
  *
- * Return: the number of sort_entries in the struct tracing_map_sort_entry
- * array, negative on error
+ * Return: the number of sort_entries in the struct
+ * tracing_map_sort_entry array, negative on error.  If n_dups is
+ * non-NULL, it will receive the number of duplicate entries found
+ * (and merged) during the sort.
  */
 int tracing_map_sort_entries(struct tracing_map *map,
 			     struct tracing_map_sort_key *sort_keys,
 			     unsigned int n_sort_keys,
-			     struct tracing_map_sort_entry ***sort_entries)
+			     struct tracing_map_sort_entry ***sort_entries,
+			     unsigned int *n_dups)
 {
 	int (*cmp_entries_fn)(const struct tracing_map_sort_entry **,
 			      const struct tracing_map_sort_entry **);
@@ -1034,6 +1151,8 @@ int tracing_map_sort_entries(struct tracing_map *map,
 	if (ret < 0)
 		goto free;
 	n_entries -= ret;
+	if (n_dups)
+		*n_dups = ret;
 
 	if (is_key(map, sort_keys[0].field_idx))
 		cmp_entries_fn = cmp_entries_key;
