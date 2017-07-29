@@ -29,6 +29,17 @@
 #include "clock.h"
 #include "sam9_smc.h"
 
+static struct map_desc at91sam9260_io_desc[] __initdata = {
+#ifdef CONFIG_IPIPE
+	{
+		.virtual	= (unsigned long)AT91_VA_BASE_TCB0,
+		.pfn		= __phys_to_pfn(AT91_BASE_TCB0),
+		.length		= SZ_16K,
+		.type		= MT_DEVICE,
+	},
+#endif /* CONFIG_IPIPE */
+};
+
 /* --------------------------------------------------------------------
  *  Clocks
  * -------------------------------------------------------------------- */
@@ -320,6 +331,10 @@ static void __init at91sam9xe_map_io(void)
 	}
 
 	at91_init_sram(0, AT91SAM9XE_SRAM_BASE, sram_size);
+
+#ifdef CONFIG_IPIPE
+	iotable_init(at91sam9260_io_desc, ARRAY_SIZE(at91sam9260_io_desc));
+#endif /* CONFIG_IPIPE */
 }
 
 static void __init at91sam9260_map_io(void)
@@ -361,6 +376,7 @@ static void __init at91sam9260_initialize(void)
  * The default interrupt priority levels (0 = lowest, 7 = highest).
  */
 static unsigned int at91sam9260_default_irq_priority[NR_AIC_IRQS] __initdata = {
+#ifndef CONFIG_IPIPE
 	7,	/* Advanced Interrupt Controller */
 	7,	/* System Peripherals */
 	1,	/* Parallel IO Controller A */
@@ -393,6 +409,42 @@ static unsigned int at91sam9260_default_irq_priority[NR_AIC_IRQS] __initdata = {
 	0,	/* Advanced Interrupt Controller */
 	0,	/* Advanced Interrupt Controller */
 	0,	/* Advanced Interrupt Controller */
+#else /* CONFIG_IPIPE */
+/* Give the highest priority to TC, since they are used as timer interrupt by
+   I-pipe. */
+	7,	/* Advanced Interrupt Controller */
+	7,	/* System Peripherals */
+	0,	/* Parallel IO Controller A */
+	0,	/* Parallel IO Controller B */
+	0,	/* Parallel IO Controller C */
+	0,	/* Analog-to-Digital Converter */
+	6,	/* USART 0 */
+	6,	/* USART 1 */
+	6,	/* USART 2 */
+	0,	/* Multimedia Card Interface */
+	4,	/* USB Device Port */
+	0,	/* Two-Wire Interface */
+	6,	/* Serial Peripheral Interface 0 */
+	6,	/* Serial Peripheral Interface 1 */
+	5,	/* Serial Synchronous Controller */
+	0,
+	0,
+	7,	/* Timer Counter 0 */
+	7,	/* Timer Counter 1 */
+	7,	/* Timer Counter 2 */
+	3,	/* USB Host port */
+	3,	/* Ethernet */
+	0,	/* Image Sensor Interface */
+	6,	/* USART 3 */
+	6,	/* USART 4 */
+	6,	/* USART 5 */
+	7,	/* Timer Counter 3 */
+	7,	/* Timer Counter 4 */
+	7,	/* Timer Counter 5 */
+	0,	/* Advanced Interrupt Controller */
+	0,	/* Advanced Interrupt Controller */
+	0,	/* Advanced Interrupt Controller */
+#endif /*CONFIG_IPIPE */
 };
 
 AT91_SOC_START(sam9260)
