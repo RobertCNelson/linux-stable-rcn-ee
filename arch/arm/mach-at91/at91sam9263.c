@@ -27,6 +27,17 @@
 #include "clock.h"
 #include "sam9_smc.h"
 
+static struct map_desc at91sam9263_io_desc[] __initdata = {
+#ifdef CONFIG_IPIPE
+	{
+		.virtual	= AT91_VA_BASE_TCB0,
+		.pfn		= __phys_to_pfn(AT91_BASE_TCB0),
+		.length		= SZ_16K,
+		.type		= MT_DEVICE,
+	},
+#endif /* CONFIG_IPIPE */
+};
+
 /* --------------------------------------------------------------------
  *  Clocks
  * -------------------------------------------------------------------- */
@@ -308,6 +319,9 @@ static void __init at91sam9263_map_io(void)
 {
 	at91_init_sram(0, AT91SAM9263_SRAM0_BASE, AT91SAM9263_SRAM0_SIZE);
 	at91_init_sram(1, AT91SAM9263_SRAM1_BASE, AT91SAM9263_SRAM1_SIZE);
+#ifdef CONFIG_IPIPE
+	iotable_init(at91sam9263_io_desc, ARRAY_SIZE(at91sam9263_io_desc));
+#endif /* CONFIG_IPIPE */
 }
 
 static void __init at91sam9263_ioremap_registers(void)
@@ -340,6 +354,7 @@ static void __init at91sam9263_initialize(void)
  * The default interrupt priority levels (0 = lowest, 7 = highest).
  */
 static unsigned int at91sam9263_default_irq_priority[NR_AIC_IRQS] __initdata = {
+#ifndef CONFIG_IPIPE
 	7,	/* Advanced Interrupt Controller (FIQ) */
 	7,	/* System Peripherals */
 	1,	/* Parallel IO Controller A */
@@ -372,6 +387,42 @@ static unsigned int at91sam9263_default_irq_priority[NR_AIC_IRQS] __initdata = {
 	2,	/* USB Host port */
 	0,	/* Advanced Interrupt Controller (IRQ0) */
 	0,	/* Advanced Interrupt Controller (IRQ1) */
+#else /* CONFIG_IPIPE */
+/* Give the highest priority to TC, since they are used as timer interrupt by
+   I-pipe. */
+	7,	/* Advanced Interrupt Controller (FIQ) */
+	6,	/* System Peripherals */
+	0,	/* Parallel IO Controller A */
+	0,	/* Parallel IO Controller B */
+	0,	/* Parallel IO Controller C, D and E */
+	0,
+	0,
+	5,	/* USART 0 */
+	5,	/* USART 1 */
+	5,	/* USART 2 */
+	0,	/* Multimedia Card Interface 0 */
+	0,	/* Multimedia Card Interface 1 */
+	3,	/* CAN */
+	0,	/* Two-Wire Interface */
+	5,	/* Serial Peripheral Interface 0 */
+	5,	/* Serial Peripheral Interface 1 */
+	4,	/* Serial Synchronous Controller 0 */
+	4,	/* Serial Synchronous Controller 1 */
+	5,	/* AC97 Controller */
+	7,	/* Timer Counter 0, 1 and 2 */
+	0,	/* Pulse Width Modulation Controller */
+	2,	/* Ethernet */
+	0,
+	0,	/* 2D Graphic Engine */
+	2,	/* USB Device Port */
+	0,	/* Image Sensor Interface */
+	2,	/* LDC Controller */
+	0,	/* DMA Controller */
+	0,
+	2,	/* USB Host port */
+	0,	/* Advanced Interrupt Controller (IRQ0) */
+	0,	/* Advanced Interrupt Controller (IRQ1) */
+#endif /*CONFIG_IPIPE */
 };
 
 AT91_SOC_START(sam9263)
