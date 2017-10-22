@@ -197,7 +197,9 @@ static int tracepoint_add_func(struct tracepoint *tp,
 	struct tracepoint_func *old, *tp_funcs;
 	int ret;
 
-	if (tp->regfunc && !static_key_enabled(&tp->key)) {
+	if (tp->regfunc &&
+	    ((tp->dynamic && !(atomic_read(&tp->key.enabled) > 0)) ||
+	     !static_key_enabled(&tp->key))) {
 		ret = tp->regfunc();
 		if (ret < 0)
 			return ret;
@@ -219,7 +221,9 @@ static int tracepoint_add_func(struct tracepoint *tp,
 	 * is used.
 	 */
 	rcu_assign_pointer(tp->funcs, tp_funcs);
-	if (!static_key_enabled(&tp->key))
+	if (tp->dynamic && !(atomic_read(&tp->key.enabled) > 0))
+		atomic_inc(&tp->key.enabled);
+	else if (!tp->dynamic && !static_key_enabled(&tp->key))
 		static_key_slow_inc(&tp->key);
 	release_probes(old);
 	return 0;
@@ -246,10 +250,14 @@ static int tracepoint_remove_func(struct tracepoint *tp,
 
 	if (!tp_funcs) {
 		/* Removed last function */
-		if (tp->unregfunc && static_key_enabled(&tp->key))
+		if (tp->unregfunc &&
+		    ((tp->dynamic && (atomic_read(&tp->key.enabled) > 0)) ||
+		     static_key_enabled(&tp->key)))
 			tp->unregfunc();
 
-		if (static_key_enabled(&tp->key))
+		if (tp->dynamic && (atomic_read(&tp->key.enabled) > 0))
+			atomic_dec(&tp->key.enabled);
+		else if (!tp->dynamic && static_key_enabled(&tp->key))
 			static_key_slow_dec(&tp->key);
 	}
 	rcu_assign_pointer(tp->funcs, tp_funcs);
@@ -258,7 +266,7 @@ static int tracepoint_remove_func(struct tracepoint *tp,
 }
 
 /**
- * tracepoint_probe_register -  Connect a probe to a tracepoint
+ * tracepoint_probe_register_prio -  Connect a probe to a tracepoint
  * @tp: tracepoint
  * @probe: probe handler
  * @data: tracepoint data
