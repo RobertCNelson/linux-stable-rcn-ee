@@ -19,6 +19,7 @@
 #include <linux/mm.h>
 #include <linux/fs.h>
 #include <linux/fsnotify.h>
+#include <linux/delay.h>
 #include <linux/slab.h>
 #include <linux/init.h>
 #include <linux/hash.h>
@@ -784,6 +785,8 @@ static inline bool fast_dput(struct dentry *dentry)
  */
 void dput(struct dentry *dentry)
 {
+	struct dentry *parent;
+
 	if (unlikely(!dentry))
 		return;
 
@@ -820,9 +823,18 @@ repeat:
 	return;
 
 kill_it:
-	dentry = dentry_kill(dentry);
-	if (dentry) {
-		cond_resched();
+	parent = dentry_kill(dentry);
+	if (parent) {
+		int r;
+
+		if (parent == dentry) {
+			/* the task with the highest priority won't schedule */
+			r = cond_resched();
+			if (!r)
+				cpu_chill();
+		} else {
+			dentry = parent;
+		}
 		goto repeat;
 	}
 }
@@ -2361,7 +2373,7 @@ again:
 	if (dentry->d_lockref.count == 1) {
 		if (!spin_trylock(&inode->i_lock)) {
 			spin_unlock(&dentry->d_lock);
-			cpu_relax();
+			cpu_chill();
 			goto again;
 		}
 		dentry->d_flags &= ~DCACHE_CANT_MOUNT;
@@ -2421,21 +2433,24 @@ static inline void end_dir_add(struct inode *dir, unsigned n)
 
 static void d_wait_lookup(struct dentry *dentry)
 {
-	if (d_in_lookup(dentry)) {
-		DECLARE_WAITQUEUE(wait, current);
-		add_wait_queue(dentry->d_wait, &wait);
-		do {
-			set_current_state(TASK_UNINTERRUPTIBLE);
-			spin_unlock(&dentry->d_lock);
-			schedule();
-			spin_lock(&dentry->d_lock);
-		} while (d_in_lookup(dentry));
-	}
+	struct swait_queue __wait;
+
+	if (!d_in_lookup(dentry))
+		return;
+
+	INIT_LIST_HEAD(&__wait.task_list);
+	do {
+		prepare_to_swait(dentry->d_wait, &__wait, TASK_UNINTERRUPTIBLE);
+		spin_unlock(&dentry->d_lock);
+		schedule();
+		spin_lock(&dentry->d_lock);
+	} while (d_in_lookup(dentry));
+	finish_swait(dentry->d_wait, &__wait);
 }
 
 struct dentry *d_alloc_parallel(struct dentry *parent,
 				const struct qstr *name,
-				wait_queue_head_t *wq)
+				struct swait_queue_head *wq)
 {
 	unsigned int hash = name->hash;
 	struct hlist_bl_head *b = in_lookup_hash(parent, hash);
@@ -2544,7 +2559,7 @@ void __d_lookup_done(struct dentry *dentry)
 	hlist_bl_lock(b);
 	dentry->d_flags &= ~DCACHE_PAR_LOOKUP;
 	__hlist_bl_del(&dentry->d_u.d_in_lookup_hash);
-	wake_up_all(dentry->d_wait);
+	swake_up_all(dentry->d_wait);
 	dentry->d_wait = NULL;
 	hlist_bl_unlock(b);
 	INIT_HLIST_NODE(&dentry->d_u.d_alias);
@@ -3580,6 +3595,8 @@ __setup("dhash_entries=", set_dhash_entries);
 
 static void __init dcache_init_early(void)
 {
+	unsigned int loop;
+
 	/* If hashes are distributed across NUMA nodes, defer
 	 * hash allocation until vmalloc space is available.
 	 */
@@ -3596,10 +3613,14 @@ static void __init dcache_init_early(void)
 					&d_hash_mask,
 					0,
 					0);
+
+	for (loop = 0; loop < (1U << d_hash_shift); loop++)
+		INIT_HLIST_BL_HEAD(dentry_hashtable + loop);
 }
 
 static void __init dcache_init(void)
 {
+	unsigned int loop;
 	/*
 	 * A constructor could be added for stable state like the lists,
 	 * but it is probably not worth it because of the cache nature
@@ -3622,6 +3643,10 @@ static void __init dcache_init(void)
 					&d_hash_mask,
 					0,
 					0);
+
+	for (loop = 0; loop < (1U << d_hash_shift); loop++)
+		INIT_HLIST_BL_HEAD(dentry_hashtable + loop);
+
 }
 
 /* SLAB cache for __getname() consumers */
