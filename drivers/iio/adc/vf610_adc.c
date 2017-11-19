@@ -77,7 +77,7 @@
 #define VF610_ADC_ADSTS_MASK		0x300
 #define VF610_ADC_ADLPC_EN		0x80
 #define VF610_ADC_ADHSC_EN		0x400
-#define VF610_ADC_REFSEL_VALT		0x800
+#define VF610_ADC_REFSEL_VALT		0x100
 #define VF610_ADC_REFSEL_VBG		0x1000
 #define VF610_ADC_ADTRG_HARD		0x2000
 #define VF610_ADC_AVGS_8		0x4000
@@ -714,19 +714,19 @@ static int vf610_write_raw(struct iio_dev *indio_dev,
 	int i;
 
 	switch (mask) {
-		case IIO_CHAN_INFO_SAMP_FREQ:
-			for (i = 0;
-				i < ARRAY_SIZE(info->sample_freq_avail);
-				i++)
-				if (val == info->sample_freq_avail[i]) {
-					info->adc_feature.sample_rate = i;
-					vf610_adc_sample_set(info);
-					return 0;
-				}
-			break;
+	case IIO_CHAN_INFO_SAMP_FREQ:
+		for (i = 0;
+			i < ARRAY_SIZE(info->sample_freq_avail);
+			i++)
+			if (val == info->sample_freq_avail[i]) {
+				info->adc_feature.sample_rate = i;
+				vf610_adc_sample_set(info);
+				return 0;
+			}
+		break;
 
-		default:
-			break;
+	default:
+		break;
 	}
 
 	return -EINVAL;
