@@ -84,6 +84,17 @@
 		mux-int-port = <1>;
 		mux-ext-port = <6>;
 	};
+
+	udoo_ard: udoo_ard_manager {
+		compatible = "udoo,imx6q-udoo-ard";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_udooard>;
+		bossac-clk-gpio   = <&gpio6 3 0>;
+		bossac-dat-gpio   = <&gpio5 18 0>;
+		bossac-erase-gpio = <&gpio4 21 0>;
+		bossac-reset-gpio = <&gpio1 0 0>;
+		status = "okay";
+	};
 };
 
 &fec {
@@ -206,6 +217,15 @@
 				MX6QDL_PAD_GPIO_1__USB_OTG_ID 0x17059
 				MX6QDL_PAD_EIM_D22__USB_OTG_PWR 0x17059
 				MX6QDL_PAD_EIM_D21__USB_OTG_OC 0x17059
+			>;
+		};
+
+		pinctrl_udooard: udooardgrp {
+			fsl,pins = <
+			MX6QDL_PAD_DISP0_DAT0__GPIO4_IO21       0x80000000
+			MX6QDL_PAD_CSI0_DAT17__GPIO6_IO03       0x80000000
+			MX6QDL_PAD_CSI0_PIXCLK__GPIO5_IO18      0x80000000
+			MX6QDL_PAD_GPIO_0__GPIO1_IO00           0x80000000
 			>;
 		};
 
