@@ -37,6 +37,7 @@ void common(void) {
 
 	BLANK();
 	OFFSET(TASK_TI_flags, task_struct, thread_info.flags);
+	OFFSET(TASK_TI_preempt_lazy_count, task_struct, thread_info.preempt_lazy_count);
 	OFFSET(TASK_addr_limit, task_struct, thread.addr_limit);
 
 	BLANK();
@@ -93,6 +94,7 @@ void common(void) {
 
 	BLANK();
 	DEFINE(PTREGS_SIZE, sizeof(struct pt_regs));
+	DEFINE(_PREEMPT_ENABLED, PREEMPT_ENABLED);
 
 	/* Layout info for cpu_entry_area */
 	OFFSET(CPU_ENTRY_AREA_tss, cpu_entry_area, tss);
