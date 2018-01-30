@@ -492,3 +492,11 @@
 &cpu0 {
 	vdd-supply = <&smps12_reg>;
 };
+
+&pruss1 {
+	status = "okay";
+};
+
+&pruss2 {
+	status = "okay";
+};
