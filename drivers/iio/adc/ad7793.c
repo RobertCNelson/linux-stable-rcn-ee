@@ -257,7 +257,7 @@ static int ad7793_setup(struct iio_dev *indio_dev,
 	unsigned int vref_mv)
 {
 	struct ad7793_state *st = iio_priv(indio_dev);
-	int i, ret;
+	int i, ret = -1;
 	unsigned long long scale_uv;
 	u32 id;
 
@@ -266,7 +266,7 @@ static int ad7793_setup(struct iio_dev *indio_dev,
 		return ret;
 
 	/* reset the serial interface */
-	ret = ad_sd_reset(&st->sd, 32);
+	ret = spi_write(st->sd.spi, (u8 *)&ret, sizeof(ret));
 	if (ret < 0)
 		goto out;
 	usleep_range(500, 2000); /* Wait for at least 500us */
@@ -478,10 +478,9 @@ static int ad7793_read_raw(struct iio_dev *indio_dev,
 				*val2 = st->
 					scale_avail[(st->conf >> 8) & 0x7][1];
 				return IIO_VAL_INT_PLUS_NANO;
-			} else {
-				/* 1170mV / 2^23 * 6 */
-				scale_uv = (1170ULL * 1000000000ULL * 6ULL);
 			}
+			/* 1170mV / 2^23 * 6 */
+			scale_uv = (1170ULL * 1000000000ULL * 6ULL);
 			break;
 		case IIO_TEMP:
 				/* 1170mV / 0.81 mV/C / 2^23 */
