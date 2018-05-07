@@ -1475,21 +1475,29 @@ static struct dentry *lookup_dcache(const struct qstr *name,
 }
 
 /*
- * Call i_op->lookup on the dentry.  The dentry must be negative and
- * unhashed.
- *
- * dir->d_inode->i_mutex must be held
+ * Parent directory has inode locked exclusive.  This is one
+ * and only case when ->lookup() gets called on non in-lookup
+ * dentries - as the matter of fact, this only gets called
+ * when directory is guaranteed to have no in-lookup children
+ * at all.
  */
-static struct dentry *lookup_real(struct inode *dir, struct dentry *dentry,
-				  unsigned int flags)
+static struct dentry *__lookup_hash(const struct qstr *name,
+		struct dentry *base, unsigned int flags)
 {
+	struct dentry *dentry = lookup_dcache(name, base, flags);
 	struct dentry *old;
+	struct inode *dir = base->d_inode;
+
+	if (dentry)
+		return dentry;
 
 	/* Don't create child dentry for a dead directory. */
-	if (unlikely(IS_DEADDIR(dir))) {
-		dput(dentry);
+	if (unlikely(IS_DEADDIR(dir)))
 		return ERR_PTR(-ENOENT);
-	}
+
+	dentry = d_alloc(base, name);
+	if (unlikely(!dentry))
+		return ERR_PTR(-ENOMEM);
 
 	old = dir->i_op->lookup(dir, dentry, flags);
 	if (unlikely(old)) {
@@ -1497,21 +1505,6 @@ static struct dentry *lookup_real(struct inode *dir, struct dentry *dentry,
 		dentry = old;
 	}
 	return dentry;
-}
-
-static struct dentry *__lookup_hash(const struct qstr *name,
-		struct dentry *base, unsigned int flags)
-{
-	struct dentry *dentry = lookup_dcache(name, base, flags);
-
-	if (dentry)
-		return dentry;
-
-	dentry = d_alloc(base, name);
-	if (unlikely(!dentry))
-		return ERR_PTR(-ENOMEM);
-
-	return lookup_real(base->d_inode, dentry, flags);
 }
 
 static int lookup_fast(struct nameidata *nd,
@@ -1608,7 +1601,7 @@ static struct dentry *lookup_slow(const struct qstr *name,
 {
 	struct dentry *dentry = ERR_PTR(-ENOENT), *old;
 	struct inode *inode = dir->d_inode;
-	DECLARE_WAIT_QUEUE_HEAD_ONSTACK(wq);
+	DECLARE_SWAIT_QUEUE_HEAD_ONSTACK(wq);
 
 	inode_lock_shared(inode);
 	/* Don't go there if it's already dead */
@@ -3102,7 +3095,7 @@ static int lookup_open(struct nameidata *nd, struct path *path,
 	struct dentry *dentry;
 	int error, create_error = 0;
 	umode_t mode = op->mode;
-	DECLARE_WAIT_QUEUE_HEAD_ONSTACK(wq);
+	DECLARE_SWAIT_QUEUE_HEAD_ONSTACK(wq);
 
 	if (unlikely(IS_DEADDIR(dir_inode)))
 		return -ENOENT;
