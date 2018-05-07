@@ -258,8 +258,6 @@ void ieee802154_rx(struct ieee802154_local *local, struct sk_buff *skb)
 {
 	u16 crc;
 
-	WARN_ON_ONCE(softirq_count() == 0);
-
 	if (local->suspended)
 		goto drop;
 
