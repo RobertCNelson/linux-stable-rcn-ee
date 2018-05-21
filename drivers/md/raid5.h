@@ -4,7 +4,7 @@
 
 #include <linux/raid/xor.h>
 #include <linux/dmaengine.h>
-
+#include <linux/refcount.h>
 /*
  *
  * Each stripe contains one buffer per device.  Each buffer can be in
@@ -208,7 +208,7 @@ struct stripe_head {
 	short			ddf_layout;/* use DDF ordering to calculate Q */
 	short			hash_lock_index;
 	unsigned long		state;		/* state flags */
-	atomic_t		count;	      /* nr of active thread/requests */
+	refcount_t		count;	      /* nr of active thread/requests */
 	int			bm_seq;	/* sequence number for bitmap flushes */
 	int			disks;		/* disks in stripe */
 	int			overwrite_disks; /* total overwrite disks in stripe,
@@ -636,6 +636,7 @@ struct r5conf {
 	int			recovery_disabled;
 	/* per cpu variables */
 	struct raid5_percpu {
+		spinlock_t	lock;		/* Protection for -RT */
 		struct page	*spare_page; /* Used when checking P/Q in raid6 */
 		struct flex_array *scribble;   /* space for constructing buffer
 					      * lists and performing address
