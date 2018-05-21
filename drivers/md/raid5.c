@@ -306,7 +306,7 @@ static void do_release_stripe(struct r5conf *conf, struct stripe_head *sh,
 static void __release_stripe(struct r5conf *conf, struct stripe_head *sh,
 			     struct list_head *temp_inactive_list)
 {
-	if (atomic_dec_and_test(&sh->count))
+	if (refcount_dec_and_test(&sh->count))
 		do_release_stripe(conf, sh, temp_inactive_list);
 }
 
@@ -398,7 +398,7 @@ void raid5_release_stripe(struct stripe_head *sh)
 
 	/* Avoid release_list until the last reference.
 	 */
-	if (atomic_add_unless(&sh->count, -1, 1))
+	if (refcount_dec_not_one(&sh->count))
 		return;
 
 	if (unlikely(!conf->mddev->thread) ||
@@ -409,16 +409,14 @@ void raid5_release_stripe(struct stripe_head *sh)
 		md_wakeup_thread(conf->mddev->thread);
 	return;
 slow_path:
-	local_irq_save(flags);
 	/* we are ok here if STRIPE_ON_RELEASE_LIST is set or not */
-	if (atomic_dec_and_lock(&sh->count, &conf->device_lock)) {
+	if (refcount_dec_and_lock_irqsave(&sh->count, &conf->device_lock, &flags)) {
 		INIT_LIST_HEAD(&list);
 		hash = sh->hash_lock_index;
 		do_release_stripe(conf, sh, &list);
-		spin_unlock(&conf->device_lock);
+		spin_unlock_irqrestore(&conf->device_lock, flags);
 		release_inactive_stripe_list(conf, &list, hash);
 	}
-	local_irq_restore(flags);
 }
 
 static inline void remove_hash(struct stripe_head *sh)
@@ -501,7 +499,7 @@ static void init_stripe(struct stripe_head *sh, sector_t sector, int previous)
 	struct r5conf *conf = sh->raid_conf;
 	int i, seq;
 
-	BUG_ON(atomic_read(&sh->count) != 0);
+	BUG_ON(refcount_read(&sh->count) != 0);
 	BUG_ON(test_bit(STRIPE_HANDLE, &sh->state));
 	BUG_ON(stripe_operations_active(sh));
 	BUG_ON(sh->batch_head);
@@ -678,11 +676,11 @@ raid5_get_active_stripe(struct r5conf *conf, sector_t sector,
 					  &conf->cache_state);
 			} else {
 				init_stripe(sh, sector, previous);
-				atomic_inc(&sh->count);
+				refcount_inc(&sh->count);
 			}
-		} else if (!atomic_inc_not_zero(&sh->count)) {
+		} else if (!refcount_inc_not_zero(&sh->count)) {
 			spin_lock(&conf->device_lock);
-			if (!atomic_read(&sh->count)) {
+			if (!refcount_read(&sh->count)) {
 				if (!test_bit(STRIPE_HANDLE, &sh->state))
 					atomic_inc(&conf->active_stripes);
 				BUG_ON(list_empty(&sh->lru) &&
@@ -698,7 +696,7 @@ raid5_get_active_stripe(struct r5conf *conf, sector_t sector,
 					sh->group = NULL;
 				}
 			}
-			atomic_inc(&sh->count);
+			refcount_inc(&sh->count);
 			spin_unlock(&conf->device_lock);
 		}
 	} while (sh == NULL);
@@ -760,9 +758,9 @@ static void stripe_add_to_batch_list(struct r5conf *conf, struct stripe_head *sh
 	hash = stripe_hash_locks_hash(head_sector);
 	spin_lock_irq(conf->hash_locks + hash);
 	head = __find_stripe(conf, head_sector, conf->generation);
-	if (head && !atomic_inc_not_zero(&head->count)) {
+	if (head && !refcount_inc_not_zero(&head->count)) {
 		spin_lock(&conf->device_lock);
-		if (!atomic_read(&head->count)) {
+		if (!refcount_read(&head->count)) {
 			if (!test_bit(STRIPE_HANDLE, &head->state))
 				atomic_inc(&conf->active_stripes);
 			BUG_ON(list_empty(&head->lru) &&
@@ -778,7 +776,7 @@ static void stripe_add_to_batch_list(struct r5conf *conf, struct stripe_head *sh
 				head->group = NULL;
 			}
 		}
-		atomic_inc(&head->count);
+		refcount_inc(&head->count);
 		spin_unlock(&conf->device_lock);
 	}
 	spin_unlock_irq(conf->hash_locks + hash);
@@ -847,7 +845,7 @@ static void stripe_add_to_batch_list(struct r5conf *conf, struct stripe_head *sh
 		sh->batch_head->bm_seq = seq;
 	}
 
-	atomic_inc(&sh->count);
+	refcount_inc(&sh->count);
 unlock_out:
 	unlock_two_stripes(head, sh);
 out:
@@ -1110,9 +1108,9 @@ again:
 			pr_debug("%s: for %llu schedule op %d on disc %d\n",
 				__func__, (unsigned long long)sh->sector,
 				bi->bi_opf, i);
-			atomic_inc(&sh->count);
+			refcount_inc(&sh->count);
 			if (sh != head_sh)
-				atomic_inc(&head_sh->count);
+				refcount_inc(&head_sh->count);
 			if (use_new_offset(conf, sh))
 				bi->bi_iter.bi_sector = (sh->sector
 						 + rdev->new_data_offset);
@@ -1174,9 +1172,9 @@ again:
 				 "replacement disc %d\n",
 				__func__, (unsigned long long)sh->sector,
 				rbi->bi_opf, i);
-			atomic_inc(&sh->count);
+			refcount_inc(&sh->count);
 			if (sh != head_sh)
-				atomic_inc(&head_sh->count);
+				refcount_inc(&head_sh->count);
 			if (use_new_offset(conf, sh))
 				rbi->bi_iter.bi_sector = (sh->sector
 						  + rrdev->new_data_offset);
@@ -1354,7 +1352,7 @@ static void ops_run_biofill(struct stripe_head *sh)
 		}
 	}
 
-	atomic_inc(&sh->count);
+	refcount_inc(&sh->count);
 	init_async_submit(&submit, ASYNC_TX_ACK, tx, ops_complete_biofill, sh, NULL);
 	async_trigger_callback(&submit);
 }
@@ -1432,7 +1430,7 @@ ops_run_compute5(struct stripe_head *sh, struct raid5_percpu *percpu)
 		if (i != target)
 			xor_srcs[count++] = sh->dev[i].page;
 
-	atomic_inc(&sh->count);
+	refcount_inc(&sh->count);
 
 	init_async_submit(&submit, ASYNC_TX_FENCE|ASYNC_TX_XOR_ZERO_DST, NULL,
 			  ops_complete_compute, sh, to_addr_conv(sh, percpu, 0));
@@ -1521,7 +1519,7 @@ ops_run_compute6_1(struct stripe_head *sh, struct raid5_percpu *percpu)
 	BUG_ON(!test_bit(R5_Wantcompute, &tgt->flags));
 	dest = tgt->page;
 
-	atomic_inc(&sh->count);
+	refcount_inc(&sh->count);
 
 	if (target == qd_idx) {
 		count = set_syndrome_sources(blocks, sh, SYNDROME_SRC_ALL);
@@ -1596,7 +1594,7 @@ ops_run_compute6_2(struct stripe_head *sh, struct raid5_percpu *percpu)
 	pr_debug("%s: stripe: %llu faila: %d failb: %d\n",
 		 __func__, (unsigned long long)sh->sector, faila, failb);
 
-	atomic_inc(&sh->count);
+	refcount_inc(&sh->count);
 
 	if (failb == syndrome_disks+1) {
 		/* Q disk is one of the missing disks */
@@ -1867,7 +1865,7 @@ ops_run_reconstruct5(struct stripe_head *sh, struct raid5_percpu *percpu,
 			break;
 	}
 	if (i >= sh->disks) {
-		atomic_inc(&sh->count);
+		refcount_inc(&sh->count);
 		set_bit(R5_Discard, &sh->dev[pd_idx].flags);
 		ops_complete_reconstruct(sh);
 		return;
@@ -1908,7 +1906,7 @@ again:
 		flags = ASYNC_TX_ACK |
 			(prexor ? ASYNC_TX_XOR_DROP_DST : ASYNC_TX_XOR_ZERO_DST);
 
-		atomic_inc(&head_sh->count);
+		refcount_inc(&head_sh->count);
 		init_async_submit(&submit, flags, tx, ops_complete_reconstruct, head_sh,
 				  to_addr_conv(sh, percpu, j));
 	} else {
@@ -1950,7 +1948,7 @@ ops_run_reconstruct6(struct stripe_head *sh, struct raid5_percpu *percpu,
 			break;
 	}
 	if (i >= sh->disks) {
-		atomic_inc(&sh->count);
+		refcount_inc(&sh->count);
 		set_bit(R5_Discard, &sh->dev[sh->pd_idx].flags);
 		set_bit(R5_Discard, &sh->dev[sh->qd_idx].flags);
 		ops_complete_reconstruct(sh);
@@ -1974,7 +1972,7 @@ again:
 				 struct stripe_head, batch_list) == head_sh;
 
 	if (last_stripe) {
-		atomic_inc(&head_sh->count);
+		refcount_inc(&head_sh->count);
 		init_async_submit(&submit, txflags, tx, ops_complete_reconstruct,
 				  head_sh, to_addr_conv(sh, percpu, j));
 	} else
@@ -2031,7 +2029,7 @@ static void ops_run_check_p(struct stripe_head *sh, struct raid5_percpu *percpu)
 	tx = async_xor_val(xor_dest, xor_srcs, 0, count, STRIPE_SIZE,
 			   &sh->ops.zero_sum_result, &submit);
 
-	atomic_inc(&sh->count);
+	refcount_inc(&sh->count);
 	init_async_submit(&submit, ASYNC_TX_ACK, tx, ops_complete_check, sh, NULL);
 	tx = async_trigger_callback(&submit);
 }
@@ -2050,7 +2048,7 @@ static void ops_run_check_pq(struct stripe_head *sh, struct raid5_percpu *percpu
 	if (!checkp)
 		srcs[count] = NULL;
 
-	atomic_inc(&sh->count);
+	refcount_inc(&sh->count);
 	init_async_submit(&submit, ASYNC_TX_ACK, NULL, ops_complete_check,
 			  sh, to_addr_conv(sh, percpu, 0));
 	async_syndrome_val(srcs, 0, count+2, STRIPE_SIZE,
@@ -2066,8 +2064,9 @@ static void raid_run_ops(struct stripe_head *sh, unsigned long ops_request)
 	struct raid5_percpu *percpu;
 	unsigned long cpu;
 
-	cpu = get_cpu();
+	cpu = get_cpu_light();
 	percpu = per_cpu_ptr(conf->percpu, cpu);
+	spin_lock(&percpu->lock);
 	if (test_bit(STRIPE_OP_BIOFILL, &ops_request)) {
 		ops_run_biofill(sh);
 		overlap_clear++;
@@ -2126,7 +2125,8 @@ static void raid_run_ops(struct stripe_head *sh, unsigned long ops_request)
 			if (test_and_clear_bit(R5_Overlap, &dev->flags))
 				wake_up(&sh->raid_conf->wait_for_overlap);
 		}
-	put_cpu();
+	spin_unlock(&percpu->lock);
+	put_cpu_light();
 }
 
 static void free_stripe(struct kmem_cache *sc, struct stripe_head *sh)
@@ -2150,7 +2150,7 @@ static struct stripe_head *alloc_stripe(struct kmem_cache *sc, gfp_t gfp,
 		INIT_LIST_HEAD(&sh->lru);
 		INIT_LIST_HEAD(&sh->r5c);
 		INIT_LIST_HEAD(&sh->log_list);
-		atomic_set(&sh->count, 1);
+		refcount_set(&sh->count, 1);
 		sh->raid_conf = conf;
 		sh->log_start = MaxSector;
 		for (i = 0; i < disks; i++) {
@@ -2451,7 +2451,7 @@ static int drop_one_stripe(struct r5conf *conf)
 	spin_unlock_irq(conf->hash_locks + hash);
 	if (!sh)
 		return 0;
-	BUG_ON(atomic_read(&sh->count));
+	BUG_ON(refcount_read(&sh->count));
 	shrink_buffers(sh);
 	free_stripe(conf->slab_cache, sh);
 	atomic_dec(&conf->active_stripes);
@@ -2483,7 +2483,7 @@ static void raid5_end_read_request(struct bio * bi)
 			break;
 
 	pr_debug("end_read_request %llu/%d, count: %d, error %d.\n",
-		(unsigned long long)sh->sector, i, atomic_read(&sh->count),
+		(unsigned long long)sh->sector, i, refcount_read(&sh->count),
 		bi->bi_status);
 	if (i == disks) {
 		bio_reset(bi);
@@ -2620,7 +2620,7 @@ static void raid5_end_write_request(struct bio *bi)
 		}
 	}
 	pr_debug("end_write_request %llu/%d, count %d, error: %d.\n",
-		(unsigned long long)sh->sector, i, atomic_read(&sh->count),
+		(unsigned long long)sh->sector, i, refcount_read(&sh->count),
 		bi->bi_status);
 	if (i == disks) {
 		bio_reset(bi);
@@ -4687,7 +4687,7 @@ static void handle_stripe(struct stripe_head *sh)
 	pr_debug("handling stripe %llu, state=%#lx cnt=%d, "
 		"pd_idx=%d, qd_idx=%d\n, check:%d, reconstruct:%d\n",
 	       (unsigned long long)sh->sector, sh->state,
-	       atomic_read(&sh->count), sh->pd_idx, sh->qd_idx,
+	       refcount_read(&sh->count), sh->pd_idx, sh->qd_idx,
 	       sh->check_state, sh->reconstruct_state);
 
 	analyse_stripe(sh, &s);
@@ -5062,7 +5062,7 @@ static void activate_bit_delay(struct r5conf *conf,
 		struct stripe_head *sh = list_entry(head.next, struct stripe_head, lru);
 		int hash;
 		list_del_init(&sh->lru);
-		atomic_inc(&sh->count);
+		refcount_inc(&sh->count);
 		hash = sh->hash_lock_index;
 		__release_stripe(conf, sh, &temp_inactive_list[hash]);
 	}
@@ -5387,7 +5387,8 @@ again:
 		sh->group = NULL;
 	}
 	list_del_init(&sh->lru);
-	BUG_ON(atomic_inc_return(&sh->count) != 1);
+	refcount_inc(&sh->count);
+	BUG_ON(refcount_read(&sh->count) != 1);
 	return sh;
 }
 
@@ -6790,6 +6791,7 @@ static int raid456_cpu_up_prepare(unsigned int cpu, struct hlist_node *node)
 			__func__, cpu);
 		return -ENOMEM;
 	}
+	spin_lock_init(&per_cpu_ptr(conf->percpu, cpu)->lock);
 	return 0;
 }
 
@@ -6800,7 +6802,6 @@ static int raid5_alloc_percpu(struct r5conf *conf)
 	conf->percpu = alloc_percpu(struct raid5_percpu);
 	if (!conf->percpu)
 		return -ENOMEM;
-
 	err = cpuhp_state_add_instance(CPUHP_MD_RAID5_PREPARE, &conf->node);
 	if (!err) {
 		conf->scribble_disks = max(conf->raid_disks,

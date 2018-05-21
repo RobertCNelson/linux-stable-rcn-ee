@@ -388,7 +388,7 @@ int ppl_write_stripe(struct r5conf *conf, struct stripe_head *sh)
 
 	set_bit(STRIPE_LOG_TRAPPED, &sh->state);
 	clear_bit(STRIPE_DELAYED, &sh->state);
-	atomic_inc(&sh->count);
+	refcount_inc(&sh->count);
 
 	if (ppl_log_stripe(log, sh)) {
 		spin_lock_irq(&ppl_conf->no_mem_stripes_lock);
