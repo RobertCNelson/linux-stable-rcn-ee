@@ -971,7 +971,7 @@ static void qcom_q6v5_dump_segment(struct rproc *rproc,
 	int ret = 0;
 	struct q6v5 *qproc = rproc->priv;
 	unsigned long mask = BIT((unsigned long)segment->priv);
-	void *ptr = rproc_da_to_va(rproc, segment->da, segment->size);
+	void *ptr = rproc_da_to_va(rproc, segment->da, segment->size, 0);
 
 	/* Unlock mba before copying segments */
 	if (!qproc->dump_mba_loaded)
