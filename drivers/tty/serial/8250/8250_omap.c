@@ -318,8 +318,7 @@ static void omap_8250_set_termios(struct uart_port *port,
 				  struct ktermios *termios,
 				  struct ktermios *old)
 {
-	struct uart_8250_port *up =
-		container_of(port, struct uart_8250_port, port);
+	struct uart_8250_port *up = up_to_u8250p(port);
 	struct omap8250_priv *priv = up->port.private_data;
 	unsigned char cval = 0;
 	unsigned int baud;
@@ -608,10 +607,6 @@ static int omap_8250_startup(struct uart_port *port)
 	up->lsr_saved_flags = 0;
 	up->msr_saved_flags = 0;
 
-	/* Disable DMA for console UART */
-	if (uart_console(port))
-		up->dma = NULL;
-
 	if (up->dma) {
 		ret = serial8250_request_dma(up);
 		if (ret) {
@@ -686,9 +681,8 @@ static void omap_8250_shutdown(struct uart_port *port)
 
 static void omap_8250_throttle(struct uart_port *port)
 {
+	struct uart_8250_port *up = up_to_u8250p(port);
 	unsigned long flags;
-	struct uart_8250_port *up =
-		container_of(port, struct uart_8250_port, port);
 
 	pm_runtime_get_sync(port->dev);
 
@@ -701,11 +695,40 @@ static void omap_8250_throttle(struct uart_port *port)
 	pm_runtime_put_autosuspend(port->dev);
 }
 
+static int omap_8250_rs485_config(struct uart_port *port,
+				  struct serial_rs485 *rs485)
+{
+	struct uart_8250_port *up = up_to_u8250p(port);
+
+	/* Clamp the delays to [0, 100ms] */
+	rs485->delay_rts_before_send = min(rs485->delay_rts_before_send, 100U);
+	rs485->delay_rts_after_send  = min(rs485->delay_rts_after_send, 100U);
+
+	port->rs485 = *rs485;
+
+	/*
+	 * Both serial8250_em485_init and serial8250_em485_destroy
+	 * are idempotent
+	 */
+	if (rs485->flags & SER_RS485_ENABLED) {
+		int ret = serial8250_em485_init(up);
+
+		if (ret) {
+			rs485->flags &= ~SER_RS485_ENABLED;
+			port->rs485.flags &= ~SER_RS485_ENABLED;
+		}
+		return ret;
+	}
+
+	serial8250_em485_destroy(up);
+
+	return 0;
+}
+
 static void omap_8250_unthrottle(struct uart_port *port)
 {
+	struct uart_8250_port *up = up_to_u8250p(port);
 	unsigned long flags;
-	struct uart_8250_port *up =
-		container_of(port, struct uart_8250_port, port);
 
 	pm_runtime_get_sync(port->dev);
 
@@ -1150,6 +1173,7 @@ static int omap8250_probe(struct platform_device *pdev)
 	up.port.shutdown = omap_8250_shutdown;
 	up.port.throttle = omap_8250_throttle;
 	up.port.unthrottle = omap_8250_unthrottle;
+	up.port.rs485_config = omap_8250_rs485_config;
 
 	if (pdev->dev.of_node) {
 		const struct of_device_id *id;
@@ -1239,8 +1263,7 @@ static int omap8250_probe(struct platform_device *pdev)
 	pm_runtime_put_autosuspend(&pdev->dev);
 	return 0;
 err:
-	pm_runtime_dont_use_autosuspend(&pdev->dev);
-	pm_runtime_put_sync(&pdev->dev);
+	pm_runtime_put(&pdev->dev);
 	pm_runtime_disable(&pdev->dev);
 	return ret;
 }
@@ -1249,7 +1272,6 @@ static int omap8250_remove(struct platform_device *pdev)
 {
 	struct omap8250_priv *priv = platform_get_drvdata(pdev);
 
-	pm_runtime_dont_use_autosuspend(&pdev->dev);
 	pm_runtime_put_sync(&pdev->dev);
 	pm_runtime_disable(&pdev->dev);
 	serial8250_unregister_port(priv->line);
@@ -1348,10 +1370,6 @@ static int omap8250_runtime_suspend(struct device *dev)
 {
 	struct omap8250_priv *priv = dev_get_drvdata(dev);
 	struct uart_8250_port *up;
-
-	/* In case runtime-pm tries this before we are setup */
-	if (!priv)
-		return 0;
 
 	up = serial8250_get_port(priv->line);
 	/*
