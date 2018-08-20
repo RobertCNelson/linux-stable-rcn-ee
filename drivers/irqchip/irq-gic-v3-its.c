@@ -160,7 +160,7 @@ static struct {
 } vpe_proxy;
 
 static LIST_HEAD(its_nodes);
-static DEFINE_SPINLOCK(its_lock);
+static DEFINE_RAW_SPINLOCK(its_lock);
 static struct rdists *gic_rdists;
 static struct irq_domain *its_parent;
 
@@ -171,6 +171,7 @@ static DEFINE_RAW_SPINLOCK(vmovp_lock);
 static DEFINE_IDA(its_vpeid_ida);
 
 #define gic_data_rdist()		(raw_cpu_ptr(gic_rdists->rdist))
+#define gic_data_rdist_cpu(cpu)		(per_cpu_ptr(gic_rdists->rdist, cpu))
 #define gic_data_rdist_rd_base()	(gic_data_rdist()->rd_base)
 #define gic_data_rdist_vlpi_base()	(gic_data_rdist_rd_base() + SZ_128K)
 
@@ -1853,15 +1854,17 @@ static int its_alloc_collections(struct its_node *its)
 	return 0;
 }
 
-static struct page *its_allocate_pending_table(gfp_t gfp_flags)
+static struct page *its_allocate_pending_table(unsigned int cpu)
 {
 	struct page *pend_page;
+	unsigned int order;
 	/*
 	 * The pending pages have to be at least 64kB aligned,
 	 * hence the 'max(LPI_PENDBASE_SZ, SZ_64K)' below.
 	 */
-	pend_page = alloc_pages(gfp_flags | __GFP_ZERO,
-				get_order(max_t(u32, LPI_PENDBASE_SZ, SZ_64K)));
+	order = get_order(max_t(u32, LPI_PENDBASE_SZ, SZ_64K));
+	pend_page = alloc_pages_node(cpu_to_node(cpu), GFP_KERNEL | __GFP_ZERO,
+				     order);
 	if (!pend_page)
 		return NULL;
 
@@ -1877,6 +1880,28 @@ static void its_free_pending_table(struct page *pt)
 		   get_order(max_t(u32, LPI_PENDBASE_SZ, SZ_64K)));
 }
 
+static int its_alloc_pend_page(unsigned int cpu)
+{
+	struct page *pend_page;
+	phys_addr_t paddr;
+
+	pend_page = gic_data_rdist_cpu(cpu)->pend_page;
+	if (pend_page)
+		return 0;
+
+	pend_page = its_allocate_pending_table(cpu);
+	if (!pend_page) {
+		pr_err("Failed to allocate PENDBASE for CPU%d\n",
+		       smp_processor_id());
+		return -ENOMEM;
+	}
+
+	paddr = page_to_phys(pend_page);
+	pr_info("CPU%d: using LPI pending table @%pa\n", cpu, &paddr);
+	gic_data_rdist_cpu(cpu)->pend_page = pend_page;
+	return 0;
+}
+
 static void its_cpu_init_lpis(void)
 {
 	void __iomem *rbase = gic_data_rdist_rd_base();
@@ -1885,21 +1910,8 @@ static void its_cpu_init_lpis(void)
 
 	/* If we didn't allocate the pending table yet, do it now */
 	pend_page = gic_data_rdist()->pend_page;
-	if (!pend_page) {
-		phys_addr_t paddr;
-
-		pend_page = its_allocate_pending_table(GFP_NOWAIT);
-		if (!pend_page) {
-			pr_err("Failed to allocate PENDBASE for CPU%d\n",
-			       smp_processor_id());
-			return;
-		}
-
-		paddr = page_to_phys(pend_page);
-		pr_info("CPU%d: using LPI pending table @%pa\n",
-			smp_processor_id(), &paddr);
-		gic_data_rdist()->pend_page = pend_page;
-	}
+	if (!pend_page)
+		return;
 
 	/* set PROPBASE */
 	val = (page_to_phys(gic_rdists->prop_page) |
@@ -1997,12 +2009,12 @@ static void its_cpu_init_collections(void)
 {
 	struct its_node *its;
 
-	spin_lock(&its_lock);
+	raw_spin_lock(&its_lock);
 
 	list_for_each_entry(its, &its_nodes, entry)
 		its_cpu_init_collection(its);
 
-	spin_unlock(&its_lock);
+	raw_spin_unlock(&its_lock);
 }
 
 static struct its_device *its_find_device(struct its_node *its, u32 dev_id)
@@ -2732,7 +2744,7 @@ static int its_vpe_init(struct its_vpe *vpe)
 		return vpe_id;
 
 	/* Allocate VPT */
-	vpt_page = its_allocate_pending_table(GFP_KERNEL);
+	vpt_page = its_allocate_pending_table(raw_smp_processor_id());
 	if (!vpt_page) {
 		its_vpe_id_free(vpe_id);
 		return -ENOMEM;
@@ -3070,7 +3082,7 @@ static int its_save_disable(void)
 	struct its_node *its;
 	int err = 0;
 
-	spin_lock(&its_lock);
+	raw_spin_lock(&its_lock);
 	list_for_each_entry(its, &its_nodes, entry) {
 		void __iomem *base;
 
@@ -3102,7 +3114,7 @@ err:
 			writel_relaxed(its->ctlr_save, base + GITS_CTLR);
 		}
 	}
-	spin_unlock(&its_lock);
+	raw_spin_unlock(&its_lock);
 
 	return err;
 }
@@ -3112,7 +3124,7 @@ static void its_restore_enable(void)
 	struct its_node *its;
 	int ret;
 
-	spin_lock(&its_lock);
+	raw_spin_lock(&its_lock);
 	list_for_each_entry(its, &its_nodes, entry) {
 		void __iomem *base;
 		int i;
@@ -3164,7 +3176,7 @@ static void its_restore_enable(void)
 		    GITS_TYPER_HCC(gic_read_typer(base + GITS_TYPER)))
 			its_cpu_init_collection(its);
 	}
-	spin_unlock(&its_lock);
+	raw_spin_unlock(&its_lock);
 }
 
 static struct syscore_ops its_syscore_ops = {
@@ -3398,9 +3410,9 @@ static int __init its_probe_one(struct resource *res,
 	if (err)
 		goto out_free_tables;
 
-	spin_lock(&its_lock);
+	raw_spin_lock(&its_lock);
 	list_add(&its->entry, &its_nodes);
-	spin_unlock(&its_lock);
+	raw_spin_unlock(&its_lock);
 
 	return 0;
 
@@ -3704,6 +3716,16 @@ int __init its_init(struct fwnode_handle *handle, struct rdists *rdists,
 	gic_rdists = rdists;
 	err = its_alloc_lpi_tables();
 	if (err)
+		return err;
+
+	err = cpuhp_setup_state(CPUHP_BP_PREPARE_DYN, "irqchip/arm/gicv3:prepare",
+				its_alloc_pend_page, NULL);
+	if (err < 0) {
+		pr_warn("ITS: Can't register CPU-hoplug callback.\n");
+		return err;
+	}
+	err = its_alloc_pend_page(smp_processor_id());
+	if (err < 0)
 		return err;
 
 	list_for_each_entry(its, &its_nodes, entry)
