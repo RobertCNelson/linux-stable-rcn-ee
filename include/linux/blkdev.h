@@ -27,6 +27,7 @@
 #include <linux/percpu-refcount.h>
 #include <linux/scatterlist.h>
 #include <linux/blkzoned.h>
+#include <linux/swork.h>
 #include <linux/seqlock.h>
 #include <linux/u64_stats_sync.h>
 
@@ -151,6 +152,9 @@ enum mq_rq_state {
  */
 struct request {
 	struct request_queue *q;
+#ifdef CONFIG_PREEMPT_RT_FULL
+	struct work_struct work;
+#endif
 	struct blk_mq_ctx *mq_ctx;
 
 	int cpu;
@@ -648,6 +652,7 @@ struct request_queue {
 #endif
 	struct rcu_head		rcu_head;
 	wait_queue_head_t	mq_freeze_wq;
+	struct swork_event	mq_pcpu_wake;
 	struct percpu_ref	q_usage_counter;
 	struct list_head	all_q_node;
 
