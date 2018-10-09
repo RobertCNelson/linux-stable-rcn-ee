@@ -917,5 +917,10 @@ static void __init imx6q_clocks_init(struct device_node *ccm_node)
 	}
 
 	imx_register_uart_clocks(uart_clks);
+
+	if (of_machine_is_compatible("udoo,imx6dl-udoo") ||
+	  of_machine_is_compatible("udoo,imx6q-udoo"))
+		clk_prepare_enable(clk[IMX6QDL_CLK_CKO]);
+
 }
 CLK_OF_DECLARE(imx6q, "fsl,imx6q-ccm", imx6q_clocks_init);
