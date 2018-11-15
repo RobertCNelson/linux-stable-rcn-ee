@@ -110,6 +110,15 @@
 				"ti-pruss/am57xx-pru1-prueth-fw.elf";
 		sram = <&ocmcram1>;
 		interrupt-parent = <&pruss2_intc>;
+		ti,pru-interrupt-map =  <0 42 0 0>, /* PORT1_RX_EOF_EVENT */
+					<0 20 2 2>, /* PRU_ARM_EVENT0 */
+					<0 22 4 4>, /* PRU_ARM_EVENT2 */
+					<0 41 7 8>, /* MII_LINK0_EVENT */
+
+					<1 54 1 1>, /* PORT2_RX_EOF_EVENT */
+					<1 21 3 3>, /* PRU_ARM_EVENT1 */
+					<1 23 5 5>, /* PRU_ARM_EVENT3 */
+					<1 53 8 9>; /* MII_LINK1_EVENT */
 		mii-rt = <&pruss2_mii_rt>;
 		iep = <&pruss2_iep>;
 
