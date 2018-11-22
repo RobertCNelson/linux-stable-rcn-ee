@@ -118,6 +118,22 @@ struct pruss_mem_region {
 	size_t size;
 };
 
+/* maximum number of system events */
+#define MAX_PRU_SYS_EVENTS	64
+
+/* maximum number of interrupt channels */
+#define MAX_PRU_CHANNELS	10
+
+/**
+ * struct pruss_intc_config - INTC configuration info
+ * @sysev_to_ch: system events to channel mapping information
+ * @ch_to_host: interrupt channel to host interrupt information
+ */
+struct pruss_intc_config {
+	s8 sysev_to_ch[MAX_PRU_SYS_EVENTS];
+	s8 ch_to_host[MAX_PRU_CHANNELS];
+};
+
 struct pruss;
 
 #if IS_ENABLED(CONFIG_TI_PRUSS)
@@ -135,6 +151,34 @@ int pruss_intc_trigger(unsigned int irq);
 int pruss_cfg_read(struct pruss *pruss, unsigned int reg, unsigned int *val);
 int pruss_cfg_update(struct pruss *pruss, unsigned int reg,
 		     unsigned int mask, unsigned int val);
+
+/**
+ * pruss_intc_configure() - configure the PRUSS INTC
+ * @pruss: the pruss instance
+ * @intc_config: PRU core-specific INTC configuration
+ *
+ * Configures the PRUSS INTC with the provided configuration from
+ * a PRU core. Any existing event to channel mappings or channel to
+ * host interrupt mappings are checked to make sure there are no
+ * conflicting configuration between both the PRU cores. The function
+ * is intended to be used only by the PRU remoteproc driver.
+ *
+ * Returns 0 on success, or a suitable error code otherwise
+ */
+int pruss_intc_configure(struct pruss *pruss,
+			 struct pruss_intc_config *intc_config);
+
+/**
+ * pruss_intc_unconfigure() - unconfigure the PRUSS INTC
+ * @pruss: the pruss instance
+ * @intc_config: PRU core specific INTC configuration
+ *
+ * Undo whatever was done in pruss_intc_configure() for a PRU core.
+ * It should be sufficient to just mark the resources free in the
+ * global map and disable the host interrupts and sysevents.
+ */
+int pruss_intc_unconfigure(struct pruss *pruss,
+			   struct pruss_intc_config *intc_config);
 
 #else
 
@@ -170,6 +214,18 @@ int pruss_cfg_read(struct pruss *pruss, unsigned int reg, unsigned int *val)
 
 int pruss_cfg_update(struct pruss *pruss, unsigned int reg,
 		     unsigned int mask, unsigned int val)
+{
+	return -ENOTSUPP;
+}
+
+int pruss_intc_configure(struct pruss *pruss,
+			 struct pruss_intc_config *intc_config)
+{
+	return -ENOTSUPP;
+}
+
+int pruss_intc_unconfigure(struct pruss *pruss,
+			   struct pruss_intc_config *intc_config)
 {
 	return -ENOTSUPP;
 }
