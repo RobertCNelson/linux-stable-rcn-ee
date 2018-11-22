@@ -41,6 +41,8 @@ int pruss_request_mem_region(struct pruss *pruss, enum pruss_mem mem_id,
 int pruss_release_mem_region(struct pruss *pruss,
 			     struct pruss_mem_region *region);
 
+int pruss_intc_trigger(unsigned int irq);
+
 #else
 
 static inline int pruss_request_mem_region(struct pruss *pruss,
@@ -52,6 +54,11 @@ static inline int pruss_request_mem_region(struct pruss *pruss,
 
 static inline int pruss_release_mem_region(struct pruss *pruss,
 					   struct pruss_mem_region *region)
+{
+	return -ENOTSUPP;
+}
+
+static inline int pruss_intc_trigger(unsigned int irq)
 {
 	return -ENOTSUPP;
 }
