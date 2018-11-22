@@ -36,6 +36,9 @@ struct pruss;
 
 #if IS_ENABLED(CONFIG_TI_PRUSS)
 
+struct pruss *pruss_get(struct rproc *rproc);
+void pruss_put(struct pruss *pruss);
+
 int pruss_request_mem_region(struct pruss *pruss, enum pruss_mem mem_id,
 			     struct pruss_mem_region *region);
 int pruss_release_mem_region(struct pruss *pruss,
@@ -44,6 +47,13 @@ int pruss_release_mem_region(struct pruss *pruss,
 int pruss_intc_trigger(unsigned int irq);
 
 #else
+
+static inline struct pruss *pruss_get(struct rproc *rproc)
+{
+	return ERR_PTR(-ENOTSUPP);
+}
+
+static inline void pruss_put(struct pruss *pruss) { }
 
 static inline int pruss_request_mem_region(struct pruss *pruss,
 					   enum pruss_mem mem_id,
