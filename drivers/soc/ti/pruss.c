@@ -10,9 +10,11 @@
 #include <linux/dma-mapping.h>
 #include <linux/module.h>
 #include <linux/io.h>
+#include <linux/mfd/syscon.h>
 #include <linux/of_address.h>
 #include <linux/of_device.h>
 #include <linux/pruss.h>
+#include <linux/regmap.h>
 #include <linux/remoteproc.h>
 
 #include "pruss.h"
@@ -152,6 +154,47 @@ int pruss_release_mem_region(struct pruss *pruss,
 }
 EXPORT_SYMBOL_GPL(pruss_release_mem_region);
 
+/**
+ * pruss_cfg_read() - read a PRUSS CFG register
+ * @pruss: the pruss instance handle
+ * @reg: register offset within the CFG sub-module
+ * @val: pointer to return the value in
+ *
+ * Reads a given register within CFG module of PRUSS
+ * and returns it through the passed-in @val pointer
+ *
+ * Returns 0 on success, or an error code otherwise
+ */
+int pruss_cfg_read(struct pruss *pruss, unsigned int reg, unsigned int *val)
+{
+	if (IS_ERR_OR_NULL(pruss))
+		return -EINVAL;
+
+	return regmap_read(pruss->cfg, reg, val);
+}
+EXPORT_SYMBOL_GPL(pruss_cfg_read);
+
+/**
+ * pruss_cfg_update() - update a PRUSS CFG register
+ * @pruss: the pruss instance handle
+ * @reg: register offset within the CFG sub-module
+ * @mask: bit mask to use for programming the @val
+ * @val: value to write
+ *
+ * Updates a given register within CFG sub-module of PRUSS
+ *
+ * Returns 0 on success, or an error code otherwise
+ */
+int pruss_cfg_update(struct pruss *pruss, unsigned int reg,
+		     unsigned int mask, unsigned int val)
+{
+	if (IS_ERR_OR_NULL(pruss))
+		return -EINVAL;
+
+	return regmap_update_bits(pruss->cfg, reg, mask, val);
+}
+EXPORT_SYMBOL_GPL(pruss_cfg_update);
+
 static int pruss_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -179,6 +222,15 @@ static int pruss_probe(struct platform_device *pdev)
 
 	pruss->dev = dev;
 	mutex_init(&pruss->lock);
+
+	np = of_get_child_by_name(node, "cfg");
+	if (!np)
+		return -ENODEV;
+
+	pruss->cfg = syscon_node_to_regmap(np);
+	of_node_put(np);
+	if (IS_ERR(pruss->cfg))
+		return -ENODEV;
 
 	np = of_get_child_by_name(node, "memories");
 	if (!np)
