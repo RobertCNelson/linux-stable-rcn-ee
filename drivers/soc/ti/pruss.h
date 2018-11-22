@@ -34,6 +34,7 @@ struct pruss_intc_config {
 /**
  * struct pruss - PRUSS parent structure
  * @dev: pruss device pointer
+ * @cfg: regmap for config region
  * @mem_regions: data for each of the PRUSS memory regions
  * @mem_in_use: to indicate if memory resource is in use
  * @host_mask: indicate which HOST IRQs are enabled
@@ -41,6 +42,7 @@ struct pruss_intc_config {
  */
 struct pruss {
 	struct device *dev;
+	struct regmap *cfg;
 	struct pruss_mem_region mem_regions[PRUSS_MEM_MAX];
 	struct pruss_mem_region *mem_in_use[PRUSS_MEM_MAX];
 	u32 host_mask;
