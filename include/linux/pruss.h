@@ -134,6 +134,7 @@ struct pruss_intc_config {
 	s8 ch_to_host[MAX_PRU_CHANNELS];
 };
 
+struct rproc;
 struct pruss;
 
 #if IS_ENABLED(CONFIG_TI_PRUSS)
