@@ -249,9 +249,18 @@ int pruss_intc_unconfigure(struct pruss *pruss,
 
 #if IS_ENABLED(CONFIG_PRUSS_REMOTEPROC)
 
+struct rproc *pru_rproc_get(struct device_node *node, int index);
+void pru_rproc_put(struct rproc *rproc);
 int pru_rproc_set_ctable(struct rproc *rproc, enum pru_ctable_idx c, u32 addr);
 
 #else
+
+static inline struct rproc *pru_rproc_get(struct device_node *node, int index)
+{
+	return ERR_PTR(-ENOTSUPP);
+}
+
+static inline void pru_rproc_put(struct rproc *rproc) { }
 
 static inline int pru_rproc_set_ctable(struct rproc *rproc,
 				       enum pru_ctable_idx c, u32 addr)
