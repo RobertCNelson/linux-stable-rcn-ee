@@ -197,6 +197,20 @@ config ST_REMOTEPROC
 config ST_SLIM_REMOTEPROC
 	tristate
 
+config PRUSS_REMOTEPROC
+	tristate "TI PRUSS remoteproc support"
+	depends on TI_PRUSS
+	default n
+	help
+	  Support for TI PRU-ICSS remote processors via the remote processor
+	  framework.
+
+	  Currently supported on AM33xx SoCs.
+
+	  Say Y or M here to support the Programmable Realtime Unit (PRU)
+	  processors on various TI SoCs. It's safe to say N here if you're
+	  not interested in the PRU or if you are unsure.
+
 endif # REMOTEPROC
 
 endmenu
