@@ -75,6 +75,7 @@ enum pru_mem {
  * @fw_name: name of firmware image used during loading
  * @gpmux_save: saved value for gpmux config
  * @dt_irqs: number of irqs configured from DT
+ * @fw_irqs: number of irqs configured from FW
  * @lock: mutex to protect client usage
  * @dbg_single_step: debug state variable to set PRU into single step mode
  * @dbg_continuous: debug state variable to restore PRU execution mode
@@ -101,6 +102,7 @@ struct pru_rproc {
 	const char *fw_name;
 	u8 gpmux_save;
 	int dt_irqs;
+	int fw_irqs;
 	struct mutex lock; /* client access lock */
 	u32 dbg_single_step;
 	u32 dbg_continuous;
@@ -651,6 +653,107 @@ static void pru_rproc_kick(struct rproc *rproc, int vq_id)
 	}
 }
 
+/*
+ * parse the custom interrupt map resource and save the intc_config
+ * for use when booting the processor.
+ */
+static int pru_handle_vendor_intrmap(struct rproc *rproc,
+				     struct fw_rsc_pruss_intrmap *rsc)
+{
+	int fw_irqs = 0, i, ret = 0;
+	u8 *arr;
+	struct device *dev = &rproc->dev;
+	struct pru_rproc *pru = rproc->priv;
+
+	dev_dbg(dev, "vendor rsc intc: version %d\n", rsc->version);
+
+	/*
+	 * 0 was prototyping version. Not supported.
+	 * 1 is currently supported version.
+	 */
+	if (rsc->version == 0 || rsc->version > 1) {
+		dev_err(dev, "Unsupported version %d\n", rsc->version);
+		return -EINVAL;
+	}
+
+	/* DT provided INTC config takes precedence */
+	if (pru->dt_irqs) {
+		dev_info(dev, "INTC config in DT and FW. Using DT config.\n");
+		return 0;
+	}
+
+	arr = rsc->data;
+
+	for (i = 0; i < ARRAY_SIZE(pru->intc_config.sysev_to_ch); i++)
+		pru->intc_config.sysev_to_ch[i] = -1;
+
+	for (i = 0; i < ARRAY_SIZE(pru->intc_config.ch_to_host); i++)
+		pru->intc_config.ch_to_host[i] = -1;
+
+	for (i = 0; i < rsc->num_maps * 3; i += 3) {
+		if (arr[i] < 0 ||
+		    arr[i] >= MAX_PRU_SYS_EVENTS) {
+			dev_err(dev, "bad sys event %d\n", arr[i]);
+			ret = -EINVAL;
+			goto err;
+		}
+
+		if (arr[i + 1] < 0 ||
+		    arr[i + 1] >= MAX_PRU_CHANNELS) {
+			dev_err(dev, "bad channel %d\n", arr[i + 1]);
+			ret = -EINVAL;
+			goto err;
+		}
+
+		if (arr[i + 2] < 0 ||
+		    arr[i + 2] >= MAX_PRU_CHANNELS) {
+			dev_err(dev, "bad host irq %d\n", arr[i + 2]);
+				ret = -EINVAL;
+			goto err;
+		}
+
+		pru->intc_config.sysev_to_ch[arr[i]] = arr[i + 1];
+		dev_dbg(dev, "sysevt-to-ch[%d] -> %d\n", arr[i],
+			arr[i + 1]);
+
+		pru->intc_config.ch_to_host[arr[i + 1]] = arr[i + 2];
+		dev_dbg(dev, "chnl-to-host[%d] -> %d\n", arr[i + 1],
+			arr[i + 2]);
+
+		fw_irqs++;
+	}
+
+	pru->fw_irqs = fw_irqs;
+	return 0;
+
+err:
+	pru->fw_irqs = 0;
+	return ret;
+}
+
+/* PRU-specific vendor resource handler */
+static int pru_rproc_handle_vendor_rsc(struct rproc *rproc,
+				       struct fw_rsc_vendor *ven_rsc)
+{
+	struct device *dev = rproc->dev.parent;
+	int ret = -EINVAL;
+
+	struct fw_rsc_pruss_intrmap *rsc;
+
+	rsc = (struct fw_rsc_pruss_intrmap *)ven_rsc->data;
+
+	switch (rsc->type) {
+	case PRUSS_RSC_INTRS:
+		ret = pru_handle_vendor_intrmap(rproc, rsc);
+		break;
+	default:
+		dev_err(dev, "%s: cannot handle unknown type %d\n", __func__,
+			rsc->type);
+	}
+
+	return ret;
+}
+
 /* start a PRU core */
 static int pru_rproc_start(struct rproc *rproc)
 {
@@ -662,7 +765,7 @@ static int pru_rproc_start(struct rproc *rproc)
 	dev_dbg(dev, "starting PRU%d: entry-point = 0x%x\n",
 		pru->id, (rproc->bootaddr >> 2));
 
-	if (pru->dt_irqs) {
+	if (pru->dt_irqs || pru->fw_irqs) {
 		ret = pruss_intc_configure(pru->pruss, &pru->intc_config);
 		if (ret) {
 			dev_err(dev, "failed to configure intc %d\n", ret);
@@ -696,7 +799,7 @@ static int pru_rproc_start(struct rproc *rproc)
 	return 0;
 
 fail:
-	if (pru->dt_irqs)
+	if (pru->dt_irqs || pru->fw_irqs)
 		pruss_intc_unconfigure(pru->pruss, &pru->intc_config);
 
 	return ret;
@@ -720,7 +823,7 @@ static int pru_rproc_stop(struct rproc *rproc)
 		free_irq(pru->irq_vring, pru);
 
 	/* undo INTC config */
-	if (pru->dt_irqs)
+	if (pru->dt_irqs || pru->fw_irqs)
 		pruss_intc_unconfigure(pru->pruss, &pru->intc_config);
 
 	return 0;
@@ -815,6 +918,7 @@ static struct rproc_ops pru_rproc_ops = {
 	.stop			= pru_rproc_stop,
 	.kick			= pru_rproc_kick,
 	.da_to_va		= pru_da_to_va,
+	.handle_vendor_rsc	= pru_rproc_handle_vendor_rsc,
 };
 
 static int pru_rproc_set_id(struct pru_rproc *pru)
