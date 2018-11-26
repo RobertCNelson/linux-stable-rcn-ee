@@ -200,6 +200,8 @@ config ST_SLIM_REMOTEPROC
 config PRUSS_REMOTEPROC
 	tristate "TI PRUSS remoteproc support"
 	depends on TI_PRUSS
+	select MAILBOX
+	select OMAP2PLUS_MBOX if ARCH_OMAP2PLUS
 	default n
 	help
 	  Support for TI PRU-ICSS remote processors via the remote processor
