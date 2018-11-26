@@ -230,6 +230,9 @@ static int rproc_rsc_table_show(struct seq_file *seq, void *p)
 					   v->vring[j].pa);
 			}
 			break;
+		case RSC_VENDOR:
+			seq_printf(seq, "Entry %d is of type %s [Vendor specific]\n",
+				   i, types[hdr->type]);
 		default:
 			seq_printf(seq, "Unknown resource type found: %d [hdr: %pK]\n",
 				   hdr->type, hdr);
