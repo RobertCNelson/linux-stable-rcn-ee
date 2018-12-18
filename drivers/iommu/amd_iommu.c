@@ -1950,12 +1950,6 @@ static int __attach_device(struct iommu_dev_data *dev_data,
 {
 	int ret;
 
-	/*
-	 * Must be called with IRQs disabled. Warn here to detect early
-	 * when its not.
-	 */
-	WARN_ON(!irqs_disabled());
-
 	/* lock domain */
 	spin_lock(&domain->lock);
 
@@ -2120,12 +2114,6 @@ skip_ats_check:
 static void __detach_device(struct iommu_dev_data *dev_data)
 {
 	struct protection_domain *domain;
-
-	/*
-	 * Must be called with IRQs disabled. Warn here to detect early
-	 * when its not.
-	 */
-	WARN_ON(!irqs_disabled());
 
 	domain = dev_data->domain;
 
