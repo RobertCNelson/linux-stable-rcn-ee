@@ -43,6 +43,10 @@
 #include "imx7d-pico.dtsi"
 
 / {
+	chosen {
+		stdout-path = "serial4:115200n8";
+	};
+
 	sound {
 		compatible = "simple-audio-card";
 		simple-audio-card,name = "imx7-sgtl5000";
