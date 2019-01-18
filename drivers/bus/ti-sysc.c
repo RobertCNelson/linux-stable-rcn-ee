@@ -622,6 +622,50 @@ static void sysc_show_registers(struct sysc *ddata)
 		buf);
 }
 
+static int sysc_enable_pruss(struct sysc *sysc)
+{
+	int i;
+	u32 reg;
+	bool ready;
+
+	/* configure for Smart Idle & Smart Standby */
+	reg = sysc_read(sysc, sysc->offsets[SYSC_SYSCONFIG]);
+	reg &= ~(SYSC_PRUSS_STANDBY_MASK | SYSC_PRUSS_IDLE_MASK);
+	reg |= SYSC_PRUSS_STANDBY_SMART | SYSC_IDLE_SMART;
+	sysc_write(sysc, sysc->offsets[SYSC_SYSCONFIG], reg);
+
+	/* bring out of Standby */
+	reg = sysc_read(sysc, sysc->offsets[SYSC_SYSCONFIG]);
+	reg &= ~SYSC_PRUSS_STANDBY_INIT;
+	sysc_write(sysc, sysc->offsets[SYSC_SYSCONFIG], reg);
+
+	/* wait till we are ready for transactions - delay is arbitrary */
+	for (i = 0; i < 10; i++) {
+		reg = sysc_read(sysc, sysc->offsets[SYSC_SYSCONFIG]);
+		ready = !(reg & SYSC_PRUSS_SUB_MWAIT);
+		if (ready)
+			break;
+		udelay(5);
+	}
+
+	if (!ready) {
+		dev_err(sysc->dev, "not ready for transaction\n");
+		return -ETIMEDOUT;
+	}
+
+	return 0;
+}
+
+static void sysc_disable_pruss(struct sysc *sysc)
+{
+	u32 reg;
+
+	/* initiate Standby */
+	reg = sysc_read(sysc, sysc->offsets[SYSC_SYSCONFIG]);
+	reg |= SYSC_PRUSS_STANDBY_INIT;
+	sysc_write(sysc, sysc->offsets[SYSC_SYSCONFIG], reg);
+}
+
 static int __maybe_unused sysc_runtime_suspend(struct device *dev)
 {
 	struct ti_sysc_platform_data *pdata;
@@ -648,6 +692,9 @@ static int __maybe_unused sysc_runtime_suspend(struct device *dev)
 
 		goto idled;
 	}
+
+	if (ddata->cap->type == TI_SYSC_PRUSS)
+		sysc_disable_pruss(ddata);
 
 	for (i = 0; i < ddata->nr_clocks; i++) {
 		if (IS_ERR_OR_NULL(ddata->clocks[i]))
@@ -703,6 +750,9 @@ static int __maybe_unused sysc_runtime_resume(struct device *dev)
 		if (error)
 			return error;
 	}
+
+	if (ddata->cap->type == TI_SYSC_PRUSS)
+		sysc_enable_pruss(ddata);
 
 awake:
 	ddata->enabled = true;
@@ -1573,6 +1623,26 @@ static const struct sysc_capabilities sysc_dra7_mcan = {
 	.regbits = &sysc_regbits_dra7_mcan,
 };
 
+/*
+ * PRUSS on AM33x and later
+ */
+static const struct sysc_regbits sysc_regbits_pruss = {
+	.midle_shift = -ENODEV,
+	.clkact_shift = -ENODEV,
+	.sidle_shift = -ENODEV,
+	.enwkup_shift = -ENODEV,
+	.srst_shift = -ENODEV,
+	.autoidle_shift = -ENODEV,
+	.dmadisable_shift = -ENODEV,
+	.emufree_shift = -ENODEV,
+};
+
+static const struct sysc_capabilities sysc_pruss = {
+	.type = TI_SYSC_PRUSS,
+	.sysc_mask = SYSC_PRUSS_STANDBY_INIT | SYSC_PRUSS_SUB_MWAIT,
+	.regbits = &sysc_regbits_pruss,
+};
+
 static int sysc_init_pdata(struct sysc *ddata)
 {
 	struct ti_sysc_platform_data *pdata = dev_get_platdata(ddata->dev);
@@ -1637,6 +1707,7 @@ static int sysc_probe(struct platform_device *pdev)
 	int error;
 
 	ddata = devm_kzalloc(&pdev->dev, sizeof(*ddata), GFP_KERNEL);
+
 	if (!ddata)
 		return -ENOMEM;
 
@@ -1702,6 +1773,10 @@ static int sysc_probe(struct platform_device *pdev)
 
 	INIT_DELAYED_WORK(&ddata->idle_work, ti_sysc_idle);
 
+	/* FIXME: how to ensure PRUSS stays enabled? */
+	if (ddata->cap->type == TI_SYSC_PRUSS)
+		goto skip_pm_put;
+
 	/* At least earlycon won't survive without deferred idle */
 	if (ddata->cfg.quirks & (SYSC_QUIRK_NO_IDLE_ON_INIT |
 				 SYSC_QUIRK_NO_RESET_ON_INIT)) {
@@ -1709,6 +1784,8 @@ static int sysc_probe(struct platform_device *pdev)
 	} else {
 		pm_runtime_put(&pdev->dev);
 	}
+
+skip_pm_put:
 
 	if (!of_get_available_child_count(ddata->dev->of_node))
 		reset_control_assert(ddata->rsts);
@@ -1766,6 +1843,7 @@ static const struct of_device_id sysc_match[] = {
 	{ .compatible = "ti,sysc-usb-host-fs",
 	  .data = &sysc_omap4_usb_host_fs, },
 	{ .compatible = "ti,sysc-dra7-mcan", .data = &sysc_dra7_mcan, },
+	{ .compatible = "ti,sysc-pruss", .data = &sysc_pruss, },
 	{  },
 };
 MODULE_DEVICE_TABLE(of, sysc_match);
