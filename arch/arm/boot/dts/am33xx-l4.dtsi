@@ -1,3 +1,5 @@
+#include <dt-bindings/reset/ti-syscon.h>
+
 &l4_wkup {						/* 0x44c00000 */
 	compatible = "ti,am33xx-l4-wkup", "simple-bus";
 	reg = <0x44c00000 0x800>,
@@ -96,10 +98,10 @@
 
 			prcm: prcm@0 {
 				compatible = "ti,am3-prcm", "simple-bus";
-				reg = <0 0x2000>;
+				reg = <0 0xb00>;
 				#address-cells = <1>;
 				#size-cells = <1>;
-				ranges = <0 0 0x2000>;
+				ranges = <0 0 0xb00>;
 
 				prcm_clocks: clocks {
 					#address-cells = <1>;
@@ -107,6 +109,19 @@
 				};
 
 				prcm_clockdomains: clockdomains {
+				};
+
+			};
+
+			prm_per {
+				compatible = "syscon", "simple-bus";
+				reg = <0x0c00 100>;
+				per_rst: reset-controller {
+					compatible = "ti,syscon-reset";
+					#reset-cells = <1>;
+					ti,reset-bits = <
+						0x0 1 0x0 1 0x0 0 (ASSERT_SET | DEASSERT_CLEAR | STATUS_NONE) /* 0: pruss */
+					>;
 				};
 			};
 		};
@@ -768,6 +783,7 @@
 			clocks = <&pruss_ocp_clkctrl AM3_PRUSS_OCP_PRUSS_CLKCTRL 0>;
 			clock-names = "fck";
 			/* TODO: Use Reset control for RM_PER_RSTCTRL, bit 1 */
+			resets = <&per_rst 0>;
 
 			#address-cells = <1>;
 			#size-cells = <1>;
