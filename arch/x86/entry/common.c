@@ -31,6 +31,7 @@
 #include <asm/vdso.h>
 #include <linux/uaccess.h>
 #include <asm/cpufeature.h>
+#include <asm/fpu/api.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/syscalls.h>
@@ -133,7 +134,7 @@ static long syscall_trace_enter(struct pt_regs *regs)
 
 #define EXIT_TO_USERMODE_LOOP_FLAGS				\
 	(_TIF_SIGPENDING | _TIF_NOTIFY_RESUME | _TIF_UPROBE |	\
-	 _TIF_NEED_RESCHED | _TIF_USER_RETURN_NOTIFY | _TIF_PATCH_PENDING)
+	 _TIF_NEED_RESCHED_MASK | _TIF_USER_RETURN_NOTIFY | _TIF_PATCH_PENDING)
 
 static void exit_to_usermode_loop(struct pt_regs *regs, u32 cached_flags)
 {
@@ -148,9 +149,16 @@ static void exit_to_usermode_loop(struct pt_regs *regs, u32 cached_flags)
 		/* We have work to do. */
 		local_irq_enable();
 
-		if (cached_flags & _TIF_NEED_RESCHED)
+		if (cached_flags & _TIF_NEED_RESCHED_MASK)
 			schedule();
 
+#ifdef ARCH_RT_DELAYS_SIGNAL_SEND
+		if (unlikely(current->forced_info.si_signo)) {
+			struct task_struct *t = current;
+			force_sig_info(t->forced_info.si_signo, &t->forced_info, t);
+			t->forced_info.si_signo = 0;
+		}
+#endif
 		if (cached_flags & _TIF_UPROBE)
 			uprobe_notify_resume(regs);
 
@@ -195,6 +203,13 @@ __visible inline void prepare_exit_to_usermode(struct pt_regs *regs)
 
 	if (unlikely(cached_flags & EXIT_TO_USERMODE_LOOP_FLAGS))
 		exit_to_usermode_loop(regs, cached_flags);
+
+	/* Reload ti->flags; we may have rescheduled above. */
+	cached_flags = READ_ONCE(ti->flags);
+
+	fpregs_assert_state_consistent();
+	if (unlikely(cached_flags & _TIF_NEED_FPU_LOAD))
+		switch_fpu_return();
 
 #ifdef CONFIG_COMPAT
 	/*

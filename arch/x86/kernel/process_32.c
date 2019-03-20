@@ -38,6 +38,7 @@
 #include <linux/io.h>
 #include <linux/kdebug.h>
 #include <linux/syscalls.h>
+#include <linux/highmem.h>
 
 #include <asm/pgtable.h>
 #include <asm/ldt.h>
@@ -195,6 +196,35 @@ start_thread(struct pt_regs *regs, unsigned long new_ip, unsigned long new_sp)
 }
 EXPORT_SYMBOL_GPL(start_thread);
 
+#ifdef CONFIG_PREEMPT_RT_FULL
+static void switch_kmaps(struct task_struct *prev_p, struct task_struct *next_p)
+{
+	int i;
+
+	/*
+	 * Clear @prev's kmap_atomic mappings
+	 */
+	for (i = 0; i < prev_p->kmap_idx; i++) {
+		int idx = i + KM_TYPE_NR * smp_processor_id();
+		pte_t *ptep = kmap_pte - idx;
+
+		kpte_clear_flush(ptep, __fix_to_virt(FIX_KMAP_BEGIN + idx));
+	}
+	/*
+	 * Restore @next_p's kmap_atomic mappings
+	 */
+	for (i = 0; i < next_p->kmap_idx; i++) {
+		int idx = i + KM_TYPE_NR * smp_processor_id();
+
+		if (!pte_none(next_p->kmap_pte[i]))
+			set_pte(kmap_pte - idx, next_p->kmap_pte[i]);
+	}
+}
+#else
+static inline void
+switch_kmaps(struct task_struct *prev_p, struct task_struct *next_p) { }
+#endif
+
 
 /*
  *	switch_to(x,y) should switch tasks from x to y.
@@ -234,7 +264,8 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 
 	/* never put a printk in __switch_to... printk() calls wake_up*() indirectly */
 
-	switch_fpu_prepare(prev_fpu, cpu);
+	if (!test_thread_flag(TIF_NEED_FPU_LOAD))
+		switch_fpu_prepare(prev_fpu, cpu);
 
 	/*
 	 * Save away %gs. No need to save %fs, as it was saved on the
@@ -264,12 +295,12 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 
 	switch_to_extra(prev_p, next_p);
 
+	switch_kmaps(prev_p, next_p);
+
 	/*
 	 * Leave lazy mode, flushing any hypercalls made here.
 	 * This must be done before restoring TLS segments so
-	 * the GDT and LDT are properly updated, and must be
-	 * done before fpu__restore(), so the TS bit is up
-	 * to date.
+	 * the GDT and LDT are properly updated.
 	 */
 	arch_end_context_switch(next_p);
 
@@ -290,9 +321,9 @@ __switch_to(struct task_struct *prev_p, struct task_struct *next_p)
 	if (prev->gs | next->gs)
 		lazy_load_gs(next->gs);
 
-	switch_fpu_finish(next_fpu, cpu);
-
 	this_cpu_write(current_task, next_p);
+
+	switch_fpu_finish(next_fpu);
 
 	/* Load the Intel cache allocation PQR MSR. */
 	resctrl_sched_in();
