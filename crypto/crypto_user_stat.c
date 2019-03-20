@@ -20,8 +20,6 @@
 
 #define null_terminated(x)	(strnlen(x, sizeof(x)) < sizeof(x))
 
-static DEFINE_MUTEX(crypto_cfg_mutex);
-
 extern struct sock *crypto_nlsk;
 
 struct crypto_dump_info {

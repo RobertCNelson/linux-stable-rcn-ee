@@ -25,7 +25,6 @@
 #include "tpm-dev.h"
 
 static struct workqueue_struct *tpm_dev_wq;
-static DEFINE_MUTEX(tpm_dev_wq_lock);
 
 static void tpm_async_work(struct work_struct *work)
 {
