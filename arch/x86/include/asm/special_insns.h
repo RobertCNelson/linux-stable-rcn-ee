@@ -112,6 +112,12 @@ static inline void __write_pkru(u32 pkru)
 	u32 ecx = 0, edx = 0;
 
 	/*
+	 * WRPKRU is relatively expensive compared to RDPKRU.
+	 * Avoid WRPKRU when it would not change the value.
+	 */
+	if (pkru == __read_pkru())
+		return;
+	/*
 	 * "wrpkru" instruction.  Loads contents in EAX to PKRU,
 	 * requires that ecx = edx = 0.
 	 */
