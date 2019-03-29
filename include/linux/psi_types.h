@@ -76,7 +76,8 @@ struct psi_group {
 	u64 total_prev[NR_PSI_STATES - 1];
 	u64 last_update;
 	u64 next_update;
-	struct delayed_work clock_work;
+	struct work_struct clock_work;
+	struct timer_list clock_work_timer;
 
 	/* Total stall times and sampled pressure averages */
 	u64 total[NR_PSI_STATES - 1];

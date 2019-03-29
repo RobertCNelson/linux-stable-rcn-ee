@@ -461,8 +461,7 @@ int i915_sw_fence_await_dma_fence(struct i915_sw_fence *fence,
 		timer->dma = dma_fence_get(dma);
 		init_irq_work(&timer->work, irq_i915_sw_fence_work);
 
-		timer_setup(&timer->timer,
-			    timer_i915_sw_fence_wake, TIMER_IRQSAFE);
+		timer_setup(&timer->timer, timer_i915_sw_fence_wake, 0);
 		mod_timer(&timer->timer, round_jiffies_up(jiffies + timeout));
 
 		func = dma_i915_sw_fence_wake_timer;
