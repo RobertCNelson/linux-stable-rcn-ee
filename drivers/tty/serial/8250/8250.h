@@ -255,3 +255,7 @@ static inline int serial_index(struct uart_port *port)
 {
 	return port->minor - 64;
 }
+
+void set_ier(struct uart_8250_port *up, unsigned char ier);
+void clear_ier(struct uart_8250_port *up);
+void restore_ier(struct uart_8250_port *up);
