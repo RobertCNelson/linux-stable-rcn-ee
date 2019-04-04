@@ -441,7 +441,8 @@ static void sync_rcu_exp_select_cpus(smp_call_func_t func)
 		if (!READ_ONCE(rnp->expmask))
 			continue; /* Avoid early boot non-existent wq. */
 		rnp->rew.rew_func = func;
-		if (!READ_ONCE(rcu_par_gp_wq) ||
+		if (IS_ENABLED(CONFIG_PREEMPT_RT_FULL) ||
+		    !READ_ONCE(rcu_par_gp_wq) ||
 		    rcu_scheduler_active != RCU_SCHEDULER_RUNNING ||
 		    rcu_is_last_leaf_node(rnp)) {
 			/* No workqueues yet or last leaf, do direct call. */
