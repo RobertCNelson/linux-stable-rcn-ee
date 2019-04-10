@@ -402,12 +402,10 @@ static const char *tp_rcu_varname __used __tracepoint_string = rcu_name;
 
 int rcu_dynticks_snap(struct rcu_data *rdp);
 
-#ifdef CONFIG_RCU_BOOST
 DECLARE_PER_CPU(unsigned int, rcu_cpu_kthread_status);
 DECLARE_PER_CPU(int, rcu_cpu_kthread_cpu);
 DECLARE_PER_CPU(unsigned int, rcu_cpu_kthread_loops);
 DECLARE_PER_CPU(char, rcu_cpu_has_work);
-#endif /* #ifdef CONFIG_RCU_BOOST */
 
 /* Forward declarations for rcutree_plugin.h */
 static void rcu_bootup_announce(void);
@@ -425,8 +423,8 @@ void call_rcu(struct rcu_head *head, rcu_callback_t func);
 static void dump_blkd_tasks(struct rcu_node *rnp, int ncheck);
 static void rcu_initiate_boost(struct rcu_node *rnp, unsigned long flags);
 static void rcu_preempt_boost_start_gp(struct rcu_node *rnp);
-static void invoke_rcu_callbacks_kthread(void);
 static bool rcu_is_callbacks_kthread(void);
+static void rcu_cpu_kthread_setup(unsigned int cpu);
 static void __init rcu_spawn_boost_kthreads(void);
 static void rcu_prepare_kthreads(int cpu);
 static void rcu_cleanup_after_idle(void);
@@ -462,11 +460,3 @@ static void rcu_bind_gp_kthread(void);
 static bool rcu_nohz_full_cpu(void);
 static void rcu_dynticks_task_enter(void);
 static void rcu_dynticks_task_exit(void);
-
-#ifdef CONFIG_SRCU
-void srcu_online_cpu(unsigned int cpu);
-void srcu_offline_cpu(unsigned int cpu);
-#else /* #ifdef CONFIG_SRCU */
-void srcu_online_cpu(unsigned int cpu) { }
-void srcu_offline_cpu(unsigned int cpu) { }
-#endif /* #else #ifdef CONFIG_SRCU */

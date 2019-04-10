@@ -39,17 +39,12 @@ int __execute_only_pkey(struct mm_struct *mm)
 	 * dance to set PKRU if we do not need to.  Check it
 	 * first and assume that if the execute-only pkey is
 	 * write-disabled that we do not have to set it
-	 * ourselves.  We need preempt off so that nobody
-	 * can make fpregs inactive.
+	 * ourselves.
 	 */
-	preempt_disable();
 	if (!need_to_set_mm_pkey &&
-	    current->thread.fpu.initialized &&
 	    !__pkru_allows_read(read_pkru(), execute_only_pkey)) {
-		preempt_enable();
 		return execute_only_pkey;
 	}
-	preempt_enable();
 
 	/*
 	 * Set up PKRU so that it denies access for everything
@@ -147,13 +142,6 @@ u32 init_pkru_value = PKRU_AD_KEY( 1) | PKRU_AD_KEY( 2) | PKRU_AD_KEY( 3) |
 void copy_init_pkru_to_fpregs(void)
 {
 	u32 init_pkru_value_snapshot = READ_ONCE(init_pkru_value);
-	/*
-	 * Any write to PKRU takes it out of the XSAVE 'init
-	 * state' which increases context switch cost.  Avoid
-	 * writing 0 when PKRU was already 0.
-	 */
-	if (!init_pkru_value_snapshot && !read_pkru())
-		return;
 	/*
 	 * Override the PKRU state that came from 'init_fpstate'
 	 * with the baseline from the process.
