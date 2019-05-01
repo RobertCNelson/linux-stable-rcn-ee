@@ -159,6 +159,7 @@ struct cgroup_subsys_state {
 
 	/* percpu_ref killing and RCU release */
 	struct work_struct destroy_work;
+	struct kthread_work destroy_kwork;
 	struct rcu_work destroy_rwork;
 
 	/*

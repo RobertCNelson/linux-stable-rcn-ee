@@ -7,8 +7,8 @@
  * (at your option) any later version.
  */
 
-#ifndef ATMEL_TC_H
-#define ATMEL_TC_H
+#ifndef __SOC_ATMEL_TCB_H
+#define __SOC_ATMEL_TCB_H
 
 #include <linux/compiler.h>
 #include <linux/list.h>
@@ -76,8 +76,27 @@ extern struct atmel_tc *atmel_tc_alloc(unsigned block);
 extern void atmel_tc_free(struct atmel_tc *tc);
 
 /* platform-specific ATMEL_TC_TIMER_CLOCKx divisors (0 means 32KiHz) */
-extern const u8 atmel_tc_divisors[5];
+static const u8 atmel_tc_divisors[] = { 2, 8, 32, 128, 0, };
 
+static const struct atmel_tcb_config tcb_rm9200_config = {
+	.counter_width = 16,
+};
+
+static const struct atmel_tcb_config tcb_sam9x5_config = {
+	.counter_width = 32,
+};
+
+static const struct of_device_id atmel_tcb_dt_ids[] = {
+	{
+		.compatible = "atmel,at91rm9200-tcb",
+		.data = &tcb_rm9200_config,
+	}, {
+		.compatible = "atmel,at91sam9x5-tcb",
+		.data = &tcb_sam9x5_config,
+	}, {
+		/* sentinel */
+	}
+};
 
 /*
  * Two registers have block-wide controls.  These are: configuring the three
