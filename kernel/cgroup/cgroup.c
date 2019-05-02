@@ -4697,10 +4697,10 @@ static void css_free_rwork_fn(struct work_struct *work)
 	}
 }
 
-static void css_release_work_fn(struct work_struct *work)
+static void css_release_work_fn(struct kthread_work *work)
 {
 	struct cgroup_subsys_state *css =
-		container_of(work, struct cgroup_subsys_state, destroy_work);
+		container_of(work, struct cgroup_subsys_state, destroy_kwork);
 	struct cgroup_subsys *ss = css->ss;
 	struct cgroup *cgrp = css->cgroup;
 
@@ -4760,8 +4760,8 @@ static void css_release(struct percpu_ref *ref)
 	struct cgroup_subsys_state *css =
 		container_of(ref, struct cgroup_subsys_state, refcnt);
 
-	INIT_WORK(&css->destroy_work, css_release_work_fn);
-	queue_work(cgroup_destroy_wq, &css->destroy_work);
+	kthread_init_work(&css->destroy_kwork, css_release_work_fn);
+	kthread_schedule_work(&css->destroy_kwork);
 }
 
 static void init_and_link_css(struct cgroup_subsys_state *css,
