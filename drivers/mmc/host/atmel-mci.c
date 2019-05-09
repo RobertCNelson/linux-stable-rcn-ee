@@ -39,6 +39,7 @@
 #include <asm/cacheflush.h>
 #include <asm/io.h>
 #include <asm/unaligned.h>
+#include "../core/pwrseq.h"
 
 /*
  * Superset of MCI IP registers integrated in Atmel AT91 Processor
@@ -2306,8 +2307,10 @@ static int atmci_init_slot(struct atmel_mci *host,
 
 	host->slot[id] = slot;
 	mmc_regulator_get_supply(mmc);
+	mmc_pwrseq_alloc(mmc);
 	ret = mmc_add_host(mmc);
 	if (ret) {
+		mmc_pwrseq_free(mmc);
 		mmc_free_host(mmc);
 		return ret;
 	}
