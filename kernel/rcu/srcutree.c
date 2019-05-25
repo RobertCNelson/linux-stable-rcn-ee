@@ -38,6 +38,7 @@
 #include <linux/delay.h>
 #include <linux/module.h>
 #include <linux/srcu.h>
+#include <linux/locallock.h>
 
 #include "rcu.h"
 #include "rcu_segcblist.h"
@@ -58,6 +59,7 @@ static bool __read_mostly srcu_init_done;
 static void srcu_invoke_callbacks(struct work_struct *work);
 static void srcu_reschedule(struct srcu_struct *ssp, unsigned long delay);
 static void process_srcu(struct work_struct *work);
+static void srcu_delay_timer(struct timer_list *t);
 
 /* Wrappers for lock acquisition and release, see raw_spin_lock_rcu_node(). */
 #define spin_lock_rcu_node(p)					\
@@ -156,7 +158,8 @@ static void init_srcu_struct_nodes(struct srcu_struct *ssp, bool is_static)
 			snp->grphi = cpu;
 		}
 		sdp->cpu = cpu;
-		INIT_DELAYED_WORK(&sdp->work, srcu_invoke_callbacks);
+		INIT_WORK(&sdp->work, srcu_invoke_callbacks);
+		timer_setup(&sdp->delay_work, srcu_delay_timer, 0);
 		sdp->ssp = ssp;
 		sdp->grpmask = 1 << (cpu - sdp->mynode->grplo);
 		if (is_static)
@@ -386,13 +389,19 @@ void _cleanup_srcu_struct(struct srcu_struct *ssp, bool quiesced)
 	} else {
 		flush_delayed_work(&ssp->work);
 	}
-	for_each_possible_cpu(cpu)
+	for_each_possible_cpu(cpu) {
+		struct srcu_data *sdp = per_cpu_ptr(ssp->sda, cpu);
+
 		if (quiesced) {
-			if (WARN_ON(delayed_work_pending(&per_cpu_ptr(ssp->sda, cpu)->work)))
+			if (WARN_ON(timer_pending(&sdp->delay_work)))
+				return; /* Just leak it! */
+			if (WARN_ON(work_pending(&sdp->work)))
 				return; /* Just leak it! */
 		} else {
-			flush_delayed_work(&per_cpu_ptr(ssp->sda, cpu)->work);
+			del_timer_sync(&sdp->delay_work);
+			flush_work(&sdp->work);
 		}
+	}
 	if (WARN_ON(rcu_seq_state(READ_ONCE(ssp->srcu_gp_seq)) != SRCU_STATE_IDLE) ||
 	    WARN_ON(srcu_readers_active(ssp))) {
 		pr_info("%s: Active srcu_struct %p state: %d\n",
@@ -463,39 +472,23 @@ static void srcu_gp_start(struct srcu_struct *ssp)
 	WARN_ON_ONCE(state != SRCU_STATE_SCAN1);
 }
 
-/*
- * Track online CPUs to guide callback workqueue placement.
- */
-DEFINE_PER_CPU(bool, srcu_online);
 
-void srcu_online_cpu(unsigned int cpu)
+static void srcu_delay_timer(struct timer_list *t)
 {
-	WRITE_ONCE(per_cpu(srcu_online, cpu), true);
+	struct srcu_data *sdp = container_of(t, struct srcu_data, delay_work);
+
+	queue_work_on(sdp->cpu, rcu_gp_wq, &sdp->work);
 }
 
-void srcu_offline_cpu(unsigned int cpu)
-{
-	WRITE_ONCE(per_cpu(srcu_online, cpu), false);
-}
-
-/*
- * Place the workqueue handler on the specified CPU if online, otherwise
- * just run it whereever.  This is useful for placing workqueue handlers
- * that are to invoke the specified CPU's callbacks.
- */
-static bool srcu_queue_delayed_work_on(int cpu, struct workqueue_struct *wq,
-				       struct delayed_work *dwork,
+static void srcu_queue_delayed_work_on(struct srcu_data *sdp,
 				       unsigned long delay)
 {
-	bool ret;
+	if (!delay) {
+		queue_work_on(sdp->cpu, rcu_gp_wq, &sdp->work);
+		return;
+	}
 
-	preempt_disable();
-	if (READ_ONCE(per_cpu(srcu_online, cpu)))
-		ret = queue_delayed_work_on(cpu, wq, dwork, delay);
-	else
-		ret = queue_delayed_work(wq, dwork, delay);
-	preempt_enable();
-	return ret;
+	timer_reduce(&sdp->delay_work, jiffies + delay);
 }
 
 /*
@@ -504,7 +497,7 @@ static bool srcu_queue_delayed_work_on(int cpu, struct workqueue_struct *wq,
  */
 static void srcu_schedule_cbs_sdp(struct srcu_data *sdp, unsigned long delay)
 {
-	srcu_queue_delayed_work_on(sdp->cpu, rcu_gp_wq, &sdp->work, delay);
+	srcu_queue_delayed_work_on(sdp, delay);
 }
 
 /*
@@ -760,6 +753,7 @@ static void srcu_flip(struct srcu_struct *ssp)
 	smp_mb(); /* D */  /* Pairs with C. */
 }
 
+static DEFINE_LOCAL_IRQ_LOCK(sp_llock);
 /*
  * If SRCU is likely idle, return true, otherwise return false.
  *
@@ -789,13 +783,13 @@ static bool srcu_might_be_idle(struct srcu_struct *ssp)
 	unsigned long t;
 
 	/* If the local srcu_data structure has callbacks, not idle.  */
-	local_irq_save(flags);
+	local_lock_irqsave(sp_llock, flags);
 	sdp = this_cpu_ptr(ssp->sda);
 	if (rcu_segcblist_pend_cbs(&sdp->srcu_cblist)) {
-		local_irq_restore(flags);
+		local_unlock_irqrestore(sp_llock, flags);
 		return false; /* Callbacks already present, so not idle. */
 	}
-	local_irq_restore(flags);
+	local_unlock_irqrestore(sp_llock, flags);
 
 	/*
 	 * No local callbacks, so probabalistically probe global state.
@@ -875,7 +869,7 @@ void __call_srcu(struct srcu_struct *ssp, struct rcu_head *rhp,
 	}
 	rhp->func = func;
 	idx = srcu_read_lock(ssp);
-	local_irq_save(flags);
+	local_lock_irqsave(sp_llock, flags);
 	sdp = this_cpu_ptr(ssp->sda);
 	spin_lock_rcu_node(sdp);
 	rcu_segcblist_enqueue(&sdp->srcu_cblist, rhp, false);
@@ -891,7 +885,8 @@ void __call_srcu(struct srcu_struct *ssp, struct rcu_head *rhp,
 		sdp->srcu_gp_seq_needed_exp = s;
 		needexp = true;
 	}
-	spin_unlock_irqrestore_rcu_node(sdp, flags);
+	spin_unlock_rcu_node(sdp);
+	local_unlock_irqrestore(sp_llock, flags);
 	if (needgp)
 		srcu_funnel_gp_start(ssp, sdp, s, do_norm);
 	else if (needexp)
@@ -1186,7 +1181,8 @@ static void srcu_invoke_callbacks(struct work_struct *work)
 	struct srcu_data *sdp;
 	struct srcu_struct *ssp;
 
-	sdp = container_of(work, struct srcu_data, work.work);
+	sdp = container_of(work, struct srcu_data, work);
+
 	ssp = sdp->ssp;
 	rcu_cblist_init(&ready_cbs);
 	spin_lock_irq_rcu_node(sdp);
