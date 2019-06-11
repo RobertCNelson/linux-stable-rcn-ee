@@ -1646,7 +1646,7 @@ bool drm_atomic_helper_framebuffer_changed(struct drm_device *dev,
 	struct drm_plane_state *old_plane_state;
 	int i;
 
-	for_each_plane_in_state(old_state, plane, old_plane_state, i) {
+	for_each_old_plane_in_state(old_state, plane, old_plane_state, i) {
 		if (plane->state->crtc != crtc &&
 		    old_plane_state->crtc != crtc)
 			continue;
