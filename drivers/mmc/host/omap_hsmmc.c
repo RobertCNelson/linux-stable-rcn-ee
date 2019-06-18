@@ -1467,6 +1467,8 @@ static void omap_hsmmc_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 			omap_hsmmc_set_power(host, 0);
 			break;
 		case MMC_POWER_UP:
+			omap_hsmmc_set_power(host, 0);
+			msleep(10);
 			omap_hsmmc_set_power(host, 1);
 			break;
 		case MMC_POWER_ON:
