@@ -169,6 +169,7 @@ extern struct rw_semaphore *rwsem_down_write_failed_killable(struct rw_semaphore
 extern struct rw_semaphore *rwsem_wake(struct rw_semaphore *sem);
 extern struct rw_semaphore *rwsem_downgrade_wake(struct rw_semaphore *sem);
 
+#ifndef CONFIG_PREEMPT_RT_FULL
 /*
  * lock for reading
  */
@@ -302,3 +303,4 @@ static inline void __downgrade_write(struct rw_semaphore *sem)
 	if (tmp < 0)
 		rwsem_downgrade_wake(sem);
 }
+#endif
