@@ -934,7 +934,11 @@ void hrtimer_grab_expiry_lock(const struct hrtimer *timer)
 {
 	struct hrtimer_clock_base *base = READ_ONCE(timer->base);
 
+#ifdef CONFIG_SMP
 	if (timer->is_soft && base != &migration_base) {
+#else
+	if (timer->is_soft && base && base->cpu_base) {
+#endif
 		spin_lock(&base->cpu_base->softirq_expiry_lock);
 		spin_unlock(&base->cpu_base->softirq_expiry_lock);
 	}
