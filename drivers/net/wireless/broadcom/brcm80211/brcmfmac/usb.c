@@ -160,7 +160,7 @@ struct brcmf_usbdev_info {
 
 	struct usb_device *usbdev;
 	struct device *dev;
-	struct completion dev_init_done;
+	struct mutex dev_init_lock;
 
 	int ctl_in_pipe, ctl_out_pipe;
 	struct urb *ctl_urb; /* URB for control endpoint */
@@ -684,18 +684,12 @@ static int brcmf_usb_up(struct device *dev)
 
 static void brcmf_cancel_all_urbs(struct brcmf_usbdev_info *devinfo)
 {
-	int i;
-
 	if (devinfo->ctl_urb)
 		usb_kill_urb(devinfo->ctl_urb);
 	if (devinfo->bulk_urb)
 		usb_kill_urb(devinfo->bulk_urb);
-	if (devinfo->tx_reqs)
-		for (i = 0; i < devinfo->bus_pub.ntxq; i++)
-			usb_kill_urb(devinfo->tx_reqs[i].urb);
-	if (devinfo->rx_reqs)
-		for (i = 0; i < devinfo->bus_pub.nrxq; i++)
-			usb_kill_urb(devinfo->rx_reqs[i].urb);
+	brcmf_usb_free_q(&devinfo->tx_postq, true);
+	brcmf_usb_free_q(&devinfo->rx_postq, true);
 }
 
 static void brcmf_usb_down(struct device *dev)
@@ -1134,12 +1128,30 @@ static void brcmf_usb_wowl_config(struct device *dev, bool enabled)
 		device_set_wakeup_enable(devinfo->dev, false);
 }
 
+static int brcmf_usb_get_fwname(struct device *dev, u32 chip, u32 chiprev,
+				u8 *fw_name)
+{
+	struct brcmf_usbdev_info *devinfo = brcmf_usb_get_businfo(dev);
+	int ret = 0;
+
+	if (devinfo->fw_name[0] != '\0')
+		strlcpy(fw_name, devinfo->fw_name, BRCMF_FW_NAME_LEN);
+	else
+		ret = brcmf_fw_map_chip_to_name(chip, chiprev,
+						brcmf_usb_fwnames,
+						ARRAY_SIZE(brcmf_usb_fwnames),
+						fw_name, NULL);
+
+	return ret;
+}
+
 static const struct brcmf_bus_ops brcmf_usb_bus_ops = {
 	.txdata = brcmf_usb_tx,
 	.stop = brcmf_usb_down,
 	.txctl = brcmf_usb_tx_ctlpkt,
 	.rxctl = brcmf_usb_rx_ctlpkt,
 	.wowl_config = brcmf_usb_wowl_config,
+	.get_fwname = brcmf_usb_get_fwname,
 };
 
 static int brcmf_usb_bus_setup(struct brcmf_usbdev_info *devinfo)
@@ -1198,11 +1210,11 @@ static void brcmf_usb_probe_phase2(struct device *dev, int ret,
 	if (ret)
 		goto error;
 
-	complete(&devinfo->dev_init_done);
+	mutex_unlock(&devinfo->dev_init_lock);
 	return;
 error:
 	brcmf_dbg(TRACE, "failed: dev=%s, err=%d\n", dev_name(dev), ret);
-	complete(&devinfo->dev_init_done);
+	mutex_unlock(&devinfo->dev_init_lock);
 	device_release_driver(dev);
 }
 
@@ -1248,7 +1260,7 @@ static int brcmf_usb_probe_cb(struct brcmf_usbdev_info *devinfo)
 		if (ret)
 			goto fail;
 		/* we are done */
-		complete(&devinfo->dev_init_done);
+		mutex_unlock(&devinfo->dev_init_lock);
 		return 0;
 	}
 	bus->chip = bus_pub->devid;
@@ -1309,10 +1321,11 @@ brcmf_usb_probe(struct usb_interface *intf, const struct usb_device_id *id)
 
 	devinfo->usbdev = usb;
 	devinfo->dev = &usb->dev;
-	/* Init completion, to protect for disconnect while still loading.
+	/* Take an init lock, to protect for disconnect while still loading.
 	 * Necessary because of the asynchronous firmware load construction
 	 */
-	init_completion(&devinfo->dev_init_done);
+	mutex_init(&devinfo->dev_init_lock);
+	mutex_lock(&devinfo->dev_init_lock);
 
 	usb_set_intfdata(intf, devinfo);
 
@@ -1390,7 +1403,7 @@ brcmf_usb_probe(struct usb_interface *intf, const struct usb_device_id *id)
 	return 0;
 
 fail:
-	complete(&devinfo->dev_init_done);
+	mutex_unlock(&devinfo->dev_init_lock);
 	kfree(devinfo);
 	usb_set_intfdata(intf, NULL);
 	return ret;
@@ -1405,7 +1418,7 @@ brcmf_usb_disconnect(struct usb_interface *intf)
 	devinfo = (struct brcmf_usbdev_info *)usb_get_intfdata(intf);
 
 	if (devinfo) {
-		wait_for_completion(&devinfo->dev_init_done);
+		mutex_lock(&devinfo->dev_init_lock);
 		/* Make sure that devinfo still exists. Firmware probe routines
 		 * may have released the device and cleared the intfdata.
 		 */
