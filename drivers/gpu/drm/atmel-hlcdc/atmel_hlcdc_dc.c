@@ -955,6 +955,8 @@ static int atmel_hlcdc_dc_drm_probe(struct platform_device *pdev)
 {
 	struct component_match *match = NULL;
 	struct device_node *core_node;
+	struct drm_device *ddev;
+	int ret;
 
 	for_each_compatible_node(core_node, NULL, "microchip,sam9x60-gfx2d") {
 		if (!of_device_is_available(core_node))
@@ -964,11 +966,36 @@ static int atmel_hlcdc_dc_drm_probe(struct platform_device *pdev)
 				    compare_of, core_node);
 	}
 
-	if (!match)
-		return -ENODEV;
+	if (match) {
+		return component_master_add_with_match(&pdev->dev,
+						       &atmel_hlcdc_dc_master_ops,
+						       match);
+	}
 
-	return component_master_add_with_match(&pdev->dev,
-					       &atmel_hlcdc_dc_master_ops, match);
+	/* Fall through old probe routine */
+	ddev = drm_dev_alloc(&atmel_hlcdc_dc_driver, &pdev->dev);
+	if (IS_ERR(ddev))
+		return PTR_ERR(ddev);
+
+	ret = atmel_hlcdc_dc_load(ddev);
+	if (ret)
+		goto err_put;
+
+	ret = drm_dev_register(ddev, 0);
+	if (ret)
+		goto err_unload;
+
+	drm_fbdev_generic_setup(ddev, 24);
+
+	return 0;
+
+err_unload:
+	atmel_hlcdc_dc_unload(ddev);
+
+err_put:
+	drm_dev_put(ddev);
+
+	return ret;
 }
 
 static int atmel_hlcdc_dc_drm_remove(struct platform_device *pdev)
