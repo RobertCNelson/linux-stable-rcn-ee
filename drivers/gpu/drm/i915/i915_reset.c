@@ -804,7 +804,7 @@ static void reset_finish(struct drm_i915_private *i915)
 
 	for_each_engine(engine, i915, id) {
 		reset_finish_engine(engine);
-		intel_engine_signal_breadcrumbs(engine);
+		intel_engine_breadcrumbs_irq(engine);
 	}
 }
 
