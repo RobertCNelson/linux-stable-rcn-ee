@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  *  Copyright (C) 2012-2013 Samsung Electronics Co., Ltd.
  */
@@ -369,6 +369,8 @@ static s32 __FAT_write(struct super_block *sb, u32 loc, u32 content)
 				FAT_modify(sb, sec);
 
 				fat_sector = FAT_getblk(sb, ++sec);
+				if (!fat_sector)
+					return -1;
 				fat_sector[0] = (u8)((fat_sector[0] & 0xF0) |
 						     (content >> 8));
 			} else {
