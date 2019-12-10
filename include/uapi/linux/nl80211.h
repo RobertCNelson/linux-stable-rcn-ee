@@ -252,9 +252,10 @@
  * DOC: SAE authentication offload
  *
  * By setting @NL80211_EXT_FEATURE_SAE_OFFLOAD flag drivers can indicate they
- * support offloading SAE authentication for WPA3-Personal networks. In
- * %NL80211_CMD_CONNECT the password for SAE should be specified using
- * %NL80211_ATTR_SAE_PASSWORD.
+ * support offloading SAE authentication for WPA3-Personal networks. The
+ * password for SAE should be specified using %NL80211_ATTR_SAE_PASSWORD in
+ * %NL80211_CMD_CONNECT and %NL80211_CMD_START_AP for station and AP mode
+ * respectively.
  */
 
 /**
@@ -5675,7 +5676,8 @@ enum nl80211_feature_flags {
  *	to a station.
  *
  * @NL80211_EXT_FEATURE_SAE_OFFLOAD: Device wants to do SAE authentication in
- *	station mode (SAE password is passed as part of the connect command).
+ *	station mode (SAE password is passed as part of the connect command)
+ *	or AP mode (SAE password is passed as part of the start AP command).
  *
  * @NL80211_EXT_FEATURE_VLAN_OFFLOAD: The driver supports a single netdev
  *	with VLAN tagged frames and separate VLAN-specific netdevs added using
