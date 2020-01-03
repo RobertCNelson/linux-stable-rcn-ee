@@ -1,9 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (C) 2012 Texas Instruments Incorporated - http://www.ti.com/
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
  */
 
 / {
@@ -29,14 +26,14 @@
 		compatible = "gpio-leds";
 
 		led2 {
-			label = "beaglebone:green:heartbeat";
+			label = "beaglebone:green:usr0";
 			gpios = <&gpio1 21 GPIO_ACTIVE_HIGH>;
 			linux,default-trigger = "heartbeat";
 			default-state = "off";
 		};
 
 		led3 {
-			label = "beaglebone:green:mmc0";
+			label = "beaglebone:green:usr1";
 			gpios = <&gpio1 22 GPIO_ACTIVE_HIGH>;
 			linux,default-trigger = "mmc0";
 			default-state = "off";
@@ -66,9 +63,6 @@
 };
 
 &am33xx_pinmux {
-	pinctrl-names = "default";
-	pinctrl-0 = <&clkout2_pin>;
-
 	user_leds_s0: user_leds_s0 {
 		pinctrl-single,pins = <
 			AM33XX_IOPAD(0x854, PIN_OUTPUT_PULLDOWN | MUX_MODE7)	/* gpmc_a5.gpio1_21 */
@@ -99,15 +93,11 @@
 		>;
 	};
 
-	clkout2_pin: pinmux_clkout2_pin {
-		pinctrl-single,pins = <
-			AM33XX_IOPAD(0x9b4, PIN_OUTPUT_PULLDOWN | MUX_MODE3)	/* xdma_event_intr1.clkout2 */
-		>;
-	};
-
 	cpsw_default: cpsw_default {
 		pinctrl-single,pins = <
 			/* Slave 1 */
+			0x108 (PIN_INPUT | MUX_MODE0)		/* mii1_col.mii1_col */
+			0x10c (PIN_INPUT | MUX_MODE0)		/* mii1_crs.mii1_crs */
 			AM33XX_IOPAD(0x910, PIN_INPUT_PULLUP | MUX_MODE0)	/* mii1_rxerr.mii1_rxerr */
 			AM33XX_IOPAD(0x914, PIN_OUTPUT_PULLDOWN | MUX_MODE0)	/* mii1_txen.mii1_txen */
 			AM33XX_IOPAD(0x918, PIN_INPUT_PULLUP | MUX_MODE0)	/* mii1_rxdv.mii1_rxdv */
@@ -127,6 +117,8 @@
 	cpsw_sleep: cpsw_sleep {
 		pinctrl-single,pins = <
 			/* Slave 1 reset value */
+			0x108 (PIN_INPUT_PULLDOWN | MUX_MODE7)
+			0x10c (PIN_INPUT_PULLDOWN | MUX_MODE7)
 			AM33XX_IOPAD(0x910, PIN_INPUT_PULLDOWN | MUX_MODE7)
 			AM33XX_IOPAD(0x914, PIN_INPUT_PULLDOWN | MUX_MODE7)
 			AM33XX_IOPAD(0x918, PIN_INPUT_PULLDOWN | MUX_MODE7)
@@ -417,4 +409,5 @@
 &rtc {
 	clocks = <&clk_32768_ck>, <&l4_per_clkctrl AM3_CLKDIV32K_CLKCTRL 0>;
 	clock-names = "ext-clk", "int-clk";
+	system-power-controller;
 };
