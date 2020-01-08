@@ -45,6 +45,7 @@ struct gfx2d_ringbuffer *gfx2d_ringbuffer_new(struct gfx2d_gpu *gpu)
 
 	ring->gpu = gpu;
 	ring->size = GFX2D_GPU_RINGBUFFER_SZ;
+	ring->wsize = GFX2D_GPU_RINGBUFFER_SZ / sizeof(uint32_t);
 
 	dma_set_coherent_mask(&gpu->pdev->dev, DMA_BIT_MASK(32));
 
@@ -56,11 +57,9 @@ struct gfx2d_ringbuffer *gfx2d_ringbuffer_new(struct gfx2d_gpu *gpu)
 		ring->start = 0;
 		goto fail;
 	}
-	ring->end   = ring->start + (GFX2D_GPU_RINGBUFFER_SZ >> 2);
-	ring->next  = ring->start;
+	ring->end   = ring->start + ring->wsize;
 	ring->cur   = ring->start;
-
-	spin_lock_init(&ring->lock);
+	ring->tail  = ring->start;
 
 	return ring;
 

@@ -777,23 +777,11 @@ static int gfx2d_ioctl_submit(struct drm_device *dev, void *data,
 	struct atmel_hlcdc_dc *priv = dev->dev_private;
 	struct gfx2d_gpu *gpu = priv->gpu;
 	struct drm_gfx2d_submit *args = data;
-	uint32_t buf[128];
-	int ret = 0;
 
 	if (!gpu)
 		return -ENXIO;
 
-	if (args->size * sizeof(__u32) > sizeof(buf))
-		return -EIO;
-
-	ret = copy_from_user(buf, (const void __user *)args->buf,
-			     args->size * sizeof(__u32));
-	if (ret) {
-		ret = -EFAULT;
-		return ret;
-	}
-
-	return gfx2d_submit(gpu, buf, args->size);
+	return gfx2d_submit(gpu, (uint32_t *)args->buf, args->size);
 }
 
 static int gfx2d_ioctl_flush(struct drm_device *dev, void *data,

@@ -66,9 +66,9 @@ static inline u32 gpu_read(struct gfx2d_gpu *gpu, u32 reg)
 	return readl(gpu->mmio + reg);
 }
 
-static inline uint32_t get_wptr(struct gfx2d_ringbuffer *ring)
+static inline uint32_t get_wptr(struct gfx2d_gpu *gpu)
 {
-	return ring->cur - ring->start;
+	return gpu_read(gpu, REG_GFX2D_HEAD);
 }
 
 static inline uint32_t get_rptr(struct gfx2d_gpu *gpu)
@@ -81,7 +81,7 @@ static int gfx2d_hw_init(struct gfx2d_gpu *gpu)
 	gpu->version = gpu_read(gpu, REG_GFX2D_VERSION) & 0x7ff;
 	gpu->mfn = (gpu_read(gpu, REG_GFX2D_VERSION) >> 16) & 0x7;
 
-	DBG("GPU version %d (%d)", gpu->version, gpu->mfn);
+	dev_dbg(&gpu->pdev->dev, "GPU version %d (%d)", gpu->version, gpu->mfn);
 
 	/* disable rb */
 	gpu_write(gpu, REG_GFX2D_GD, REG_GFX2D_GD_DISABLE);
@@ -98,47 +98,86 @@ static int gfx2d_hw_init(struct gfx2d_gpu *gpu)
 	gpu_write(gpu, REG_GFX2D_GE, REG_GFX2D_GE_ENABLE);
 
 	/* enable interrupt */
-	gpu_write(gpu, REG_GFX2D_IE, REG_GFX2D_IE_EXEND | REG_GFX2D_IE_RBEMPTY);
+	gpu_write(gpu, REG_GFX2D_IE, REG_GFX2D_IE_EXEND | REG_GFX2D_IE_RBEMPTY | REG_GFX2D_IE_IERR);
 
 	return 0;
 }
 
-static uint32_t ring_freewords(struct gfx2d_gpu *gpu)
+static inline unsigned ring_freewords(struct gfx2d_ringbuffer *ring)
 {
-	uint32_t size = gpu->rb->size / 4;
-	uint32_t wptr = get_wptr(gpu->rb);
-	uint32_t rptr = get_rptr(gpu);
-	return (rptr + (size - 1) - wptr) % size;
-}
-
-static int gfx2d_wait_ring(struct gfx2d_gpu *gpu, uint32_t nwords)
-{
-	if (spin_until(ring_freewords(gpu) >= nwords)) {
-		DRM_ERROR("timeout waiting for ringbuffer space\n");
-		return -ETIMEDOUT;
-	}
-
-	return 0;
+    if (ring->cur >= ring->tail) {
+        return ring->end - ring->cur + ring->tail - ring->start;
+    } else {
+        return ring->tail - ring->cur;
+    }
 }
 
 int gfx2d_submit(struct gfx2d_gpu *gpu, uint32_t* buf, uint32_t nwords)
 {
 	struct gfx2d_ringbuffer *ring = gpu->rb;
-	unsigned i;
-	int ret;
+	int ret, size, nremainingwords, freewords;
 
-	ret = gfx2d_wait_ring(gpu, nwords);
-	if (ret)
-		return ret;
+	if (!nwords)
+		return 0;
 
-	for (i = 0; i < nwords; i++) {
-		DBG("rb out: %08x", buf[i]);
-		OUT_RING(ring, buf[i]);
+	/*
+	 * This case should not happend, libm2d should submit as soon as
+	 * there are more than 512 words.
+	 */
+	if (nwords > ring->wsize)
+		return -EINVAL;
+
+	freewords = ring_freewords(ring);
+	/*
+	 * One extra free word needed because is head and tail are at the same
+	 * position, the hardware assumes the buffer is empty and not full.
+	 */
+	if (freewords < nwords + 1) {
+		/* Check the hardware tail position. */
+		ring->tail = ring->start + gpu_read(gpu, REG_GFX2D_TAIL);
+		freewords = ring_freewords(ring);
+		/*
+		 * If we still have not enough place, let the hardware drain the
+		 * command buffer.
+		 */
+		if (freewords < nwords + 1) {
+			while (gpu_read(gpu, REG_GFX2D_GS) & REG_GFX2D_GS_BUSY);
+			ring->tail = ring->start + gpu_read(gpu, REG_GFX2D_TAIL);
+		}
 	}
 
-	DBG("added %d words to ringbuffer, %d free", nwords, ring_freewords(gpu));
-	DBG("wptr: %x", get_wptr(gpu->rb));
-	DBG("rptr: %x", get_rptr(gpu));
+	/* Copy the commands to the ring buffer. */
+	size = ring->end - ring->cur;
+	if ((nwords > size)) {
+		ret = copy_from_user(ring->cur, (const void __user *)buf, size * 4);
+		if (ret) {
+			ret = -EFAULT;
+			return ret;
+		}
+
+		nremainingwords = nwords - size;
+		ret = copy_from_user(ring->start, (const void __user *)(buf + size), nremainingwords * 4);
+		if (ret) {
+			ret = -EFAULT;
+			return ret;
+		}
+
+		ring->cur = ring->start + nwords - size;
+	} else {
+		ret = copy_from_user(ring->cur, (const void __user *)buf, nwords * 4);
+		if (ret) {
+			ret = -EFAULT;
+			return ret;
+		}
+
+		ring->cur += nwords;
+	}
+
+	/* Ensure writes to ringbuffer have hit system memory. */
+	mb();
+
+	/* Start to execute the commands. */
+	gpu_write(gpu, REG_GFX2D_HEAD, ring->cur - ring->start);
 
 	return 0;
 }
@@ -146,30 +185,22 @@ int gfx2d_submit(struct gfx2d_gpu *gpu, uint32_t* buf, uint32_t nwords)
 int gfx2d_flush(struct gfx2d_gpu *gpu)
 {
 	struct gfx2d_ringbuffer *ring = gpu->rb;
-	uint32_t wptr;
 
-	DBG("flushing rb ...");
-
-	ring->cur = ring->next;
-	if (ring->cur == ring->end)
-		ring->cur = ring->start;
-
-	wptr = get_wptr(gpu->rb);
-
-	/* ensure writes to ringbuffer have hit system memory: */
+	/* Ensure writes to ringbuffer have hit system memory. */
 	mb();
 
-	gpu_write(gpu, REG_GFX2D_HEAD, wptr);
+	if (ring->cur != ring->tail)
+		gpu_write(gpu, REG_GFX2D_HEAD, ring->cur - ring->start);
+
+	/* Do we need to wait for an end of work event? */
 
 	return 0;
 }
 
 void gfx2d_idle(struct gfx2d_gpu *gpu)
 {
-	uint32_t wptr = get_wptr(gpu->rb);
+	uint32_t wptr = get_wptr(gpu);
 	int ret;
-
-	DBG("wait for idle wptr: %x",wptr);
 
 	/* wait for CP to drain ringbuffer: */
 	ret = spin_until(get_rptr(gpu) == wptr);
@@ -185,8 +216,8 @@ void gfx2d_show(struct gfx2d_gpu *gpu, struct seq_file *m)
 
 	seq_printf(m, "revision:      %d (%d)\n", gpu->version, gpu->mfn);
 	seq_printf(m, "rptr:          %d\n", get_rptr(gpu));
-	seq_printf(m, "wptr:          %d\n", get_wptr(gpu->rb));
-	seq_printf(m, "rb freewords:  %d\n", ring_freewords(gpu));
+	seq_printf(m, "wptr:          %d\n", get_wptr(gpu));
+	//seq_printf(m, "rb freewords:  %d\n", ring_freewords(gpu));
 
 	seq_printf(m, "mmio:\n");
 	for (i = 0; i != REG_GFX2D_VERSION; i+=4) {
@@ -200,12 +231,22 @@ static irqreturn_t gfx2d_irq(int irq, void *data)
 {
 	struct gfx2d_gpu *gpu = data;
 	uint32_t status;
+	int ret;
 
 	status = gpu_read(gpu, REG_GFX2D_IS);
-	if (!status)
-		return IRQ_NONE;
 
-	DBG("status: %08x", status);
+	if (status & REG_GFX2D_IS_IERR) {
+		/*
+		 * When an illegal instruction IRQ is rised, the GPU is
+		 * automatically disabled.
+		 */
+		dev_err(&gpu->pdev->dev,"illegal instruction, reinitialize the command buffer\n");
+		ret = gfx2d_hw_init(gpu);
+		if (ret)
+			dev_err(&gpu->pdev->dev,"can't reinitialize the command buffer\n");
+
+		return IRQ_HANDLED;
+	}
 
 	if (status & REG_GFX2D_IS_EXEND) {
 	}
