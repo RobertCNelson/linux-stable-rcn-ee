@@ -803,9 +803,7 @@ static int gfx2d_ioctl_gem_addr(struct drm_device *dev, void *data,
 
 	mutex_lock(&dev->object_name_lock);
 	obj = idr_find(&dev->object_name_idr, (int) args->name);
-	if (obj) {
-		drm_gem_object_get(obj);
-	} else {
+	if (!obj) {
 		mutex_unlock(&dev->object_name_lock);
 		return -ENOENT;
 	}
