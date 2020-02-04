@@ -192,7 +192,7 @@ int gfx2d_flush(struct gfx2d_gpu *gpu)
 	if (ring->cur != ring->tail)
 		gpu_write(gpu, REG_GFX2D_HEAD, ring->cur - ring->start);
 
-	/* Do we need to wait for an end of work event? */
+	while (gpu_read(gpu, REG_GFX2D_GS) & REG_GFX2D_GS_BUSY);
 
 	return 0;
 }
