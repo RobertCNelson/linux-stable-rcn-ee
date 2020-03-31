@@ -13,9 +13,10 @@
 
 #include <linux/regmap.h>
 
-#include <drm/drm_plane.h>
-#include <drm/drm_modes.h>
 #include <drm/drm_crtc.h>
+#include <drm/drm_encoder.h>
+#include <drm/drm_modes.h>
+#include <drm/drm_plane.h>
 
 #define ATMEL_HLCDC_LAYER_CHER			0x0
 #define ATMEL_HLCDC_LAYER_CHDR			0x4
