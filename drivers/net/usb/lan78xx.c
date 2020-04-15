@@ -720,7 +720,7 @@ static int lan78xx_read_stats(struct lan78xx_net *dev,
 			dst[i] = src[i];
 		}
 	} else {
-		netdev_warn(dev->net,
+		netdev_dbg(dev->net,
 			    "Failed to read stat ret = %d", ret);
 	}
 
