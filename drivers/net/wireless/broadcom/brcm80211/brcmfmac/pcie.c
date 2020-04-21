@@ -1886,8 +1886,8 @@ static int brcmf_pcie_get_resource(struct brcmf_pciedev_info *devinfo)
 		return -EINVAL;
 	}
 
-	devinfo->regs = ioremap_nocache(bar0_addr, BRCMF_PCIE_REG_MAP_SIZE);
-	devinfo->tcm = ioremap_nocache(bar1_addr, bar1_size);
+	devinfo->regs = ioremap(bar0_addr, BRCMF_PCIE_REG_MAP_SIZE);
+	devinfo->tcm = ioremap(bar1_addr, bar1_size);
 #ifdef CONFIG_BRCMFMAC_PCIE_BARWIN_SZ
 	devinfo->bar1_size = bar1_size;
 #endif /* CONFIG_BRCMFMAC_PCIE_BARWIN_SZ */
