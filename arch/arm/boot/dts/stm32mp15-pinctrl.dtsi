@@ -1051,6 +1051,12 @@
 		};
 	};
 
+	rtc_out2_rmp_pins_a: rtc-out2-rmp-pins@0 {
+		pins {
+			pinmux = <STM32_PINMUX('I', 8, ANALOG)>; /* RTC_OUT2_RMP */
+		};
+	};
+
 	sai2a_pins_a: sai2a-0 {
 		pins {
 			pinmux = <STM32_PINMUX('I', 5, AF10)>, /* SAI2_SCK_A */
@@ -1739,6 +1745,28 @@
 		pins {
 			pinmux = <STM32_PINMUX('A', 11, ANALOG)>, /* OTG_FS_DM */
 				 <STM32_PINMUX('A', 12, ANALOG)>; /* OTG_FS_DP */
+		};
+	};
+
+	spi4_pins_b: spi4-0 {
+		pins {
+			pinmux = <STM32_PINMUX('E', 12, AF5)>, /* SPI4_SCK */
+				 <STM32_PINMUX('E', 14, AF5)>;  /* SPI4_MOSI */
+			bias-disable;
+			drive-push-pull;
+			slew-rate = <1>;
+		};
+		pins2 {
+			pinmux = <STM32_PINMUX('E', 13, AF5)>; /* SPI4_MISO */
+			bias-disable;
+		};
+	};
+
+	spi4_sleep_pins_b: spi4-sleep-0 {
+		pins {
+			pinmux = <STM32_PINMUX('E', 12, ANALOG)>, /* SPI4_SCK */
+				 <STM32_PINMUX('E', 13, ANALOG)>, /* SPI4_MISO */
+				 <STM32_PINMUX('E', 14, ANALOG)>; /* SPI4_MOSI */
 		};
 	};
 };
