@@ -1,9 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (C) 2012 Texas Instruments Incorporated - http://www.ti.com/
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
  */
 /dts-v1/;
 
@@ -142,6 +139,7 @@
 	};
 
 	etb@540000000 {
+		status = "disabled";
 		compatible = "arm,coresight-etb10", "arm,primecell";
 		reg = <0x5401b000 0x1000>;
 
@@ -156,6 +154,7 @@
 	};
 
 	etm@54010000 {
+		status = "disabled";
 		compatible = "arm,coresight-etm3x", "arm,primecell";
 		reg = <0x54010000 0x1000>;
 
@@ -272,7 +271,16 @@
 			codec {
 			};
 		};
+
+		twl_power: power {
+			compatible = "ti,twl4030-power-reset";
+			ti,use_poweroff;
+		};
 	};
+};
+
+&i2c2 {
+	clock-frequency = <400000>;
 };
 
 #include "twl4030.dtsi"
