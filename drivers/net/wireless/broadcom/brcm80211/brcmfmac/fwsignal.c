@@ -404,7 +404,7 @@ struct brcmf_fws_mac_descriptor {
 	u8 traffic_lastreported_bmp;
 };
 
-#define BRCMF_FWS_HANGER_MAXITEMS	3072
+#define BRCMF_FWS_HANGER_MAXITEMS	1024
 
 /**
  * enum brcmf_fws_hanger_item_state - state of hanger item.
@@ -643,7 +643,6 @@ static inline int brcmf_fws_hanger_poppkt(struct brcmf_fws_hanger *h,
 static void brcmf_fws_psq_flush(struct brcmf_fws_info *fws, struct pktq *q,
 				int ifidx)
 {
-	struct brcmf_fws_hanger_item *hi;
 	bool (*matchfn)(struct sk_buff *, void *) = NULL;
 	struct sk_buff *skb;
 	int prec;
@@ -655,9 +654,6 @@ static void brcmf_fws_psq_flush(struct brcmf_fws_info *fws, struct pktq *q,
 		skb = brcmu_pktq_pdeq_match(q, prec, matchfn, &ifidx);
 		while (skb) {
 			hslot = brcmf_skb_htod_tag_get_field(skb, HSLOT);
-			hi = &fws->hanger.items[hslot];
-			WARN_ON(skb != hi->pkt);
-			hi->state = BRCMF_FWS_HANGER_ITEM_STATE_FREE;
 			brcmf_fws_hanger_poppkt(&fws->hanger, hslot, &skb,
 						true);
 			brcmu_pkt_buf_free_skb(skb);
@@ -912,7 +908,7 @@ static u8 brcmf_fws_hdrpush(struct brcmf_fws_info *fws, struct sk_buff *skb)
 	wlh += wlh[1] + 2;
 
 	if (entry->send_tim_signal) {
-		entry->send_tim_signal = false;
+		entry->send_tim_signal = 0;
 		wlh[0] = BRCMF_FWS_TYPE_PENDING_TRAFFIC_BMP;
 		wlh[1] = BRCMF_FWS_TYPE_PENDING_TRAFFIC_BMP_LEN;
 		wlh[2] = entry->mac_handle;
@@ -2149,7 +2145,8 @@ int brcmf_fws_process_skb(struct brcmf_if *ifp, struct sk_buff *skb)
 		brcmf_fws_enq(fws, BRCMF_FWS_SKBSTATE_DELAYED, fifo, skb);
 		brcmf_fws_schedule_deq(fws);
 	} else {
-		bphy_err(drvr, "no hanger slot available\n");
+		bphy_err(drvr, "drop skb: no hanger slot\n");
+		brcmf_txfinalize(ifp, skb, false);
 		rc = -ENOMEM;
 	}
 	brcmf_fws_unlock(fws);
