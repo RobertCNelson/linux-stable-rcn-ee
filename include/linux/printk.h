@@ -147,22 +147,12 @@ static inline __printf(1, 2) __cold
 void early_printk(const char *s, ...) { }
 #endif
 
-#ifdef CONFIG_PRINTK_NMI
-extern void printk_nmi_enter(void);
-extern void printk_nmi_exit(void);
-extern void printk_nmi_direct_enter(void);
-extern void printk_nmi_direct_exit(void);
-#else
-static inline void printk_nmi_enter(void) { }
-static inline void printk_nmi_exit(void) { }
-static inline void printk_nmi_direct_enter(void) { }
-static inline void printk_nmi_direct_exit(void) { }
-#endif /* PRINTK_NMI */
+struct dev_printk_info;
 
 #ifdef CONFIG_PRINTK
-asmlinkage __printf(5, 0)
+asmlinkage __printf(4, 0)
 int vprintk_emit(int facility, int level,
-		 const char *dict, size_t dictlen,
+		 const struct dev_printk_info *dev_info,
 		 const char *fmt, va_list args);
 
 asmlinkage __printf(1, 0)
@@ -203,8 +193,6 @@ __printf(1, 2) void dump_stack_set_arch_desc(const char *fmt, ...);
 void dump_stack_print_info(const char *log_lvl);
 void show_regs_print_info(const char *log_lvl);
 extern asmlinkage void dump_stack(void) __cold;
-extern void printk_safe_flush(void);
-extern void printk_safe_flush_on_panic(void);
 #else
 static inline __printf(1, 0)
 int vprintk(const char *s, va_list args)
@@ -266,14 +254,6 @@ static inline void show_regs_print_info(const char *log_lvl)
 }
 
 static inline void dump_stack(void)
-{
-}
-
-static inline void printk_safe_flush(void)
-{
-}
-
-static inline void printk_safe_flush_on_panic(void)
 {
 }
 #endif
