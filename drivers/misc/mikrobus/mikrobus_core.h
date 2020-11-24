@@ -168,12 +168,11 @@ struct addon_board_info {
  * @id: port id starting from 1
  */
 struct mikrobus_port {
-	struct i2c_client *eeprom_client;
 	struct addon_board_info *board;
 	struct i2c_adapter *i2c_adap;
 	struct spi_master *spi_mstr;
+	struct w1_bus_master *w1_master;
 	struct serdev_controller *ser_ctrl;
-	struct nvmem_device *eeprom;
 	struct gpio_descs *gpios;
 	struct pwm_device *pwm;
 	struct pinctrl *pinctrl;
