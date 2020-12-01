@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: "http://devicetree.org/schemas/rng/microchip,mpfs-rng.yaml#"
+$schema: "http://devicetree.org/meta-schemas/core.yaml#"
+
+title: Microchip MPFS random number generator
+
+maintainers:
+  - Conor Dooley <conor.dooley@microchip.com>
+
+properties:
+  compatible:
+    const: microchip,polarfire-soc-rng
+
+  syscontroller:
+    maxItems: 1
+    description: name of the system controller device node
+
+  "#address-cells":
+    const: 1
+
+  "#size-cells":
+    const: 1
+
+required:
+  - compatible
+  - "#address-cells"
+  - "#size-cells"
+  - "syscontroller"
+
+additionalProperties: false
+
+examples:
+  - |
+    hwrandom: hwrandom {
+        compatible = "microchip,polarfire-soc-rng";
+        #address-cells = <1>;
+        #size-cells = <1>;
+        syscontroller = <&syscontroller>;
+    };
