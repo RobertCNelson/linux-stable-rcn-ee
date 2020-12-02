@@ -17,6 +17,7 @@
 #include <linux/module.h>
 #include <linux/gpio/consumer.h>
 #include <linux/mutex.h>
+#include <linux/w1.h>
 #include <linux/w1-gpio.h>
 #include <linux/device.h>
 #include <linux/i2c.h>
@@ -46,6 +47,7 @@ static DEFINE_IDR(mikrobus_port_idr);
 static struct class_compat *mikrobus_port_compat_class;
 int	__mikrobus_first_dynamic_bus_num;
 static bool is_registered;
+static int mikrobus_port_id_eeprom_probe(struct mikrobus_port *port);
 
 const char *MIKROBUS_PINCTRL_STR[] = {"pwm", "uart", "i2c", "spi"};
 
@@ -54,63 +56,66 @@ struct bus_type mikrobus_bus_type = {
 };
 EXPORT_SYMBOL_GPL(mikrobus_bus_type);
 
-static int mikrobus_port_scan_eeprom(struct mikrobus_port *port)
+int mikrobus_port_scan_eeprom(struct mikrobus_port *port)
 {
 	struct addon_board_info *board;
 	int manifest_size;
 	char header[12];
 	int retval;
 	char *buf;
-return -ENOMEM;
-// 	retval = nvmem_device_read(port->eeprom, 0, 12, header);
-// 	if (retval != 12) {
-// 		dev_err(&port->dev, "failed to fetch manifest header %d\n",
-// 			retval);
-// 		return -EINVAL;
-// 	}
-// 	manifest_size = mikrobus_manifest_header_validate(header, 12);
-// 	if (manifest_size < 0) {
-// 		dev_err(&port->dev, "invalid manifest size %d\n",
-// 			manifest_size);
-// 		return -EINVAL;
-// 	}
-// 	buf = kzalloc(manifest_size, GFP_KERNEL);
-// 	if (!buf)
-// 		return -ENOMEM;
-// 	retval = nvmem_device_read(port->eeprom, 0, manifest_size, buf);
-// 	if (retval != manifest_size) {
-// 		dev_err(&port->dev, "failed to fetch manifest %d\n", retval);
-// 		retval = -EINVAL;
-// 		goto err_free_buf;
-// 	}
-// 	board = kzalloc(sizeof(*board), GFP_KERNEL);
-// 	if (!board) {
-// 		retval = -ENOMEM;
-// 		goto err_free_buf;
-// 	}
-// 	INIT_LIST_HEAD(&board->manifest_descs);
-// 	INIT_LIST_HEAD(&board->devices);
-// 	retval = mikrobus_manifest_parse(board, buf, manifest_size);
-// 	if (!retval) {
-// 		dev_err(&port->dev, "failed to parse manifest, size %d\n",
-// 			manifest_size);
-// 		retval = -EINVAL;
-// 		goto err_free_board;
-// 	}
-// 	retval = mikrobus_board_register(port, board);
-// 	if (retval) {
-// 		dev_err(&port->dev, "failed to register board %s\n",
-// 			board->name);
-// 		goto err_free_board;
-// 	}
-// 	kfree(buf);
-// 	return 0;
-// err_free_board:
-// 	kfree(board);
-// err_free_buf:
-// 	kfree(buf);
-// 	return retval;
+	retval = nvmem_device_read(port->eeprom, 0, 12, header);
+	if (retval != 12) {
+		dev_err(&port->dev, "failed to fetch manifest header %d\n",
+			retval);
+		return -EINVAL;
+	}
+	manifest_size = mikrobus_manifest_header_validate(header, 12);
+	if (manifest_size < 0) {
+		dev_err(&port->dev, "invalid manifest size %d\n",
+			manifest_size);
+		return -EINVAL;
+	}
+	buf = kzalloc(manifest_size, GFP_KERNEL);
+	if (!buf)
+		return -ENOMEM;
+	retval = nvmem_device_read(port->eeprom, 0, manifest_size, buf);
+	if (retval != manifest_size) {
+		dev_err(&port->dev, "failed to fetch manifest %d\n", retval);
+		retval = -EINVAL;
+		goto err_free_buf;
+	}
+	board = kzalloc(sizeof(*board), GFP_KERNEL);
+	if (!board) {
+		retval = -ENOMEM;
+		goto err_free_buf;
+	}
+	w1_reset_bus(port->w1_master);
+	w1_write_8(port->w1_master, MIKROBUS_EEPROM_EXIT_ID_CMD);
+	set_bit(W1_ABORT_SEARCH, &port->w1_master->flags);
+	INIT_LIST_HEAD(&board->manifest_descs);
+	INIT_LIST_HEAD(&board->devices);
+	retval = mikrobus_manifest_parse(board, buf, manifest_size);
+	if (!retval) {
+		dev_err(&port->dev, "failed to parse manifest, size %d\n",
+			manifest_size);
+		retval = -EINVAL;
+		goto err_free_board;
+	}
+	retval = mikrobus_board_register(port, board);
+	if (retval) {
+		dev_err(&port->dev, "failed to register board %s\n",
+			board->name);
+		goto err_free_board;
+	}
+	kfree(buf);
+	return 0;
+err_free_board:
+	kfree(board);
+err_free_buf:
+	kfree(buf);
+	return retval;
 }
+EXPORT_SYMBOL_GPL(mikrobus_port_scan_eeprom);
 
 static ssize_t name_show(struct device *dev, struct device_attribute *attr,
 						 char *buf)
@@ -161,6 +166,7 @@ static ssize_t rescan_store(struct device *dev, struct device_attribute *attr,
 	struct mikrobus_port *port = to_mikrobus_port(dev);
 	unsigned long id;
 	int retval;
+	int i;
 
 	if (kstrtoul(buf, 0, &id)) {
 		dev_err(dev, "cannot parse trigger\n");
@@ -170,6 +176,27 @@ static ssize_t rescan_store(struct device *dev, struct device_attribute *attr,
 		dev_err(dev, "already has board registered\n");
 		return -EBUSY;
 	}
+
+	if (!port->eeprom){
+		return mikrobus_port_id_eeprom_probe(port);
+	}
+	/* Enter ID Mode */
+	sprintf(port->pinctrl_selected[MIKROBUS_PINCTRL_SPI], "%s_%s",
+			MIKROBUS_PINCTRL_STR[MIKROBUS_PINCTRL_SPI], MIKROBUS_PINCTRL_STATE_GPIO);
+
+	retval = mikrobus_port_pinctrl_select(port);
+	/* set MOSI LOW, SCK HIGH */
+	gpiod_direction_output(port->gpios->desc[MIKROBUS_PIN_MOSI], 0);
+	gpiod_direction_output(port->gpios->desc[MIKROBUS_PIN_SCK], 1);
+	msleep(100);
+	for( i = 0; i < 4; i++){
+		gpiod_set_value(port->gpios->desc[MIKROBUS_PIN_MOSI] , 1);
+		udelay(1000);
+		gpiod_set_value(port->gpios->desc[MIKROBUS_PIN_MOSI] , 0);
+		udelay(1000);
+	}
+	msleep(100); /* temporary delay to fix ROM ID copy */
+
 	retval = mikrobus_port_scan_eeprom(port);
 	if (retval) {
 		dev_err(dev, "board register from manifest failed\n");
@@ -219,7 +246,29 @@ struct device_type mikrobus_port_type = {
 };
 EXPORT_SYMBOL_GPL(mikrobus_port_type);
 
+static int mikrobus_w1_master_match(struct device *dev, const void *data)
+{
+	struct mikrobus_port *port;
 
+	if(dev->type != &mikrobus_port_type)
+		return 0;	
+
+	port = to_mikrobus_port(dev);
+
+	return port->w1_master == data;
+}
+
+struct mikrobus_port *mikrobus_find_port_by_w1_master(struct w1_master *master)
+{
+	struct device *dev;
+
+	dev = bus_find_device(&mikrobus_bus_type, NULL, master, mikrobus_w1_master_match);
+	if (!dev)
+		return NULL;
+
+	return (dev->type == &mikrobus_port_type) ? to_mikrobus_port(dev) : NULL;
+}
+EXPORT_SYMBOL(mikrobus_find_port_by_w1_master);
 
 int mikrobus_port_pinctrl_select(struct mikrobus_port *port)
 {
@@ -584,8 +633,8 @@ static struct platform_device mikrobus_id_eeprom_w1_device = {
 
 static int mikrobus_port_id_eeprom_probe(struct mikrobus_port *port)
 {
+	struct w1_bus_master *bm;
 	struct gpiod_lookup_table *lookup;
-	struct pinctrl_state *state;
 	int retval;
 	int i;
 
@@ -617,7 +666,9 @@ static int mikrobus_port_id_eeprom_probe(struct mikrobus_port *port)
 						MIKROBUS_PIN_CS);
 	gpiod_add_lookup_table(lookup);
 	platform_device_register(&mikrobus_id_eeprom_w1_device);
-	port->w1_master = (struct w1_bus_master *) platform_get_drvdata(&mikrobus_id_eeprom_w1_device);
+	port->w1_gpio = &mikrobus_id_eeprom_w1_device;
+	bm = (struct w1_bus_master *) platform_get_drvdata(&mikrobus_id_eeprom_w1_device);
+	port->w1_master = w1_find_master_device(bm);
 	return 0;
 }
 
@@ -670,13 +721,13 @@ int mikrobus_port_register(struct mikrobus_port *port)
 											port->id);
 		retval = mikrobus_port_id_eeprom_probe(port);
 	}
-	if (port->w1_master) {
-		retval = mikrobus_port_scan_eeprom(port);
-		if (retval) {
-			dev_warn(&port->dev, "failed to register board from manifest\n");
-			return 0;
-		}
-	}
+	// if (port->w1_master) {
+	// 	retval = mikrobus_port_scan_eeprom(port);
+	// 	if (retval) {
+	// 		dev_warn(&port->dev, "failed to register board from manifest\n");
+	// 		return 0;
+	// 	}
+	// }
 	return retval;
 }
 EXPORT_SYMBOL_GPL(mikrobus_port_register);
@@ -698,10 +749,10 @@ void mikrobus_port_delete(struct mikrobus_port *port)
 		return;
 	}
 
-	// if (port->eeprom) {
-	// 	nvmem_device_put(port->eeprom);
-	// 	i2c_unregister_device(port->eeprom_client);
-	// }
+	if (port->eeprom) {
+		nvmem_device_put(port->eeprom);
+		platform_device_unregister(port->w1_gpio);
+	}
 
 	class_compat_remove_link(mikrobus_port_compat_class, &port->dev,
 							port->dev.parent);
