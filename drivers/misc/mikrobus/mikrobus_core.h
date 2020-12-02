@@ -40,6 +40,8 @@
 
 #define MIKROBUS_PINCTRL_STATE_GPIO	"gpio"
 
+#define MIKROBUS_EEPROM_EXIT_ID_CMD 0xD2
+
 extern struct bus_type mikrobus_bus_type;
 extern struct device_type mikrobus_port_type;
 extern const char *MIKROBUS_PINCTRL_STR[];
@@ -169,9 +171,11 @@ struct addon_board_info {
  */
 struct mikrobus_port {
 	struct addon_board_info *board;
+	struct nvmem_device *eeprom;
 	struct i2c_adapter *i2c_adap;
 	struct spi_master *spi_mstr;
-	struct w1_bus_master *w1_master;
+	struct w1_master *w1_master;
+	struct platform_device *w1_gpio;
 	struct serdev_controller *ser_ctrl;
 	struct gpio_descs *gpios;
 	struct pwm_device *pwm;
@@ -192,5 +196,6 @@ int mikrobus_board_register(struct mikrobus_port *port,
 int mikrobus_port_register(struct mikrobus_port *port);
 int mikrobus_port_pinctrl_select(struct mikrobus_port *port);
 void mikrobus_port_delete(struct mikrobus_port *port);
-
+int mikrobus_port_scan_eeprom(struct mikrobus_port *port);
+struct mikrobus_port *mikrobus_find_port_by_w1_master(struct w1_master *master);
 #endif /* __MIKROBUS_H */
