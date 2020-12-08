@@ -669,6 +669,10 @@ static int mikrobus_port_id_eeprom_probe(struct mikrobus_port *port)
 	port->w1_gpio = &mikrobus_id_eeprom_w1_device;
 	bm = (struct w1_bus_master *) platform_get_drvdata(&mikrobus_id_eeprom_w1_device);
 	port->w1_master = w1_find_master_device(bm);
+	mutex_lock(&port->w1_master->mutex);
+	port->w1_master->max_slave_count = 1;
+	clear_bit(W1_WARN_MAX_COUNT, &port->w1_master->flags);
+	mutex_unlock(&port->w1_master->mutex);
 	return 0;
 }
 

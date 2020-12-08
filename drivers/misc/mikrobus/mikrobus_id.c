@@ -27,14 +27,16 @@
 #define W1_MIKROBUS_ID_EEPROM_COPY_SCRATCH	0x55
 #define W1_MIKROBUS_ID_EEPROM_COPY_SCRATCH_ES	0x40
 
-#define W1_MIKROBUS_ID_EEPROM_TPROG_MS		40
+#define W1_MIKROBUS_ID_EEPROM_TPROG_MS		60
 
 static int w1_mikrobus_id_readblock(struct w1_slave *sl, int off, int count, char *buf)
 {
 	u8 wrbuf[3];
 	u8 cmp[W1_MIKROBUS_ID_EEPROM_SIZE];
 	int tries = W1_MIKROBUS_ID_EEPROM_READ_RETRIES;
-
+	
+	msleep(10); /* debug slave going not responding on write-read-write */
+	
 	do {
 		wrbuf[0] = W1_MIKROBUS_ID_READ_EEPROM;
 		wrbuf[1] = count >> 8;
@@ -68,40 +70,33 @@ static int w1_mikrobus_id_writeblock(struct w1_slave *sl, int off, int count, ch
 	int k;
 
 	memcpy(wrdata, buf, W1_MIKROBUS_ID_EEPROM_SIZE);
-
+	msleep(10);
 	while(len > 0) {
 		wrbuf[0] = W1_MIKROBUS_ID_EEPROM_WRITE_SCRATCH;
-		wrbuf[1] = (wraddr & 0x100) >> 8;
+		wrbuf[1] = wraddr >> 8;
 		wrbuf[2] = wraddr & 0xFF;
 
 		/* write scratchpad */
 		w1_reset_select_slave(sl);
 		w1_write_block(sl->master, wrbuf, 3);
-		/* write_block fails */
-		// w1_write_block(sl->master, wrdata + wraddr, W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE);
-		for(k = 0; k < W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE; k++){
-			w1_write_8(sl->master, wrdata[wraddr + k]);
-			udelay(50); //delay to fix slave going non-responsive
-		}
+		w1_write_block(sl->master, wrdata + wraddr, W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE);
+		udelay(100);
 		w1_read_block(sl->master, write_scratchpad_crc, 2);
-		msleep(10); //delay to fix slave going non-responsive 
-		/* verify scratchpad */
 		w1_reset_select_slave(sl);
 		w1_write_8(sl->master, W1_MIKROBUS_ID_EEPROM_READ_SCRATCH);
-		/* read_block fails*/
-		// w1_read_block(sl->master, scratchpad_verify, W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE + 3);
-		for(k = 0; k < (W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE + 3); k++){
-			scratchpad_verify[k] = w1_read_8(sl->master);
-			udelay(50); //delay to fix slave going non-responsive
-		}
-		msleep(10); //delay to fix slave going non-responsive
-		/* copy scratchpad */
+		w1_read_block(sl->master, scratchpad_verify, W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE + 3);
 		wrbuf[0] = W1_MIKROBUS_ID_EEPROM_COPY_SCRATCH;
-		wrbuf[1] = (wraddr & 0x100) >> 8;
+		wrbuf[1] = wraddr >> 8;
 		wrbuf[2] = wraddr & 0xFF;
 		wrbuf[3] = W1_MIKROBUS_ID_EEPROM_COPY_SCRATCH_ES;
 		w1_reset_select_slave(sl);
-		w1_write_block(sl->master, wrbuf, 4);
+		/* write_block fails */
+		//w1_write_block(sl->master, wrbuf, 4);
+		w1_write_8(sl->master, wrbuf[0]);
+		udelay(20);
+		w1_write_8(sl->master, wrbuf[1]);
+		w1_write_8(sl->master, wrbuf[2]);
+		w1_write_8(sl->master, wrbuf[3]);
 
 		msleep(W1_MIKROBUS_ID_EEPROM_TPROG_MS);
 		wraddr += W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE;
@@ -166,7 +161,6 @@ static int w1_mikrobus_id_add_slave(struct w1_slave *sl)
 	if(!port)
 		return -ENODEV;
 
-	set_bit(W1_ABORT_SEARCH, &sl->master->flags);
 	nvmem_cfg.name = port->name;
 	nvmem = devm_nvmem_register(&sl->dev, &nvmem_cfg);
 	port->eeprom = nvmem;
