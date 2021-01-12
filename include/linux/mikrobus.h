@@ -18,11 +18,13 @@
 #include <linux/spi/spi.h>
 #include <linux/serdev.h>
 #include <linux/property.h>
+#include <linux/greybus.h>
 #include <linux/pinctrl/pinctrl.h>
 #include <linux/pinctrl/pinmux.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/nvmem-consumer.h>
 #include <linux/nvmem-provider.h>
+#include <linux/greybus/gbphy.h>
 
 #define MIKROBUS_VERSION_MAJOR 0x00
 #define MIKROBUS_VERSION_MINOR 0x03
@@ -186,6 +188,7 @@ struct mikrobus_port {
 	char *pinctrl_selected[MIKROBUS_NUM_PINCTRL_STATE];
 	unsigned int chip_select[MIKROBUS_NUM_CS];
 	int skip_scan;
+	int disable_eeprom;
 	int id;
 };
 #define to_mikrobus_port(d) container_of(d, struct mikrobus_port, dev)
@@ -194,6 +197,8 @@ void mikrobus_board_unregister(struct mikrobus_port *port,
 				struct addon_board_info *board);
 int mikrobus_board_register(struct mikrobus_port *port,
 				struct addon_board_info *board);
+
+int mikrobus_port_gb_register(struct gbphy_host *host, void *manifest_blob, size_t manifest_size);
 int mikrobus_port_register(struct mikrobus_port *port);
 int mikrobus_port_pinctrl_select(struct mikrobus_port *port);
 void mikrobus_port_delete(struct mikrobus_port *port);
