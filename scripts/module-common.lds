@@ -24,6 +24,3 @@ SECTIONS {
 
 	__jump_table		0 : ALIGN(8) { KEEP(*(__jump_table)) }
 }
-
-/* bring in arch-specific sections */
-#include <asm/module.lds.h>
