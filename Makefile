@@ -1695,8 +1695,7 @@ else # KBUILD_EXTMOD
 #                      Install the modules built in the module directory
 #                      Assumes install directory is already created
 
-# We are always building only modules.
-KBUILD_BUILTIN :=
+# We are always building modules
 KBUILD_MODULES := 1
 
 build-dirs := $(KBUILD_EXTMOD)
