@@ -994,6 +994,7 @@ void wilc_netdev_cleanup(struct wilc *wilc)
 	wilc->hif_workqueue = NULL;
 
 	wilc_wlan_cfg_deinit(wilc);
+	wilc_sysfs_exit();
 	wlan_deinit_locks(wilc);
 	wiphy_unregister(wilc->wiphy);
 	wiphy_free(wilc->wiphy);

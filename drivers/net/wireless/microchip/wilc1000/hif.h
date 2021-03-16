@@ -218,6 +218,10 @@ int wilc_get_tx_power(struct wilc_vif *vif, u8 *tx_power);
 void wilc_set_wowlan_trigger(struct wilc_vif *vif, bool enabled);
 int wilc_set_external_auth_param(struct wilc_vif *vif,
 				 struct cfg80211_external_auth_params *param);
+/* 0 select antenna 1 , 2 select antenna mode , 2 allow the firmware to choose
+ * the best antenna
+ */
+int wilc_set_antenna(struct wilc_vif *vif, u8 mode);
 void wilc_scan_complete_received(struct wilc *wilc, u8 *buffer, u32 length);
 void wilc_network_info_received(struct wilc *wilc, u8 *buffer, u32 length);
 void wilc_gnrl_async_info_received(struct wilc *wilc, u8 *buffer, u32 length);

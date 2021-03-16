@@ -29,6 +29,10 @@
 
 #define TX_BACKOFF_WEIGHT_MS			1
 
+#define ANT_SWTCH_INVALID_GPIO_CTRL		0
+#define ANT_SWTCH_SNGL_GPIO_CTRL		1
+#define ANT_SWTCH_DUAL_GPIO_CTRL		2
+
 struct wilc_wfi_stats {
 	unsigned long rx_packets;
 	unsigned long tx_packets;
