@@ -36,6 +36,13 @@ struct host_if_wowlan_trigger {
 	u8 wowlan_trigger;
 };
 
+struct host_if_set_ant {
+	u8 mode;
+	u8 antenna1;
+	u8 antenna2;
+	u8 gpio_mode;
+};
+
 struct wilc_del_all_sta {
 	u8 assoc_sta;
 	u8 mac[WILC_MAX_NUM_STA][ETH_ALEN];
@@ -49,6 +56,7 @@ union wilc_message_body {
 	char *data;
 	struct host_if_wowlan_trigger wow_trigger;
 	struct send_buffered_eap send_buff_eap;
+	struct host_if_set_ant set_ant;
 };
 
 struct host_if_msg {
@@ -2171,4 +2179,66 @@ int wilc_set_default_mgmt_key_index(struct wilc_vif *vif, u8 index)
                            "Failed to send default mgmt key index\n");
 
         return result;
+}
+
+static bool is_valid_gpio(struct wilc_vif *vif, u8 gpio)
+{
+	switch (vif->wilc->chip) {
+	case WILC_1000:
+		if (gpio == 0 || gpio == 1 || gpio == 4 || gpio == 6)
+			return true;
+		else
+			return false;
+	case WILC_3000:
+		if (gpio == 0 || gpio == 3 || gpio == 4 ||
+		    (gpio >= 17 && gpio <= 20))
+			return true;
+		else
+			return false;
+	default:
+		return false;
+	}
+}
+
+int wilc_set_antenna(struct wilc_vif *vif, u8 mode)
+{
+	struct wid wid;
+	int ret;
+	struct sysfs_attr_group *attr_sysfs_p = &vif->wilc->attr_sysfs;
+	struct host_if_set_ant set_ant;
+
+	set_ant.mode = mode;
+
+	if (attr_sysfs_p->ant_swtch_mode == ANT_SWTCH_INVALID_GPIO_CTRL) {
+		pr_err("Ant switch GPIO mode is invalid.\n");
+		pr_err("Set it using /sys/wilc/ant_swtch_mode\n");
+		return -EINVAL;
+	}
+
+	if (is_valid_gpio(vif, attr_sysfs_p->antenna1)) {
+		set_ant.antenna1 = attr_sysfs_p->antenna1;
+	} else  {
+		pr_err("Invalid GPIO %d\n", attr_sysfs_p->antenna1);
+		return -EINVAL;
+	}
+
+	if (attr_sysfs_p->ant_swtch_mode == ANT_SWTCH_DUAL_GPIO_CTRL) {
+		if (attr_sysfs_p->antenna2 != attr_sysfs_p->antenna1 &&
+		    is_valid_gpio(vif, attr_sysfs_p->antenna2)) {
+			set_ant.antenna2 = attr_sysfs_p->antenna2;
+		} else {
+			pr_err("Invalid GPIO %d\n", attr_sysfs_p->antenna2);
+			return -EINVAL;
+		}
+	}
+
+	set_ant.gpio_mode = attr_sysfs_p->ant_swtch_mode;
+
+	wid.id = WID_ANTENNA_SELECTION;
+	wid.type = WID_BIN;
+	wid.val = (u8 *)&set_ant;
+	wid.size = sizeof(struct host_if_set_ant);
+	ret = wilc_send_config_pkt(vif, WILC_SET_CFG, &wid, 1);
+
+	return ret;
 }

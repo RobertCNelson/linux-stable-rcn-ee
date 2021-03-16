@@ -27,6 +27,10 @@
 #define TCP_ACK_FILTER_LINK_SPEED_THRESH	54
 #define DEFAULT_LINK_SPEED			72
 
+#define ANT_SWTCH_INVALID_GPIO_CTRL		0
+#define ANT_SWTCH_SNGL_GPIO_CTRL		1
+#define ANT_SWTCH_DUAL_GPIO_CTRL		2
+
 struct wilc_wfi_stats {
 	unsigned long rx_packets;
 	unsigned long tx_packets;
@@ -182,6 +186,16 @@ struct tcp_ack_filter {
 	bool enabled;
 };
 
+#define WILC_P2P_ROLE_GO	1
+#define WILC_P2P_ROLE_CLIENT	0
+
+struct sysfs_attr_group {
+	bool p2p_mode;
+	u8 ant_swtch_mode;
+	u8 antenna1;
+	u8 antenna2;
+};
+
 struct wilc_vif {
 	u8 idx;
 	u8 iftype;
@@ -275,6 +289,7 @@ struct wilc {
 	struct device *dev;
 	struct device *dt_dev;
 
+	enum wilc_chip_type chip;
 	struct workqueue_struct *hif_workqueue;
 	struct wilc_cfg cfg;
 	void *bus_data;
@@ -284,6 +299,7 @@ struct wilc {
 	struct mutex deinit_lock;
 	u8 sta_ch;
 	u8 op_ch;
+	struct sysfs_attr_group attr_sysfs;
 	struct ieee80211_channel channels[ARRAY_SIZE(wilc_2ghz_channels)];
 	struct ieee80211_rate bitrates[ARRAY_SIZE(wilc_bitrates)];
 	struct ieee80211_supported_band band;
