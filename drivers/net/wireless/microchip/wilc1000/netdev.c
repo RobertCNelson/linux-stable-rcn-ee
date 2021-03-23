@@ -953,6 +953,8 @@ void wilc_netdev_cleanup(struct wilc *wilc)
 
 	srcu_idx = srcu_read_lock(&wilc->srcu);
 	list_for_each_entry_rcu(vif, &wilc->vif_list, list) {
+		/* clear the mode */
+		wilc_set_operation_mode(vif, 0, 0, 0);
 		if (vif->ndev)
 			unregister_netdev(vif->ndev);
 	}
@@ -960,7 +962,7 @@ void wilc_netdev_cleanup(struct wilc *wilc)
 
 	wilc_wfi_deinit_mon_interface(wilc, false);
 	destroy_workqueue(wilc->hif_workqueue);
-
+	wilc->hif_workqueue = NULL;
 	while (ifc_cnt < WILC_NUM_CONCURRENT_IFC) {
 		mutex_lock(&wilc->vif_mutex);
 		if (wilc->vif_num <= 0) {
