@@ -8,6 +8,8 @@
 #include <linux/mmc/sdio_func.h>
 #include <linux/mmc/sdio_ids.h>
 #include <linux/mmc/host.h>
+#include <linux/mmc/card.h>
+#include <linux/pm_runtime.h>
 #include <linux/mmc/sdio.h>
 #include <linux/of_irq.h>
 
@@ -636,9 +638,11 @@ static int wilc_sdio_read(struct wilc *wilc, u32 addr, u8 *buf, u32 size)
 
 static int wilc_sdio_deinit(struct wilc *wilc)
 {
+	struct sdio_func *func = dev_to_sdio_func(wilc->dev);
 	struct wilc_sdio *sdio_priv = wilc->bus_data;
 
 	sdio_priv->isinit = false;
+	pm_runtime_put_sync_autosuspend(mmc_dev(func->card->host));
 	return 0;
 }
 
@@ -649,6 +653,13 @@ static int wilc_sdio_init(struct wilc *wilc, bool resume)
 	struct sdio_cmd52 cmd;
 	int loop, ret;
 	u32 chipid;
+
+	/* Patch for sdio interrupt latency issue */
+	ret = pm_runtime_get_sync(mmc_dev(func->card->host));
+	if (ret < 0) {
+		pm_runtime_put_noidle(mmc_dev(func->card->host));
+		return ret;
+	}
 
 	init_waitqueue_head(&sdio_intr_waitqueue);
 	sdio_priv->irq_gpio = (wilc->io_type == WILC_HIF_SDIO_GPIO_IRQ);
@@ -664,7 +675,7 @@ static int wilc_sdio_init(struct wilc *wilc, bool resume)
 	ret = wilc_sdio_cmd52(wilc, &cmd);
 	if (ret) {
 		dev_err(&func->dev, "Fail cmd 52, enable csa...\n");
-		return ret;
+		goto pm_runtime_put;
 	}
 
 	/**
@@ -673,7 +684,7 @@ static int wilc_sdio_init(struct wilc *wilc, bool resume)
 	ret = wilc_sdio_set_block_size(wilc, 0, WILC_SDIO_BLOCK_SIZE);
 	if (ret) {
 		dev_err(&func->dev, "Fail cmd 52, set func 0 block size...\n");
-		return ret;
+		goto pm_runtime_put;
 	}
 	sdio_priv->block_size = WILC_SDIO_BLOCK_SIZE;
 
@@ -689,7 +700,7 @@ static int wilc_sdio_init(struct wilc *wilc, bool resume)
 	if (ret) {
 		dev_err(&func->dev,
 			"Fail cmd 52, set IOE register...\n");
-		return ret;
+		goto pm_runtime_put;
 	}
 
 	/**
@@ -706,7 +717,7 @@ static int wilc_sdio_init(struct wilc *wilc, bool resume)
 		if (ret) {
 			dev_err(&func->dev,
 				"Fail cmd 52, get IOR register...\n");
-			return ret;
+			goto pm_runtime_put;
 		}
 		if (cmd.data == WILC_SDIO_CCCR_IO_EN_FUNC1)
 			break;
@@ -714,7 +725,7 @@ static int wilc_sdio_init(struct wilc *wilc, bool resume)
 
 	if (loop <= 0) {
 		dev_err(&func->dev, "Fail func 1 is not ready...\n");
-		return -EINVAL;
+		goto pm_runtime_put;
 	}
 
 	/**
@@ -723,7 +734,7 @@ static int wilc_sdio_init(struct wilc *wilc, bool resume)
 	ret = wilc_sdio_set_block_size(wilc, 1, WILC_SDIO_BLOCK_SIZE);
 	if (ret) {
 		dev_err(&func->dev, "Fail set func 1 block size...\n");
-		return ret;
+		goto pm_runtime_put;
 	}
 
 	/**
@@ -737,7 +748,7 @@ static int wilc_sdio_init(struct wilc *wilc, bool resume)
 	ret = wilc_sdio_cmd52(wilc, &cmd);
 	if (ret) {
 		dev_err(&func->dev, "Fail cmd 52, set IEN register...\n");
-		return ret;
+		goto pm_runtime_put;
 	}
 
 	/**
@@ -747,13 +758,18 @@ static int wilc_sdio_init(struct wilc *wilc, bool resume)
 		ret = wilc_sdio_read_reg(wilc, WILC_CHIPID, &chipid);
 		if (ret) {
 			dev_err(&func->dev, "Fail cmd read chip id...\n");
-			return ret;
+			goto pm_runtime_put;
 		}
 		dev_err(&func->dev, "chipid (%08x)\n", chipid);
 	}
 
 	sdio_priv->isinit = true;
+
 	return 0;
+
+pm_runtime_put:
+	pm_runtime_put_sync_autosuspend(mmc_dev(func->card->host));
+	return ret;
 }
 
 static int wilc_sdio_read_size(struct wilc *wilc, u32 *size)
