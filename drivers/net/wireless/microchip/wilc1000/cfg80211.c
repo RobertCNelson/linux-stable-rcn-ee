@@ -1427,10 +1427,14 @@ static int change_virtual_intf(struct wiphy *wiphy, struct net_device *dev,
 static int start_ap(struct wiphy *wiphy, struct net_device *dev,
 		    struct cfg80211_ap_settings *settings)
 {
-	struct wilc_vif *vif = netdev_priv(dev);
 	int ret;
+	struct wilc_vif *vif = netdev_priv(dev);
+	int freq = settings->chandef.chan->center_freq;
+	int channelnum = ieee80211_frequency_to_channel(freq);
 
-	ret = set_channel(wiphy, &settings->chandef);
+	pr_info("%s,dev[%s]\n", __func__, dev->name);
+
+	ret = wilc_set_mac_chnl_num(vif, channelnum);
 	if (ret != 0)
 		netdev_err(dev, "Error in setting channel\n");
 
