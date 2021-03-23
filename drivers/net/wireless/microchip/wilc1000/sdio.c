@@ -137,8 +137,9 @@ static int wilc_sdio_probe(struct sdio_func *func,
 			   const struct sdio_device_id *id)
 {
 	struct wilc *wilc;
-	int ret;
+	int ret, io_type;
 	struct wilc_sdio *sdio_priv;
+	int irq_num;
 
 	sdio_priv = kzalloc(sizeof(*sdio_priv), GFP_KERNEL);
 	if (!sdio_priv)
@@ -150,24 +151,22 @@ static int wilc_sdio_probe(struct sdio_func *func,
 		goto free;
 	}
 
-	ret = wilc_cfg80211_init(&wilc, &func->dev, WILC_HIF_SDIO,
-				 &wilc_hif_sdio);
+	if (IS_ENABLED(CONFIG_WILC_HW_OOB_INTR))
+		io_type = WILC_HIF_SDIO_GPIO_IRQ;
+	else
+		io_type = WILC_HIF_SDIO;
+
+	ret = wilc_cfg80211_init(&wilc, &func->dev, io_type, &wilc_hif_sdio);
 	if (ret)
 		goto free;
-
-	if (IS_ENABLED(CONFIG_WILC1000_HW_OOB_INTR)) {
-		struct device_node *np = func->card->dev.of_node;
-		int irq_num = of_irq_get(np, 0);
-
-		if (irq_num > 0) {
-			wilc->dev_irq_num = irq_num;
-			sdio_priv->irq_gpio = true;
-		}
-	}
 
 	sdio_set_drvdata(func, wilc);
 	wilc->bus_data = sdio_priv;
 	wilc->dev = &func->dev;
+
+	irq_num = of_irq_get(func->card->dev.of_node, 0);
+	if (irq_num > 0)
+		wilc->dev_irq_num = irq_num;
 
 	wilc->rtc_clk = devm_clk_get_optional(&func->card->dev, "rtc");
 	if (IS_ERR(wilc->rtc_clk)) {
@@ -627,6 +626,7 @@ static int wilc_sdio_init(struct wilc *wilc, bool resume)
 	struct sdio_cmd52 cmd;
 	int loop, ret;
 	u32 chipid;
+	sdio_priv->irq_gpio = (wilc->io_type == WILC_HIF_SDIO_GPIO_IRQ);
 
 	/**
 	 *      function 0 csa enable

@@ -570,7 +570,8 @@ void chip_allow_sleep(struct wilc *wilc)
 	u32 trials = 100;
 	int ret;
 
-	if (wilc->io_type == WILC_HIF_SDIO) {
+	if (wilc->io_type == WILC_HIF_SDIO ||
+	    wilc->io_type == WILC_HIF_SDIO_GPIO_IRQ) {
 		wakeup_reg = WILC_SDIO_WAKEUP_REG;
 		wakeup_bit = WILC_SDIO_WAKEUP_BIT;
 		from_host_to_fw_reg = WILC_SDIO_HOST_TO_FW_REG;
@@ -629,7 +630,8 @@ void chip_wakeup(struct wilc *wilc)
 	u32 from_host_to_fw_reg, from_host_to_fw_bit;
 	const struct wilc_hif_func *hif_func = wilc->hif_func;
 
-	if (wilc->io_type == WILC_HIF_SDIO) {
+	if (wilc->io_type == WILC_HIF_SDIO ||
+	    wilc->io_type == WILC_HIF_SDIO_GPIO_IRQ) {
 		wakeup_reg = WILC_SDIO_WAKEUP_REG;
 		wakeup_bit = WILC_SDIO_WAKEUP_BIT;
 		clk_status_reg = WILC_SDIO_CLK_STATUS_REG;
@@ -1161,7 +1163,8 @@ int wilc_wlan_start(struct wilc *wilc)
 	int ret;
 	u32 chipid;
 
-	if (wilc->io_type == WILC_HIF_SDIO) {
+	if (wilc->io_type == WILC_HIF_SDIO ||
+	    wilc->io_type == WILC_HIF_SDIO_GPIO_IRQ) {
 		reg = 0;
 		reg |= BIT(3);
 	} else if (wilc->io_type == WILC_HIF_SPI) {
@@ -1173,7 +1176,7 @@ int wilc_wlan_start(struct wilc *wilc)
 		goto release;
 
 	reg = 0;
-	if (wilc->io_type == WILC_HIF_SDIO && wilc->dev_irq_num)
+	if (wilc->io_type == WILC_HIF_SDIO_GPIO_IRQ)
 		reg |= WILC_HAVE_SDIO_IRQ_GPIO;
 
 	ret = wilc->hif_func->hif_write_reg(wilc, WILC_GP_REG_1, reg);

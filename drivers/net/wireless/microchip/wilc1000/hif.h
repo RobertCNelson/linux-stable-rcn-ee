@@ -80,7 +80,8 @@ enum conn_event {
 
 enum {
 	WILC_HIF_SDIO = 0,
-	WILC_HIF_SPI = BIT(0)
+	WILC_HIF_SPI = BIT(0),
+	WILC_HIF_SDIO_GPIO_IRQ = BIT(1)
 };
 
 enum {
