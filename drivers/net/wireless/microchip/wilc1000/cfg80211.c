@@ -457,11 +457,6 @@ static int disconnect(struct wiphy *wiphy, struct net_device *dev,
 	if (!wilc)
 		return -EIO;
 
-	if (wilc->close) {
-		/* already disconnected done */
-		cfg80211_disconnected(dev, 0, NULL, 0, true, GFP_KERNEL);
-		return 0;
-	}
 
 	if (vif->iftype != WILC_CLIENT_MODE)
 		wilc->sta_ch = WILC_INVALID_CHANNEL;
@@ -1623,7 +1618,6 @@ static int del_virtual_intf(struct wiphy *wiphy, struct wireless_dev *wdev)
 	    wdev->iftype == NL80211_IFTYPE_P2P_GO)
 		wilc_wfi_deinit_mon_interface(wl, true);
 	vif = netdev_priv(wdev->netdev);
-	cfg80211_stop_iface(wiphy, wdev, GFP_KERNEL);
 	cfg80211_unregister_netdevice(vif->ndev);
 	vif->monitor_flag = 0;
 

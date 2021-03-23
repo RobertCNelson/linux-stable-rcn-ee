@@ -944,6 +944,7 @@ void wilc_netdev_cleanup(struct wilc *wilc)
 
 	wilc_wfi_deinit_mon_interface(wilc, false);
 	destroy_workqueue(wilc->hif_workqueue);
+	wilc->hif_workqueue = NULL;
 
 	wilc_wlan_cfg_deinit(wilc);
 	wlan_deinit_locks(wilc);
