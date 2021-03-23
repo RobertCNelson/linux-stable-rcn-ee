@@ -231,23 +231,20 @@ static int wilc_sdio_suspend(struct device *dev)
 	struct wilc *wilc = sdio_get_drvdata(func);
 	int ret;
 
-	dev_info(dev, "sdio suspend\n");
+	dev_info(&func->dev, "sdio suspend\n");
+	mutex_lock(&wilc->hif_cs);
+
 	chip_wakeup(wilc);
 
-	if (!IS_ERR(wilc->rtc_clk))
-		clk_disable_unprepare(wilc->rtc_clk);
+	if (mutex_is_locked(&wilc->hif_cs))
+		mutex_unlock(&wilc->hif_cs);
 
-	if (wilc->suspend_event) {
-		host_sleep_notify(wilc);
-		chip_allow_sleep(wilc);
-	}
+	host_sleep_notify(wilc);
+	chip_allow_sleep(wilc);
+
+	mutex_lock(&wilc->hif_cs);
 
 	ret = wilc_sdio_reset(wilc);
-	if (ret) {
-		dev_err(&func->dev, "Fail reset sdio\n");
-		return ret;
-	}
-	sdio_claim_host(func);
 
 	return 0;
 }
@@ -947,15 +944,21 @@ static int wilc_sdio_resume(struct device *dev)
 	struct sdio_func *func = dev_to_sdio_func(dev);
 	struct wilc *wilc = sdio_get_drvdata(func);
 
-	dev_info(dev, "sdio resume\n");
-	sdio_release_host(func);
+	dev_info(&func->dev, "sdio resume\n");
 	chip_wakeup(wilc);
 	wilc_sdio_init(wilc, true);
 
-	if (wilc->suspend_event)
-		host_wakeup_notify(wilc);
+	if (mutex_is_locked(&wilc->hif_cs))
+		mutex_unlock(&wilc->hif_cs);
+
+	host_wakeup_notify(wilc);
+
+	mutex_lock(&wilc->hif_cs);
 
 	chip_allow_sleep(wilc);
+
+	if (mutex_is_locked(&wilc->hif_cs))
+		mutex_unlock(&wilc->hif_cs);
 
 	return 0;
 }

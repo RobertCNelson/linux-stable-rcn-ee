@@ -251,6 +251,51 @@ static void wilc_bus_remove(struct spi_device *spi)
 	kfree(spi_priv);
 }
 
+static int wilc_spi_suspend(struct device *dev)
+{
+	struct spi_device *spi = to_spi_device(dev);
+	struct wilc *wilc = spi_get_drvdata(spi);
+
+	dev_info(&spi->dev, "\n\n << SUSPEND >>\n\n");
+	mutex_lock(&wilc->hif_cs);
+	chip_wakeup(wilc);
+
+	if (mutex_is_locked(&wilc->hif_cs))
+		mutex_unlock(&wilc->hif_cs);
+
+	/* notify the chip that host will sleep */
+	host_sleep_notify(wilc);
+	chip_allow_sleep(wilc);
+	mutex_lock(&wilc->hif_cs);
+
+	return 0;
+}
+
+static int wilc_spi_resume(struct device *dev)
+{
+	struct spi_device *spi = to_spi_device(dev);
+	struct wilc *wilc = spi_get_drvdata(spi);
+
+	dev_info(&spi->dev, "\n\n  <<RESUME>>\n\n");
+
+	/* wake the chip to compelete the re-initialization */
+	chip_wakeup(wilc);
+
+	if (mutex_is_locked(&wilc->hif_cs))
+		mutex_unlock(&wilc->hif_cs);
+
+	host_wakeup_notify(wilc);
+
+	mutex_lock(&wilc->hif_cs);
+
+	chip_allow_sleep(wilc);
+
+	if (mutex_is_locked(&wilc->hif_cs))
+		mutex_unlock(&wilc->hif_cs);
+
+	return 0;
+}
+
 static const struct of_device_id wilc_of_match[] = {
 	{ .compatible = "microchip,wilc1000", },
 	{ /* sentinel */ }
@@ -263,10 +308,16 @@ static const struct spi_device_id wilc_spi_id[] = {
 };
 MODULE_DEVICE_TABLE(spi, wilc_spi_id);
 
+static const struct dev_pm_ops wilc_spi_pm_ops = {
+	.suspend = wilc_spi_suspend,
+	.resume = wilc_spi_resume,
+};
+
 static struct spi_driver wilc_spi_driver = {
 	.driver = {
 		.name = SPI_MODALIAS,
 		.of_match_table = wilc_of_match,
+		.pm = &wilc_spi_pm_ops,
 	},
 	.id_table = wilc_spi_id,
 	.probe =  wilc_bus_probe,

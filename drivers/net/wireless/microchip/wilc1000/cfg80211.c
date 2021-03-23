@@ -1637,13 +1637,6 @@ static int del_virtual_intf(struct wiphy *wiphy, struct wireless_dev *wdev)
 
 static int wilc_suspend(struct wiphy *wiphy, struct cfg80211_wowlan *wow)
 {
-	struct wilc *wl = wiphy_priv(wiphy);
-
-	if (!wow && wilc_wlan_get_num_conn_ifcs(wl))
-		wl->suspend_event = true;
-	else
-		wl->suspend_event = false;
-
 	return 0;
 }
 
