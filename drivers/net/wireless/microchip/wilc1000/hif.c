@@ -122,8 +122,19 @@ static int handle_scan_done(struct wilc_vif *vif, enum scan_event evt)
 	struct wid wid;
 	struct host_if_drv *hif_drv = vif->hif_drv;
 	struct wilc_user_scan_req *scan_req;
+	u8 null_bssid[6] = {0};
 
-	if (evt == SCAN_EVENT_ABORTED) {
+	if (!hif_drv) {
+		pr_err("hif driver is NULL\n");
+		return result;
+	}
+
+	if (evt == SCAN_EVENT_DONE) {
+		if (memcmp(hif_drv->assoc_bssid, null_bssid, ETH_ALEN) == 0)
+			hif_drv->hif_state = HOST_IF_IDLE;
+		else
+			hif_drv->hif_state = HOST_IF_CONNECTED;
+	} else if (evt == SCAN_EVENT_ABORTED) {
 		abort_running_scan = 1;
 		wid.id = WID_ABORT_RUNNING_SCAN;
 		wid.type = WID_CHAR;
@@ -132,14 +143,9 @@ static int handle_scan_done(struct wilc_vif *vif, enum scan_event evt)
 
 		result = wilc_send_config_pkt(vif, WILC_SET_CFG, &wid, 1);
 		if (result) {
-			netdev_err(vif->ndev, "Failed to set abort running\n");
+			pr_err("Failed to set abort running\n");
 			result = -EFAULT;
 		}
-	}
-
-	if (!hif_drv) {
-		netdev_err(vif->ndev, "%s: hif driver is NULL\n", __func__);
-		return result;
 	}
 
 	scan_req = &hif_drv->usr_scan_req;
@@ -167,13 +173,26 @@ int wilc_scan(struct wilc_vif *vif, u8 scan_source,
 	u8 *search_ssid_vals = NULL;
 	const u8 ch_list_len = request->n_channels;
 	struct host_if_drv *hif_drv = vif->hif_drv;
+	struct wilc_vif *vif_tmp;
+	int srcu_idx;
 
-	if (hif_drv->hif_state >= HOST_IF_SCANNING &&
-	    hif_drv->hif_state < HOST_IF_CONNECTED) {
-		netdev_err(vif->ndev, "Already scan\n");
-		result = -EBUSY;
-		goto error;
+	srcu_idx = srcu_read_lock(&vif->wilc->srcu);
+	list_for_each_entry_rcu(vif_tmp, &vif->wilc->vif_list, list) {
+		struct host_if_drv *hif_drv_tmp;
+
+		if (vif_tmp == NULL || vif_tmp->hif_drv == NULL)
+			continue;
+
+		hif_drv_tmp = vif_tmp->hif_drv;
+
+		if (hif_drv_tmp->hif_state != HOST_IF_IDLE &&
+		    hif_drv_tmp->hif_state != HOST_IF_CONNECTED) {
+			result = -EBUSY;
+			srcu_read_unlock(&vif->wilc->srcu, srcu_idx);
+			goto error;
+		}
 	}
+	srcu_read_unlock(&vif->wilc->srcu, srcu_idx);
 
 	if (vif->connecting) {
 		netdev_err(vif->ndev, "Don't do obss scan\n");
@@ -278,6 +297,25 @@ static int wilc_send_connect_wid(struct wilc_vif *vif)
 	struct host_if_drv *hif_drv = vif->hif_drv;
 	struct wilc_conn_info *conn_attr = &hif_drv->conn_info;
 	struct wilc_join_bss_param *bss_param = conn_attr->param;
+	struct wilc_vif *vif_tmp;
+	int srcu_idx;
+
+	srcu_idx = srcu_read_lock(&vif->wilc->srcu);
+	list_for_each_entry_rcu(vif_tmp, &vif->wilc->vif_list, list) {
+		struct host_if_drv *hif_drv_tmp;
+
+		if (vif_tmp == NULL || vif_tmp->hif_drv == NULL)
+			continue;
+
+		hif_drv_tmp = vif_tmp->hif_drv;
+
+		if (hif_drv_tmp->hif_state == HOST_IF_SCANNING) {
+			result = -EBUSY;
+			srcu_read_unlock(&vif->wilc->srcu, srcu_idx);
+			goto error;
+		}
+	}
+	srcu_read_unlock(&vif->wilc->srcu, srcu_idx);
 
 
         wid_list[wid_cnt].id = WID_SET_MFP;
@@ -727,6 +765,24 @@ int wilc_disconnect(struct wilc_vif *vif)
 	struct wilc_conn_info *conn_info;
 	int result;
 	u16 dummy_reason_code = 0;
+	struct wilc_vif *vif_tmp;
+	int srcu_idx;
+
+	srcu_idx = srcu_read_lock(&vif->wilc->srcu);
+	list_for_each_entry_rcu(vif_tmp, &vif->wilc->vif_list, list) {
+		struct host_if_drv *hif_drv_tmp;
+
+		if (vif_tmp == NULL || vif_tmp->hif_drv == NULL)
+			continue;
+
+		hif_drv_tmp = vif_tmp->hif_drv;
+
+		if (hif_drv_tmp->hif_state == HOST_IF_SCANNING) {
+			del_timer(&hif_drv_tmp->scan_timer);
+			handle_scan_done(vif_tmp, SCAN_EVENT_ABORTED);
+		}
+	}
+	srcu_read_unlock(&vif->wilc->srcu, srcu_idx);
 
 	wid.id = WID_DISCONNECT;
 	wid.type = WID_CHAR;
@@ -750,11 +806,16 @@ int wilc_disconnect(struct wilc_vif *vif)
 
 	if (conn_info->conn_result) {
 		if (hif_drv->hif_state == HOST_IF_WAITING_CONN_RESP ||
-		    hif_drv->hif_state == HOST_IF_EXTERNAL_AUTH)
+		    hif_drv->hif_state == HOST_IF_EXTERNAL_AUTH) {
 			del_timer(&hif_drv->connect_timer);
-
-		conn_info->conn_result(CONN_DISCONN_EVENT_DISCONN_NOTIF, 0,
-				       conn_info->priv);
+			conn_info->conn_result(CONN_DISCONN_EVENT_CONN_RESP,
+					       WILC_MAC_STATUS_DISCONNECTED,
+					       conn_info->priv);
+		} else if (hif_drv->hif_state == HOST_IF_CONNECTED) {
+			conn_info->conn_result(CONN_DISCONN_EVENT_DISCONN_NOTIF,
+					       WILC_MAC_STATUS_DISCONNECTED,
+					       conn_info->priv);
+		}
 	} else {
 		netdev_err(vif->ndev, "%s: conn_result is NULL\n", __func__);
 	}
@@ -766,6 +827,7 @@ int wilc_disconnect(struct wilc_vif *vif)
 	conn_info->req_ies_len = 0;
 	kfree(conn_info->req_ies);
 	conn_info->req_ies = NULL;
+	conn_info->conn_result = NULL;
 
 	return 0;
 }
@@ -867,15 +929,35 @@ static int handle_remain_on_chan(struct wilc_vif *vif,
 	u8 remain_on_chan_flag;
 	struct wid wid;
 	struct host_if_drv *hif_drv = vif->hif_drv;
+	struct wilc_vif *vif_tmp;
+	int srcu_idx;
 
-	if (hif_drv->usr_scan_req.scan_result)
-		return -EBUSY;
+	if (!hif_drv)
+		return -EFAULT;
 
-	if (hif_drv->hif_state == HOST_IF_WAITING_CONN_RESP)
-		return -EBUSY;
+	srcu_idx = srcu_read_lock(&vif->wilc->srcu);
+	list_for_each_entry_rcu(vif_tmp, &vif->wilc->vif_list, list) {
+		struct host_if_drv *hif_drv_tmp;
 
-	if (vif->connecting)
+		if (vif_tmp == NULL || vif_tmp->hif_drv == NULL)
+			continue;
+
+		hif_drv_tmp = vif_tmp->hif_drv;
+
+		if (hif_drv_tmp->hif_state == HOST_IF_SCANNING) {
+			srcu_read_unlock(&vif->wilc->srcu, srcu_idx);
+			return -EBUSY;
+		} else if (hif_drv_tmp->hif_state != HOST_IF_IDLE &&
+			   hif_drv_tmp->hif_state != HOST_IF_CONNECTED) {
+			srcu_read_unlock(&vif->wilc->srcu, srcu_idx);
+			return -EBUSY;
+		}
+	}
+	srcu_read_unlock(&vif->wilc->srcu, srcu_idx);
+
+	if (vif->connecting) {
 		return -EBUSY;
+	}
 
 	remain_on_chan_flag = true;
 	wid.id = WID_REMAIN_ON_CHAN;
@@ -908,6 +990,7 @@ static int wilc_handle_roc_expired(struct wilc_vif *vif, u64 cookie)
 	struct wid wid;
 	int result;
 	struct host_if_drv *hif_drv = vif->hif_drv;
+	u8 null_bssid[6] = {0};
 
 	if (vif->priv.p2p_listen_state) {
 		remain_on_chan_flag = false;
@@ -929,10 +1012,14 @@ static int wilc_handle_roc_expired(struct wilc_vif *vif, u64 cookie)
 			return -EINVAL;
 		}
 
-		if (hif_drv->remain_on_ch.expired) {
+		if (hif_drv->remain_on_ch.expired)
 			hif_drv->remain_on_ch.expired(hif_drv->remain_on_ch.vif,
 						      cookie);
-		}
+
+		if (memcmp(hif_drv->assoc_bssid, null_bssid, ETH_ALEN) == 0)
+			hif_drv->hif_state = HOST_IF_IDLE;
+		else
+			hif_drv->hif_state = HOST_IF_CONNECTED;
 	} else {
 		netdev_dbg(vif->ndev, "Not in listen state\n");
 	}
