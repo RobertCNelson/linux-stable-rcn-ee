@@ -1659,21 +1659,23 @@ void wilc_network_info_received(struct wilc *wilc, u8 *buffer, u32 length)
 	int id;
 	struct host_if_drv *hif_drv;
 	struct wilc_vif *vif;
+	int srcu_idx;
 
 	id = get_unaligned_le32(&buffer[length - 4]);
+	srcu_idx = srcu_read_lock(&wilc->srcu);
 	vif = wilc_get_vif_from_idx(wilc, id);
 	if (!vif)
-		return;
-	hif_drv = vif->hif_drv;
+		goto out;
 
+	hif_drv = vif->hif_drv;
 	if (!hif_drv) {
 		netdev_err(vif->ndev, "driver not init[%p]\n", hif_drv);
-		return;
+		goto out;
 	}
 
 	msg = wilc_alloc_work(vif, handle_rcvd_ntwrk_info, false);
 	if (IS_ERR(msg))
-		return;
+		goto out;
 
 	msg->body.net_info.frame_len = get_unaligned_le16(&buffer[6]) - 1;
 	msg->body.net_info.rssi = buffer[8];
@@ -1682,7 +1684,7 @@ void wilc_network_info_received(struct wilc *wilc, u8 *buffer, u32 length)
 					  GFP_KERNEL);
 	if (!msg->body.net_info.mgmt) {
 		kfree(msg);
-		return;
+		goto out;
 	}
 
 	result = wilc_enqueue_work(msg);
@@ -1691,6 +1693,8 @@ void wilc_network_info_received(struct wilc *wilc, u8 *buffer, u32 length)
 		kfree(msg->body.net_info.mgmt);
 		kfree(msg);
 	}
+out:
+	srcu_read_unlock(&wilc->srcu, srcu_idx);
 }
 
 void wilc_gnrl_async_info_received(struct wilc *wilc, u8 *buffer, u32 length)
@@ -1700,34 +1704,31 @@ void wilc_gnrl_async_info_received(struct wilc *wilc, u8 *buffer, u32 length)
 	int id;
 	struct host_if_drv *hif_drv;
 	struct wilc_vif *vif;
+	int srcu_idx;
 
 	mutex_lock(&wilc->deinit_lock);
 
 	id = get_unaligned_le32(&buffer[length - 4]);
+	srcu_idx = srcu_read_lock(&wilc->srcu);
 	vif = wilc_get_vif_from_idx(wilc, id);
-	if (!vif) {
-		mutex_unlock(&wilc->deinit_lock);
-		return;
-	}
+	if (!vif)
+		goto out;
 
 	hif_drv = vif->hif_drv;
 
 	if (!hif_drv) {
-		mutex_unlock(&wilc->deinit_lock);
-		return;
+		pr_err("hif driver is NULL\n");
+		goto out;
 	}
 
 	if (!hif_drv->conn_info.conn_result) {
-		netdev_err(vif->ndev, "%s: conn_result is NULL\n", __func__);
-		mutex_unlock(&wilc->deinit_lock);
-		return;
+		pr_err("there is no current Connect Request\n");
+		goto out;
 	}
 
 	msg = wilc_alloc_work(vif, handle_rcvd_gnrl_async_info, false);
-	if (IS_ERR(msg)) {
-		mutex_unlock(&wilc->deinit_lock);
-		return;
-	}
+	if (IS_ERR(msg))
+		goto out;
 
 	msg->body.mac_info.status = buffer[7];
 	result = wilc_enqueue_work(msg);
@@ -1735,8 +1736,9 @@ void wilc_gnrl_async_info_received(struct wilc *wilc, u8 *buffer, u32 length)
 		netdev_err(vif->ndev, "%s: enqueue work failed\n", __func__);
 		kfree(msg);
 	}
-
+out:
 	mutex_unlock(&wilc->deinit_lock);
+	srcu_read_unlock(&wilc->srcu, srcu_idx);
 }
 
 void wilc_scan_complete_received(struct wilc *wilc, u8 *buffer, u32 length)
@@ -1745,22 +1747,26 @@ void wilc_scan_complete_received(struct wilc *wilc, u8 *buffer, u32 length)
 	int id;
 	struct host_if_drv *hif_drv;
 	struct wilc_vif *vif;
+	int srcu_idx;
 
 	id = get_unaligned_le32(&buffer[length - 4]);
+	srcu_idx = srcu_read_lock(&wilc->srcu);
 	vif = wilc_get_vif_from_idx(wilc, id);
 	if (!vif)
-		return;
-	hif_drv = vif->hif_drv;
+		goto out;
 
-	if (!hif_drv)
-		return;
+	hif_drv = vif->hif_drv;
+	if (!hif_drv) {
+		pr_err("hif driver is NULL\n");
+		goto out;
+	}
 
 	if (hif_drv->usr_scan_req.scan_result) {
 		struct host_if_msg *msg;
 
 		msg = wilc_alloc_work(vif, handle_scan_complete, false);
 		if (IS_ERR(msg))
-			return;
+			goto out;
 
 		result = wilc_enqueue_work(msg);
 		if (result) {
@@ -1769,6 +1775,8 @@ void wilc_scan_complete_received(struct wilc *wilc, u8 *buffer, u32 length)
 			kfree(msg);
 		}
 	}
+out:
+	srcu_read_unlock(&wilc->srcu, srcu_idx);
 }
 
 int wilc_remain_on_channel(struct wilc_vif *vif, u64 cookie, u16 chan,
