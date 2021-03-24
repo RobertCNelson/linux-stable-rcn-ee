@@ -152,31 +152,24 @@ void wilc_wlan_set_bssid(struct net_device *wilc_netdev, const u8 *bssid,
 	vif->iftype = mode;
 }
 
-int wilc_wlan_get_num_conn_ifcs(struct wilc *wilc)
-{
-	int srcu_idx;
-	u8 ret_val = 0;
-	struct wilc_vif *vif;
-
-	srcu_idx = srcu_read_lock(&wilc->srcu);
-	list_for_each_entry_rcu(vif, &wilc->vif_list, list) {
-		if (!is_zero_ether_addr(vif->bssid))
-			ret_val++;
-	}
-	srcu_read_unlock(&wilc->srcu, srcu_idx);
-	return ret_val;
-}
+#define TX_BACKOFF_WEIGHT_INCR_STEP (1)
+#define TX_BACKOFF_WEIGHT_DECR_STEP (1)
+#define TX_BACKOFF_WEIGHT_MAX (0)
+#define TX_BACKOFF_WEIGHT_MIN (0)
+#define TX_BCKOFF_WGHT_MS (1)
 
 static int wilc_txq_task(void *vp)
 {
 	int ret;
 	u32 txq_count;
+	int backoff_weight = TX_BACKOFF_WEIGHT_MIN;
+	signed long timeout;
 	struct wilc *wl = vp;
 
 	complete(&wl->txq_thread_started);
 	while (1) {
-		wait_for_completion(&wl->txq_event);
-
+		if (wait_for_completion_interruptible(&wl->txq_event))
+			continue;
 		if (wl->close) {
 			complete(&wl->txq_thread_started);
 
@@ -193,10 +186,34 @@ static int wilc_txq_task(void *vp)
 				srcu_idx = srcu_read_lock(&wl->srcu);
 				list_for_each_entry_rcu(ifc, &wl->vif_list,
 							list) {
-					if (ifc->mac_opened && ifc->ndev)
+					if (ifc->mac_opened &&
+					    netif_queue_stopped(ifc->ndev))
 						netif_wake_queue(ifc->ndev);
 				}
 				srcu_read_unlock(&wl->srcu, srcu_idx);
+			}
+
+			if (ret == WILC_VMM_ENTRY_FULL_RETRY) {
+				timeout = msecs_to_jiffies(TX_BCKOFF_WGHT_MS <<
+							   backoff_weight);
+				do {
+			/* Back off from sending packets for some time.
+			 * schedule_timeout will allow RX task to run and free
+			 * buffers. Setting state to TASK_INTERRUPTIBLE will
+			 * put the thread back to CPU running queue when it's
+			 * signaled even if 'timeout' isn't elapsed. This gives
+			 * faster chance for reserved SK buffers to be freed
+			 */
+					set_current_state(TASK_INTERRUPTIBLE);
+					timeout = schedule_timeout(timeout);
+					} while (/*timeout*/0);
+				backoff_weight += TX_BACKOFF_WEIGHT_INCR_STEP;
+				if (backoff_weight > TX_BACKOFF_WEIGHT_MAX)
+					backoff_weight = TX_BACKOFF_WEIGHT_MAX;
+			} else if (backoff_weight > TX_BACKOFF_WEIGHT_MIN) {
+				backoff_weight -= TX_BACKOFF_WEIGHT_DECR_STEP;
+				if (backoff_weight < TX_BACKOFF_WEIGHT_MIN)
+					backoff_weight = TX_BACKOFF_WEIGHT_MIN;
 			}
 		} while (ret == WILC_VMM_ENTRY_FULL_RETRY && !wl->close);
 	}
