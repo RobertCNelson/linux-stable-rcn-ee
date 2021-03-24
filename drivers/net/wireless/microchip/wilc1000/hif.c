@@ -1005,9 +1005,11 @@ static int handle_remain_on_chan(struct wilc_vif *vif,
 	hif_drv->remain_on_ch.expired = hif_remain_ch->expired;
 	hif_drv->remain_on_ch.ch = hif_remain_ch->ch;
 	hif_drv->remain_on_ch.cookie = hif_remain_ch->cookie;
+	hif_drv->hif_state = HOST_IF_P2P_LISTEN;
+
 	hif_drv->remain_on_ch_timer_vif = vif;
 
-	return 0;
+	return result;
 }
 
 static int wilc_handle_roc_expired(struct wilc_vif *vif, u64 cookie)
@@ -1018,7 +1020,7 @@ static int wilc_handle_roc_expired(struct wilc_vif *vif, u64 cookie)
 	struct host_if_drv *hif_drv = vif->hif_drv;
 	u8 null_bssid[6] = {0};
 
-	if (vif->priv.p2p_listen_state) {
+	if (hif_drv->hif_state == HOST_IF_P2P_LISTEN) {
 		remain_on_chan_flag = false;
 		wid.id = WID_REMAIN_ON_CHAN;
 		wid.type = WID_STR;
@@ -1056,8 +1058,11 @@ static int wilc_handle_roc_expired(struct wilc_vif *vif, u64 cookie)
 static void wilc_handle_listen_state_expired(struct work_struct *work)
 {
 	struct host_if_msg *msg = container_of(work, struct host_if_msg, work);
+	struct wilc_vif *vif = msg->vif;
+	struct wilc_remain_ch *hif_remain_ch = &msg->body.remain_on_ch;
 
-	wilc_handle_roc_expired(msg->vif, msg->body.remain_on_ch.cookie);
+	wilc_handle_roc_expired(vif, hif_remain_ch->cookie);
+
 	kfree(msg);
 }
 

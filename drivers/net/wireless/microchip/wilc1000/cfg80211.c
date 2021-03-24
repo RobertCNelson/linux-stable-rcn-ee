@@ -454,19 +454,19 @@ static int disconnect(struct wiphy *wiphy, struct net_device *dev,
 	struct wilc_vif *vif = netdev_priv(dev);
 	struct wilc_priv *priv = &vif->priv;
 	struct wilc *wilc = vif->wilc;
+	struct host_if_drv *wfi_drv;
 	int ret;
 
 	vif->connecting = false;
 
 	if (!wilc)
 		return -EIO;
-
-
+	wfi_drv = (struct host_if_drv *)priv->hif_drv;
 	if (vif->iftype != WILC_CLIENT_MODE)
 		wilc->sta_ch = WILC_INVALID_CHANNEL;
 	wilc_wlan_set_bssid(priv->dev, NULL, WILC_STATION_MODE);
 
-	priv->hif_drv->p2p_timeout = 0;
+	wfi_drv->p2p_timeout = 0;
 
 	ret = wilc_disconnect(vif);
 	if (ret != 0) {
@@ -941,6 +941,25 @@ static int flush_pmksa(struct wiphy *wiphy, struct net_device *netdev)
 	return 0;
 }
 
+static inline void wilc_wfi_cfg_parse_p2p_intent_attr(u8 *buf, u32 len,
+						      bool p2p_mode)
+{
+	struct wilc_attr_entry *e;
+	u32 index = 0;
+
+	while (index + sizeof(*e) <= len) {
+		e = (struct wilc_attr_entry *)&buf[index];
+		if (e->attr_type == IEEE80211_P2P_ATTR_GO_INTENT) {
+			if (p2p_mode == WILC_P2P_ROLE_GO)
+				e->val[0] = (e->val[0]  & 0x01) | (0x0f << 1);
+			else
+				e->val[0] = (e->val[0]  & 0x01) | (0x00 << 1);
+			return;
+		}
+		index += le16_to_cpu(e->attr_len) + sizeof(*e);
+	}
+}
+
 static inline void wilc_wfi_cfg_parse_ch_attr(u8 *buf, u32 len, u8 sta_ch)
 {
 	struct wilc_attr_entry *e;
@@ -1020,7 +1039,7 @@ bool wilc_wfi_mgmt_frame_rx(struct wilc_vif *vif, u8 *buff, u32 size)
 	return cfg80211_rx_mgmt(&priv->wdev, freq, 0, buff, size, 0);
 }
 
-void wilc_wfi_p2p_rx(struct wilc_vif *vif, u8 *buff, u32 size)
+bool wilc_wfi_p2p_rx(struct wilc_vif *vif, u8 *buff, u32 size)
 {
 	struct wilc *wl = vif->wilc;
 	struct wilc_priv *priv = &vif->priv;
@@ -1032,6 +1051,7 @@ void wilc_wfi_p2p_rx(struct wilc_vif *vif, u8 *buff, u32 size)
 	const u8 *vendor_ie;
 	u32 header, pkt_offset;
 	s32 freq;
+	int ret;
 
 	header = get_unaligned_le32(buff - HOST_HDR_OFFSET);
 	pkt_offset = FIELD_GET(WILC_PKT_HDR_OFFSET_FIELD, header);
@@ -1046,7 +1066,7 @@ void wilc_wfi_p2p_rx(struct wilc_vif *vif, u8 *buff, u32 size)
 
 		cfg80211_mgmt_tx_status(&priv->wdev, priv->tx_cookie, buff,
 					size, ack, GFP_KERNEL);
-		return;
+		return true;
 	}
 
 	freq = ieee80211_channel_to_frequency(wl->op_ch, NL80211_BAND_2GHZ);
@@ -1058,13 +1078,14 @@ void wilc_wfi_p2p_rx(struct wilc_vif *vif, u8 *buff, u32 size)
 	if (priv->cfg_scanning &&
 	    time_after_eq(jiffies, (unsigned long)wfi_drv->p2p_timeout)) {
 		netdev_dbg(vif->ndev, "Receiving action wrong ch\n");
-		return;
+		return false;
 	}
 
 	if (!ieee80211_is_public_action((struct ieee80211_hdr *)buff, size))
 		goto out_rx_mgmt;
 
 	d = (struct wilc_p2p_pub_act_frame *)(&mgmt->u.action);
+
 	if (d->oui_subtype != GO_NEG_REQ && d->oui_subtype != GO_NEG_RSP &&
 	    d->oui_subtype != P2P_INV_REQ && d->oui_subtype != P2P_INV_RSP)
 		goto out_rx_mgmt;
@@ -1075,10 +1096,16 @@ void wilc_wfi_p2p_rx(struct wilc_vif *vif, u8 *buff, u32 size)
 		goto out_rx_mgmt;
 
 	p = (struct wilc_vendor_specific_ie *)vendor_ie;
+	/* use p2p mode invert value to treat other p2p device
+	 * opposite of mode set on this device.
+	 */
+	wilc_wfi_cfg_parse_p2p_intent_attr(p->attr, p->tag_len - 4,
+					   !vif->wilc->attr_sysfs.p2p_mode);
 	wilc_wfi_cfg_parse_ch_attr(p->attr, p->tag_len - 4, vif->wilc->sta_ch);
 
 out_rx_mgmt:
-	cfg80211_rx_mgmt(&priv->wdev, freq, 0, buff, size, 0);
+	ret = cfg80211_rx_mgmt(&priv->wdev, freq, 0, buff, size, 0);
+	return ret;
 }
 
 static void wilc_wfi_mgmt_tx_complete(void *priv, int status)
@@ -1095,12 +1122,13 @@ static void wilc_wfi_remain_on_channel_expired(void *data, u64 cookie)
 	struct wilc_priv *priv = &vif->priv;
 	struct wilc_wfi_p2p_listen_params *params = &priv->remain_on_ch_params;
 
-	if (cookie != params->listen_cookie)
+	if (cookie != priv->remain_on_ch_params.listen_cookie) {
 		return;
+	}
 
-	priv->p2p_listen_state = false;
+	vif->p2p_listen_state = false;
 
-	cfg80211_remain_on_channel_expired(&priv->wdev, params->listen_cookie,
+	cfg80211_remain_on_channel_expired(&vif->priv.wdev, cookie,
 					   params->listen_ch, GFP_KERNEL);
 }
 
@@ -1134,7 +1162,7 @@ static int remain_on_channel(struct wiphy *wiphy,
 	priv->remain_on_ch_params.listen_ch = chan;
 	priv->remain_on_ch_params.listen_cookie = id;
 	*cookie = id;
-	priv->p2p_listen_state = true;
+	vif->p2p_listen_state = true;
 	priv->remain_on_ch_params.listen_duration = duration;
 
 	cfg80211_ready_on_channel(wdev, *cookie, chan, duration, GFP_KERNEL);
@@ -1221,7 +1249,8 @@ static int mgmt_tx(struct wiphy *wiphy,
 		vif->wilc->op_ch = chan->hw_value;
 	}
 
-	if (d->oui_subtype != P2P_INV_REQ && d->oui_subtype != P2P_INV_RSP)
+	if (d->oui_subtype != GO_NEG_REQ && d->oui_subtype != GO_NEG_RSP &&
+	    d->oui_subtype != P2P_INV_REQ && d->oui_subtype != P2P_INV_RSP)
 		goto out_set_timeout;
 
 	vendor_ie = cfg80211_find_vendor_ie(WLAN_OUI_WFA, WLAN_OUI_TYPE_WFA_P2P,
@@ -1231,14 +1260,24 @@ static int mgmt_tx(struct wiphy *wiphy,
 		goto out_set_timeout;
 
 	p = (struct wilc_vendor_specific_ie *)vendor_ie;
-	wilc_wfi_cfg_parse_ch_attr(p->attr, p->tag_len - 4, vif->wilc->sta_ch);
+	wilc_wfi_cfg_parse_p2p_intent_attr(p->attr, p->tag_len - 4,
+					   vif->wilc->attr_sysfs.p2p_mode);
+	/*
+	 * Update only the go_intent value and don't modify the channel list
+	 * attributes values for GO_REQ and GO_Response to retain
+	 * previous logic.  For mgmt_tx only INVITATION_REQ and INVITATION_RES
+	 * frame update the channel list attribute.
+	 */
+
+	if (d->oui_subtype == P2P_INV_REQ && d->oui_subtype == P2P_INV_RSP)
+		wilc_wfi_cfg_parse_ch_attr(p->attr, p->tag_len - 4,
+					   vif->wilc->sta_ch);
 
 out_set_timeout:
 	wfi_drv->p2p_timeout = (jiffies + msecs_to_jiffies(wait));
 
 out_txq_add_pkt:
-
-	wilc_wlan_txq_add_mgmt_pkt(wdev->netdev, mgmt_tx,
+	wilc_wlan_txq_add_mgmt_pkt(priv->wdev.netdev, mgmt_tx,
 				   mgmt_tx->buff, mgmt_tx->size,
 				   wilc_wfi_mgmt_tx_complete);
 
@@ -1257,7 +1296,7 @@ static int mgmt_tx_cancel_wait(struct wiphy *wiphy,
 
 	wfi_drv->p2p_timeout = jiffies;
 
-	if (!priv->p2p_listen_state) {
+	if (!vif->p2p_listen_state) {
 		struct wilc_wfi_p2p_listen_params *params;
 
 		params = &priv->remain_on_ch_params;
@@ -1905,7 +1944,8 @@ int wilc_init_host_int(struct net_device *net)
 	struct wilc_priv *priv = &vif->priv;
 
 	timer_setup(&priv->eap_buff_timer, eap_buff_timeout, 0);
-	priv->p2p_listen_state = false;
+
+	vif->p2p_listen_state = false;
 
 	mutex_init(&priv->scan_req_lock);
 	ret = wilc_init(net, &priv->hif_drv);
@@ -1921,7 +1961,7 @@ void wilc_deinit_host_int(struct net_device *net)
 	struct wilc_vif *vif = netdev_priv(net);
 	struct wilc_priv *priv = &vif->priv;
 
-	priv->p2p_listen_state = false;
+	vif->p2p_listen_state = false;
 
 	flush_workqueue(vif->wilc->hif_workqueue);
 	mutex_destroy(&priv->scan_req_lock);
