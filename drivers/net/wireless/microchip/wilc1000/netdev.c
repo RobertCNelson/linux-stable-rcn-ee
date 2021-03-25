@@ -525,36 +525,47 @@ static int wilc_wlan_initialize(struct net_device *dev, struct wilc_vif *vif)
 		wl->close = 0;
 
 		ret = wilc_wlan_init(dev);
-		if (ret)
+		if (ret) {
+			pr_err("Initializing WILC_Wlan FAILED\n");
 			return ret;
-
-		ret = wlan_initialize_threads(dev);
-		if (ret)
-			goto fail_wilc_wlan;
-
-		if (wl->dev_irq_num && init_irq(dev)) {
-			ret = -EIO;
-			goto fail_threads;
 		}
 
-		if (!wl->dev_irq_num &&
-		    wl->hif_func->enable_interrupt &&
+		ret = wlan_initialize_threads(dev);
+		if (ret) {
+			pr_err("Initializing Threads FAILED\n");
+			goto fail_wilc_wlan;
+		}
+
+		ret = init_irq(dev);
+		if (ret)
+			goto fail_threads;
+
+		if (wl->io_type == WILC_HIF_SDIO &&
 		    wl->hif_func->enable_interrupt(wl)) {
+			pr_err("couldn't initialize IRQ\n");
 			ret = -EIO;
 			goto fail_irq_init;
 		}
 
 		ret = wilc_wlan_get_firmware(dev);
-		if (ret)
+		if (ret) {
+			pr_err("Can't get firmware\n");
 			goto fail_irq_enable;
+		}
 
 		ret = wilc1000_firmware_download(dev);
-		if (ret)
+		if (ret) {
+			pr_err("Failed to download firmware\n");
 			goto fail_irq_enable;
+		}
 
 		ret = wilc_start_firmware(dev);
-		if (ret)
+		if (ret) {
+			pr_err("Failed to start firmware\n");
 			goto fail_irq_enable;
+		}
+
+		wl->initialized = true;
 
 		if (wilc_wlan_cfg_get(vif, 1, WID_FIRMWARE_VERSION, 1, 0)) {
 			int size;
@@ -568,23 +579,23 @@ static int wilc_wlan_initialize(struct net_device *dev, struct wilc_vif *vif)
 		}
 
 		ret = wilc_init_fw_config(dev, vif);
-		if (ret) {
+		if (ret < 0) {
 			netdev_err(dev, "Failed to configure firmware\n");
+			ret = -EIO;
 			goto fail_fw_start;
 		}
-		wl->initialized = true;
+
 		return 0;
 
 fail_fw_start:
 		wilc_wlan_stop(wl, vif);
 
 fail_irq_enable:
-		if (!wl->dev_irq_num &&
-		    wl->hif_func->disable_interrupt)
+		if (wl->io_type == WILC_HIF_SDIO)
 			wl->hif_func->disable_interrupt(wl);
 fail_irq_init:
-		if (wl->dev_irq_num)
-			deinit_irq(dev);
+		deinit_irq(dev);
+
 fail_threads:
 		wlan_deinitialize_threads(dev);
 fail_wilc_wlan:
