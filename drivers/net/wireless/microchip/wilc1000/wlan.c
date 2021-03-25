@@ -723,6 +723,11 @@ int wilc_wlan_handle_txq(struct wilc *wilc, u32 *txq_count)
 	u8 *txb = wilc->tx_buffer;
 	struct wilc_vif *vif;
 
+	if (!wilc->txq_entries) {
+		*txq_count = 0;
+		return 0;
+	}
+
 	if (wilc->quit)
 		goto out_update_cnt;
 
@@ -868,7 +873,7 @@ int wilc_wlan_handle_txq(struct wilc *wilc, u32 *txq_count)
 	}
 
 	release_bus(wilc, WILC_BUS_RELEASE_ALLOW_SLEEP);
-
+	schedule();
 	offset = 0;
 	i = 0;
 	do {
@@ -942,6 +947,7 @@ out_release_bus:
 
 out_unlock:
 	mutex_unlock(&wilc->txq_add_to_head_cs);
+	schedule();
 
 out_update_cnt:
 	*txq_count = wilc->txq_entries;
@@ -1277,7 +1283,6 @@ void wilc_wlan_cleanup(struct net_device *dev)
 	wilc->rx_buffer = NULL;
 	kfree(wilc->tx_buffer);
 	wilc->tx_buffer = NULL;
-	wilc->hif_func->hif_deinit(wilc);
 }
 
 static int wilc_wlan_cfg_commit(struct wilc_vif *vif, int type,
