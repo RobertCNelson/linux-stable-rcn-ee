@@ -1438,32 +1438,28 @@ static int init_chip(struct net_device *dev)
 
 	chipid = wilc_get_chipid(wilc, true);
 
-	if ((chipid & 0xfff) != 0xa0) {
-		ret = wilc->hif_func->hif_read_reg(wilc,
-						   WILC_CORTUS_RESET_MUX_SEL,
-						   &reg);
-		if (ret) {
-			netdev_err(dev, "fail read reg 0x1118\n");
-			goto release;
-		}
-		reg |= BIT(0);
-		ret = wilc->hif_func->hif_write_reg(wilc,
-						    WILC_CORTUS_RESET_MUX_SEL,
-						    reg);
-		if (ret) {
-			netdev_err(dev, "fail write reg 0x1118\n");
-			goto release;
-		}
-		ret = wilc->hif_func->hif_write_reg(wilc,
-						    WILC_CORTUS_BOOT_REGISTER,
-						    WILC_CORTUS_BOOT_FROM_IRAM);
-		if (ret) {
-			netdev_err(dev, "fail write reg 0xc0000\n");
-			goto release;
-		}
+	ret = wilc->hif_func->hif_read_reg(wilc, WILC_CORTUS_RESET_MUX_SEL,
+					   &reg);
+	if (ret) {
+		pr_err("fail read reg 0x1118\n");
+		goto end;
 	}
 
-release:
+	reg |= BIT(0);
+	ret = wilc->hif_func->hif_write_reg(wilc, WILC_CORTUS_RESET_MUX_SEL,
+					    reg);
+	if (ret) {
+		pr_err("fail write reg 0x1118\n");
+		goto end;
+	}
+	ret = wilc->hif_func->hif_write_reg(wilc, WILC_CORTUS_BOOT_REGISTER,
+					    WILC_CORTUS_BOOT_FROM_IRAM);
+	if (ret) {
+		pr_err("fail write reg 0xc0000 ...\n");
+		goto end;
+	}
+
+end:
 	release_bus(wilc, WILC_BUS_RELEASE_ALLOW_SLEEP);
 
 	return ret;
