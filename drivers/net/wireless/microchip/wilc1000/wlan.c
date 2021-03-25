@@ -12,10 +12,6 @@
 
 #define WAKE_UP_TRIAL_RETRY		10000
 
-static inline bool is_wilc1000(u32 id)
-{
-	return (id & (~WILC_CHIP_REV_FIELD)) == WILC_1000_BASE_ID;
-}
 
 static inline void acquire_bus(struct wilc *wilc, enum bus_acquire acquire)
 {
@@ -1284,7 +1280,6 @@ void wilc_wlan_cleanup(struct net_device *dev)
 	wilc->rx_buffer = NULL;
 	kfree(wilc->tx_buffer);
 	wilc->tx_buffer = NULL;
-	wilc->hif_func->hif_deinit(wilc);
 }
 
 static int wilc_wlan_cfg_commit(struct wilc_vif *vif, int type,
@@ -1470,28 +1465,24 @@ end:
 u32 wilc_get_chipid(struct wilc *wilc, bool update)
 {
 	u32 chipid = 0;
-	u32 rfrevid = 0;
 
 	if (wilc->chipid == 0 || update) {
-		wilc->hif_func->hif_read_reg(wilc, WILC_CHIPID, &chipid);
-		wilc->hif_func->hif_read_reg(wilc, WILC_RF_REVISION_ID,
-					     &rfrevid);
+		wilc->hif_func->hif_read_reg(wilc, WILC3000_CHIP_ID, &chipid);
+		if (ret)
+			pr_err("[wilc start]: fail read reg 0x3b0000\n");
 		if (!is_wilc1000(chipid)) {
 			wilc->chipid = 0;
 			return wilc->chipid;
 		}
-		if (chipid == WILC_1000_BASE_ID_2A) { /* 0x1002A0 */
-			if (rfrevid != 0x1)
-				chipid = WILC_1000_BASE_ID_2A_REV1;
-		} else if (chipid == WILC_1000_BASE_ID_2B) { /* 0x1002B0 */
-			if (rfrevid == 0x4)
-				chipid = WILC_1000_BASE_ID_2B_REV1;
-			else if (rfrevid != 0x3)
-				chipid = WILC_1000_BASE_ID_2B_REV2;
+		if (chipid < 0x1003a0) {
+			pr_err("WILC1002 isn't supported %x\n",
+			       wilc->chipid);
+			wilc->chipid = 0;
+			return wilc->chipid;
 		}
-
 		wilc->chipid = chipid;
 	}
+
 	return wilc->chipid;
 }
 
