@@ -952,18 +952,22 @@ static int wilc_sdio_sync_ext(struct wilc *wilc, int nint)
 		return -EINVAL;
 	}
 
-	/**
-	 *      Disable power sequencer
-	 **/
-	if (wilc_sdio_read_reg(wilc, WILC_MISC, &reg)) {
-		dev_err(&func->dev, "Failed read misc reg...\n");
-		return -EINVAL;
-	}
-
-	reg &= ~BIT(8);
-	if (wilc_sdio_write_reg(wilc, WILC_MISC, reg)) {
-		dev_err(&func->dev, "Failed write misc reg...\n");
-		return -EINVAL;
+/* WILC3000 only. Was removed in WILC1000 on revision 6200.
+ * Might be related to suspend/resume
+ */
+	if (wilc->chip == WILC_3000) {
+		/**
+		 *      Disable power sequencer
+		 **/
+		if (wilc_sdio_read_reg(wilc, WILC_MISC, &reg)) {
+			dev_err(&func->dev, "Failed read misc reg\n");
+			return -EINVAL;
+		}
+		reg &= ~BIT(8);
+		if (wilc_sdio_write_reg(wilc, WILC_MISC, reg)) {
+			dev_err(&func->dev, "Failed write misc reg\n");
+			return -EINVAL;
+		}
 	}
 
 	if (sdio_priv->irq_gpio) {
