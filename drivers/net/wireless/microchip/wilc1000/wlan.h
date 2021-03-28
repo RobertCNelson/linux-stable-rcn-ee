@@ -187,6 +187,11 @@
 
 #define GLOBAL_MODE_CONTROL		0x1614
 #define PWR_SEQ_MISC_CTRL		0x3008
+#define COE_AUTO_PS_ON_NULL_PKT		0x160468
+#define COE_AUTO_PS_OFF_NULL_PKT	0x16046C
+#define CCA_CTL_2 (0x160EF4)
+#define CCA_CTL_7 (0x160F08)
+
 #define WILC_HAVE_SDIO_IRQ_GPIO		BIT(0)
 #define WILC_HAVE_SLEEP_CLK_SRC_RTC	BIT(2)
 #define WILC_HAVE_SLEEP_CLK_SRC_XO	BIT(3)
@@ -238,6 +243,9 @@ static inline bool is_wilc3000(u32 id)
 
 #define WILC_RX_BUFF_SIZE	(96 * 1024)
 #define WILC_TX_BUFF_SIZE	(64 * 1024)
+
+#define GPIO_NUM_CHIP_EN	94
+#define GPIO_NUM_RESET		60
 
 #define NQUEUES			4
 #define AC_BUFFER_SIZE		1000
@@ -405,6 +413,7 @@ struct wilc_hif_func {
 	void (*disable_interrupt)(struct wilc *nic);
 	int (*hif_reset)(struct wilc *wilc);
 	bool (*hif_is_init)(struct wilc *wilc);
+	int (*hif_clear_init)(struct wilc *wilc);
 };
 
 #define WILC_MAX_CFG_FRAME_SIZE		1468
@@ -456,13 +465,17 @@ netdev_tx_t wilc_mac_xmit(struct sk_buff *skb, struct net_device *dev);
 
 bool wilc_wfi_p2p_rx(struct wilc_vif *vif, u8 *buff, u32 size);
 bool wilc_wfi_mgmt_frame_rx(struct wilc_vif *vif, u8 *buff, u32 size);
-void host_wakeup_notify(struct wilc *wilc);
-void host_sleep_notify(struct wilc *wilc);
-void chip_allow_sleep(struct wilc *wilc);
-void chip_wakeup(struct wilc *wilc);
+void host_wakeup_notify(struct wilc *wilc, int source);
+void host_sleep_notify(struct wilc *wilc, int source);
+void chip_allow_sleep(struct wilc *wilc, int source);
+void chip_wakeup(struct wilc *wilc, int source);
 int wilc_send_config_pkt(struct wilc_vif *vif, u8 mode, struct wid *wids,
 			 u32 count);
+void wilc_bt_init(struct wilc *wilc);
+void wilc_bt_deinit(void);
 void eap_buff_timeout(struct timer_list *t);
+void acquire_bus(struct wilc *wilc, enum bus_acquire acquire, int source);
+void release_bus(struct wilc *wilc, enum bus_release release, int source);
 int wilc_wlan_init(struct net_device *dev);
 u32 wilc_get_chipid(struct wilc *wilc, bool update);
 void wilc_wfi_handle_monitor_rx(struct wilc *wilc, u8 *buff, u32 size);

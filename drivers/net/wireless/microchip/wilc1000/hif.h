@@ -32,6 +32,7 @@ enum {
 };
 
 #define WILC_MAX_ASSOC_RESP_FRAME_SIZE   256
+extern uint32_t cfg_packet_timeout;
 
 struct rf_info {
 	u8 link_speed;
@@ -222,12 +223,15 @@ int wilc_set_external_auth_param(struct wilc_vif *vif,
  * the best antenna
  */
 int wilc_set_antenna(struct wilc_vif *vif, u8 mode);
+int handle_scan_done(struct wilc_vif *vif, enum scan_event evt);
 void wilc_scan_complete_received(struct wilc *wilc, u8 *buffer, u32 length);
 void wilc_network_info_received(struct wilc *wilc, u8 *buffer, u32 length);
 void wilc_gnrl_async_info_received(struct wilc *wilc, u8 *buffer, u32 length);
 void *wilc_parse_join_bss_param(struct cfg80211_bss *bss,
 				struct cfg80211_crypto_settings *crypto);
 int wilc_set_default_mgmt_key_index(struct wilc_vif *vif, u8 index);
-void wilc_handle_disconnect(struct wilc_vif *vif);
 
+void wilc_handle_disconnect(struct wilc_vif *vif);
+int wilc_of_parse_power_pins(struct wilc *wilc);
+void wilc_wlan_power(struct wilc *wilc, bool on);
 #endif

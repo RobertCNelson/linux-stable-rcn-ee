@@ -153,7 +153,9 @@ static int wilc_sdio_probe(struct sdio_func *func,
 {
 	struct wilc *wilc;
 	int ret, io_type;
+	static bool init_power;
 	struct wilc_sdio *sdio_priv;
+	struct device_node *np;
 	int irq_num;
 
 	sdio_priv = kzalloc(sizeof(*sdio_priv), GFP_KERNEL);
@@ -172,12 +174,15 @@ static int wilc_sdio_probe(struct sdio_func *func,
 		io_type = WILC_HIF_SDIO;
 
 	ret = wilc_cfg80211_init(&wilc, &func->dev, io_type, &wilc_hif_sdio);
-	if (ret)
+	if (ret) {
+		dev_err(&func->dev, "Couldn't initialize netdev\n");
 		goto free;
-
+	}
 	sdio_set_drvdata(func, wilc);
 	wilc->bus_data = sdio_priv;
 	wilc->dev = &func->dev;
+	wilc->dt_dev = &func->card->dev;
+	sdio_priv->wl = wilc;
 
 	irq_num = of_irq_get(func->card->dev.of_node, 0);
 	if (irq_num > 0)
@@ -190,9 +195,38 @@ static int wilc_sdio_probe(struct sdio_func *func,
 	}
 	clk_prepare_enable(wilc->rtc_clk);
 
+	/*
+	 * Some WILC SDIO setups needs a SD power sequence driver to be able
+	 * to power the WILC devices before reaching this function. For those
+	 * devices the power sequence driver already provides reset-gpios
+	 * and chip_en-gpios.
+	 */
+	np = of_parse_phandle(func->card->host->parent->of_node, "mmc-pwrseq",
+			      0);
+	if (np && of_device_is_available(np)) {
+		init_power = 1;
+		of_node_put(np);
+	} else {
+		ret = wilc_of_parse_power_pins(wilc);
+		if (ret)
+			goto disable_rtc_clk;
+	}
+
+
+	if (!init_power) {
+		wilc_wlan_power(wilc, false);
+		init_power = 1;
+		wilc_wlan_power(wilc, true);
+	}
+
+	wilc_bt_init(wilc);
+
 	dev_info(&func->dev, "Driver Initializing success\n");
 	return 0;
 
+disable_rtc_clk:
+	if (!IS_ERR(wilc->rtc_clk))
+		clk_disable_unprepare(wilc->rtc_clk);
 dispose_irq:
 	irq_dispose_mapping(wilc->dev_irq_num);
 	wilc_netdev_cleanup(wilc);
@@ -211,6 +245,7 @@ static void wilc_sdio_remove(struct sdio_func *func)
 	wilc_netdev_cleanup(wilc);
 	kfree(sdio_priv->cmd53_buf);
 	kfree(sdio_priv);
+	wilc_bt_deinit();
 }
 
 static int wilc_sdio_reset(struct wilc *wilc)
@@ -218,6 +253,8 @@ static int wilc_sdio_reset(struct wilc *wilc)
 	struct sdio_cmd52 cmd;
 	int ret;
 	struct sdio_func *func = dev_to_sdio_func(wilc->dev);
+
+	dev_info(&func->dev, "De Init SDIO\n");
 
 	cmd.read_write = 1;
 	cmd.function = 0;
@@ -239,6 +276,15 @@ static bool wilc_sdio_is_init(struct wilc *wilc)
 	return sdio_priv->isinit;
 }
 
+static int wilc_sdio_clear_init(struct wilc *wilc)
+{
+	struct wilc_sdio *sdio_priv = wilc->bus_data;
+
+	sdio_priv->isinit = false;
+
+	return 0;
+}
+
 static int wilc_sdio_suspend(struct device *dev)
 {
 	struct sdio_func *func = dev_to_sdio_func(dev);
@@ -248,13 +294,13 @@ static int wilc_sdio_suspend(struct device *dev)
 	dev_info(&func->dev, "sdio suspend\n");
 	mutex_lock(&wilc->hif_cs);
 
-	chip_wakeup(wilc);
+	chip_wakeup(wilc, DEV_WIFI);
 
 	if (mutex_is_locked(&wilc->hif_cs))
 		mutex_unlock(&wilc->hif_cs);
 
-	host_sleep_notify(wilc);
-	chip_allow_sleep(wilc);
+	host_sleep_notify(wilc, DEV_WIFI);
+	chip_allow_sleep(wilc, DEV_WIFI);
 
 	mutex_lock(&wilc->hif_cs);
 
@@ -404,7 +450,7 @@ static int wilc_sdio_write_reg(struct wilc *wilc, u32 addr, u32 data)
 		ret = wilc_sdio_cmd52(wilc, &cmd);
 		if (ret)
 			dev_err(&func->dev,
-				"Failed cmd 52, read reg (%08x) ...\n", addr);
+				"Failed cmd 52, write reg (%08x) ...\n", addr);
 	} else {
 		struct sdio_cmd53 cmd;
 
@@ -642,7 +688,10 @@ static int wilc_sdio_deinit(struct wilc *wilc)
 	struct wilc_sdio *sdio_priv = wilc->bus_data;
 
 	sdio_priv->isinit = false;
+
 	pm_runtime_put_sync_autosuspend(mmc_dev(func->card->host));
+	wilc_wlan_power(wilc, false);
+
 	return 0;
 }
 
@@ -653,6 +702,9 @@ static int wilc_sdio_init(struct wilc *wilc, bool resume)
 	struct sdio_cmd52 cmd;
 	int loop, ret;
 	u32 chipid;
+
+	dev_info(&func->dev, "SDIO speed: %d\n",
+		func->card->host->ios.clock);
 
 	/* Patch for sdio interrupt latency issue */
 	ret = pm_runtime_get_sync(mmc_dev(func->card->host));
@@ -946,9 +998,10 @@ static int wilc_sdio_sync_ext(struct wilc *wilc, int nint)
 	struct sdio_func *func = dev_to_sdio_func(wilc->dev);
 	struct wilc_sdio *sdio_priv = wilc->bus_data;
 	u32 reg;
+	int ret, i;
 
 	if (nint > MAX_NUM_INT) {
-		dev_err(&func->dev, "Too many interrupts (%d)...\n", nint);
+		dev_err(&func->dev, "Too many interrupts %d\n", nint);
 		return -EINVAL;
 	}
 
@@ -971,9 +1024,6 @@ static int wilc_sdio_sync_ext(struct wilc *wilc, int nint)
 	}
 
 	if (sdio_priv->irq_gpio) {
-		u32 reg;
-		int ret, i;
-
 		/**
 		 *      interrupt pin mux select
 		 **/
@@ -1051,6 +1101,7 @@ static const struct wilc_hif_func wilc_hif_sdio = {
 	.disable_interrupt = wilc_sdio_disable_interrupt,
 	.hif_reset = wilc_sdio_reset,
 	.hif_is_init = wilc_sdio_is_init,
+	.hif_clear_init = wilc_sdio_clear_init,
 };
 
 static int wilc_sdio_resume(struct device *dev)
@@ -1059,17 +1110,17 @@ static int wilc_sdio_resume(struct device *dev)
 	struct wilc *wilc = sdio_get_drvdata(func);
 
 	dev_info(&func->dev, "sdio resume\n");
-	chip_wakeup(wilc);
+	chip_wakeup(wilc, DEV_WIFI);
 	wilc_sdio_init(wilc, true);
 
 	if (mutex_is_locked(&wilc->hif_cs))
 		mutex_unlock(&wilc->hif_cs);
 
-	host_wakeup_notify(wilc);
+	host_wakeup_notify(wilc, DEV_WIFI);
 
 	mutex_lock(&wilc->hif_cs);
 
-	chip_allow_sleep(wilc);
+	chip_allow_sleep(wilc, DEV_WIFI);
 
 	if (mutex_is_locked(&wilc->hif_cs))
 		mutex_unlock(&wilc->hif_cs);

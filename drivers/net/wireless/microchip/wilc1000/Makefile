@@ -1,8 +1,10 @@
 # SPDX-License-Identifier: GPL-2.0
+ccflags-y += -I$(src)/ -DWILC_DEBUGFS
+
 obj-$(CONFIG_WILC1000) += wilc1000.o
 
 wilc1000-objs := cfg80211.o netdev.o mon.o \
-			hif.o wlan_cfg.o wlan.o sysfs.o
+			hif.o wlan_cfg.o wlan.o sysfs.o power.o bt.o debugfs.o
 
 obj-$(CONFIG_WILC1000_SDIO) += wilc1000-sdio.o
 wilc1000-sdio-objs += sdio.o

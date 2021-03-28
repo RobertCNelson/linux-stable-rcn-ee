@@ -18,6 +18,8 @@
 #include "wlan.h"
 #include "wlan_cfg.h"
 
+extern int wait_for_recovery;
+
 #define FLOW_CONTROL_LOWER_THRESHOLD		128
 #define FLOW_CONTROL_UPPER_THRESHOLD		256
 
@@ -214,9 +216,20 @@ struct wilc_vif {
 	bool connecting;
 	struct wilc_priv priv;
 	struct list_head list;
+	u8 restart;
 	bool p2p_listen_state;
 	struct cfg80211_bss *bss;
 	struct cfg80211_external_auth_params auth;
+};
+
+struct wilc_power_gpios {
+	int reset;
+	int chip_en;
+};
+
+struct wilc_power {
+	struct wilc_power_gpios gpios;
+	u8 status[DEV_MAX];
 };
 
 struct wilc_tx_queue_status {
@@ -262,8 +275,9 @@ struct wilc {
 	struct completion sync_event;
 	struct completion txq_event;
 	struct completion txq_thread_started;
-
+	struct completion debug_thread_started;
 	struct task_struct *txq_thread;
+	struct task_struct *debug_thread;
 
 	int quit;
 
@@ -290,6 +304,9 @@ struct wilc {
 	struct device *dt_dev;
 
 	enum wilc_chip_type chip;
+	struct wilc_power power;
+	uint8_t keep_awake[DEV_MAX];
+	struct mutex cs;
 	struct workqueue_struct *hif_workqueue;
 	struct wilc_cfg cfg;
 	void *bus_data;
@@ -320,4 +337,7 @@ void wilc_wlan_set_bssid(struct net_device *wilc_netdev, const u8 *bssid,
 struct wilc_vif *wilc_netdev_ifc_init(struct wilc *wl, const char *name,
 				      int vif_type, enum nl80211_iftype type,
 				      bool rtnl_locked);
+int wilc_bt_power_up(struct wilc *wilc, int source);
+int wilc_bt_power_down(struct wilc *wilc, int source);
+
 #endif
