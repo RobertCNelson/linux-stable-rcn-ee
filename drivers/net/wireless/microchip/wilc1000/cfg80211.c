@@ -1415,6 +1415,16 @@ static int change_virtual_intf(struct wiphy *wiphy, struct net_device *dev,
 			wilc_set_operation_mode(vif, wilc_get_vif_idx(vif),
 						WILC_AP_MODE, vif->idx);
 		break;
+	case NL80211_IFTYPE_MONITOR:
+		dev->ieee80211_ptr->iftype = type;
+		dev->type = ARPHRD_IEEE80211_RADIOTAP;
+		priv->wdev.iftype = type;
+		vif->iftype = WILC_MONITOR_MODE;
+
+		if (wl->initialized)
+			wilc_set_operation_mode(vif, wilc_get_vif_idx(vif),
+						WILC_MONITOR_MODE, vif->idx);
+		break;
 
 	default:
 		netdev_err(dev, "Unknown interface type= %d\n", type);
@@ -1524,7 +1534,7 @@ static int change_station(struct wiphy *wiphy, struct net_device *dev,
 	return ret;
 }
 
-static struct wilc_vif *wilc_get_vif_from_type(struct wilc *wl, int type)
+struct wilc_vif *wilc_get_vif_from_type(struct wilc *wl, int type)
 {
 	struct wilc_vif *vif;
 
@@ -1545,7 +1555,7 @@ static struct wireless_dev *add_virtual_intf(struct wiphy *wiphy,
 	struct wilc *wl = wiphy_priv(wiphy);
 	struct wilc_vif *vif;
 	struct wireless_dev *wdev;
-	int iftype;
+	u8 iftype;
 
 	if (type == NL80211_IFTYPE_MONITOR) {
 		struct net_device *ndev;
@@ -1569,11 +1579,7 @@ static struct wireless_dev *add_virtual_intf(struct wiphy *wiphy,
 		ndev = wilc_wfi_init_mon_interface(wl, name, vif->ndev);
 		if (ndev) {
 			vif->monitor_flag = 1;
-		} else {
-			srcu_read_unlock(&wl->srcu, srcu_idx);
-			return ERR_PTR(-EINVAL);
 		}
-
 		wdev = &vif->priv.wdev;
 		srcu_read_unlock(&wl->srcu, srcu_idx);
 		return wdev;
@@ -1588,6 +1594,9 @@ validate_interface:
 	}
 	mutex_unlock(&wl->vif_mutex);
 
+	pr_info("add_interaface [%d] name[%s] type[%d]\n", wl->vif_num,
+		name, type);
+
 	switch (type) {
 	case NL80211_IFTYPE_STATION:
 		iftype = WILC_STATION_MODE;
@@ -1595,13 +1604,16 @@ validate_interface:
 	case NL80211_IFTYPE_AP:
 		iftype = WILC_AP_MODE;
 		break;
+	case NL80211_IFTYPE_MONITOR:
+		iftype = WILC_MONITOR_MODE;
+		break;
 	default:
 		return ERR_PTR(-EOPNOTSUPP);
 	}
 
 	vif = wilc_netdev_ifc_init(wl, name, iftype, type, true);
 	if (IS_ERR(vif))
-		return ERR_CAST(vif);
+		return ERR_PTR(-EINVAL);
 
 	return &vif->priv.wdev;
 }
@@ -1611,6 +1623,12 @@ static int del_virtual_intf(struct wiphy *wiphy, struct wireless_dev *wdev)
 	struct wilc *wl = wiphy_priv(wiphy);
 	struct wilc_vif *vif;
 
+	/* delete the monitor mode interface */
+	if (wdev->iftype == NL80211_IFTYPE_MONITOR) {
+		wilc_wfi_deinit_mon_interface(wl, true);
+		return 0;
+	}
+	/* delete the AP monitor mode interface */
 	if (wdev->iftype == NL80211_IFTYPE_AP ||
 	    wdev->iftype == NL80211_IFTYPE_P2P_GO)
 		wilc_wfi_deinit_mon_interface(wl, true);
