@@ -1529,6 +1529,7 @@ u32 wilc_get_chipid(struct wilc *wilc, bool update)
 	}
 	return wilc->chipid;
 }
+EXPORT_SYMBOL_GPL(wilc_get_chipid);
 
 int wilc_wlan_init(struct net_device *dev)
 {
