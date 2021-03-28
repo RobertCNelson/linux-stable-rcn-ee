@@ -756,7 +756,9 @@ static int wilc_sdio_init(struct wilc *wilc, bool resume)
 	 **/
 	if (!resume) {
 		chipid = wilc_get_chipid(wilc, true);
-		if (is_wilc1000(chipid)) {
+		if (is_wilc3000(chipid)) {
+			wilc->chip = WILC_3000;
+		} else if (is_wilc1000(chipid)) {
 			wilc->chip = WILC_1000;
 		} else {
 			dev_err(&func->dev, "Unsupported chipid: %x\n", chipid);
@@ -1015,7 +1017,8 @@ static int wilc_sdio_resume(struct device *dev)
 
 static const struct of_device_id wilc_of_match[] = {
 	{ .compatible = "microchip,wilc1000", },
-	{ /* sentinel */ }
+	{ .compatible = "microchip,wilc3000", },
+	{ /* sentinel */}
 };
 MODULE_DEVICE_TABLE(of, wilc_of_match);
 

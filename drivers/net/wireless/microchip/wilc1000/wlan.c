@@ -1216,6 +1216,9 @@ int wilc_wlan_start(struct wilc *wilc)
 	if (wilc->io_type == WILC_HIF_SDIO_GPIO_IRQ)
 		reg |= WILC_HAVE_SDIO_IRQ_GPIO;
 
+	if (wilc->chip == WILC_3000)
+		reg |= WILC_HAVE_SLEEP_CLK_SRC_RTC;
+
 	ret = wilc->hif_func->hif_write_reg(wilc, WILC_GP_REG_1, reg);
 	if (ret) {
 		pr_err("[wilc start]: fail write WILC_GP_REG_1...\n");
@@ -1502,6 +1505,16 @@ static int init_chip(struct net_device *dev)
 		goto end;
 	}
 
+	if (wilc->chip == WILC_3000) {
+		ret = wilc->hif_func->hif_read_reg(wilc, 0x207ac, &reg);
+		ret = wilc->hif_func->hif_write_reg(wilc, 0x4f0000,
+						    0x71);
+		if (ret) {
+			pr_err("fail write reg 0x4f0000 ...\n");
+			goto end;
+		}
+	}
+
 end:
 	release_bus(wilc, WILC_BUS_RELEASE_ALLOW_SLEEP);
 
@@ -1510,21 +1523,27 @@ end:
 
 u32 wilc_get_chipid(struct wilc *wilc, bool update)
 {
+	int ret;
 	u32 chipid = 0;
 
 	if (wilc->chipid == 0 || update) {
-		wilc->hif_func->hif_read_reg(wilc, WILC3000_CHIP_ID, &chipid);
+		ret = wilc->hif_func->hif_read_reg(wilc, WILC3000_CHIP_ID,
+						   &chipid);
 		if (ret)
 			pr_err("[wilc start]: fail read reg 0x3b0000\n");
-		if (!is_wilc1000(chipid)) {
-			wilc->chipid = 0;
-			return wilc->chipid;
-		}
-		if (chipid < 0x1003a0) {
-			pr_err("WILC1002 isn't supported %x\n",
-			       wilc->chipid);
-			wilc->chipid = 0;
-			return wilc->chipid;
+		if (!is_wilc3000(chipid)) {
+			wilc->hif_func->hif_read_reg(wilc, WILC_CHIPID,
+						     &chipid);
+			if (!is_wilc1000(chipid)) {
+				wilc->chipid = 0;
+				return wilc->chipid;
+			}
+			if (chipid < 0x1003a0) {
+				pr_err("WILC1002 isn't supported %x\n",
+				       wilc->chipid);
+				wilc->chipid = 0;
+				return wilc->chipid;
+			}
 		}
 		wilc->chipid = chipid;
 	}

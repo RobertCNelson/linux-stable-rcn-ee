@@ -182,6 +182,7 @@
 
 #define WILC_CORTUS_RESET_MUX_SEL	0x1118
 #define WILC_CORTUS_BOOT_REGISTER	0xc0000
+#define WILC3000_CHIP_ID		0x3b0000
 
 #define WILC_CORTUS_BOOT_FROM_IRAM	0x71
 
@@ -194,11 +195,18 @@
 #define WILC_1000_BASE_ID_2B_REV1	(WILC_1000_BASE_ID_2B + 1)
 #define WILC_1000_BASE_ID_2B_REV2	(WILC_1000_BASE_ID_2B + 2)
 
+#define WILC_3000_BASE_ID		0x300000
+
 #define WILC_CHIP_REV_FIELD		GENMASK(11, 0)
 
 static inline bool is_wilc1000(u32 id)
 {
 	return (id & (~WILC_CHIP_REV_FIELD)) == WILC_1000_BASE_ID;
+}
+
+static inline bool is_wilc3000(u32 id)
+{
+	return (id & (~WILC_CHIP_REV_FIELD)) == WILC_3000_BASE_ID;
 }
 
 /********************************************
