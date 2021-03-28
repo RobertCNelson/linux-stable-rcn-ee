@@ -972,32 +972,36 @@ static void wilc_wlan_handle_rx_buff(struct wilc *wilc, u8 *buffer, int size)
 		tp_len = FIELD_GET(WILC_PKT_HDR_TOTAL_LEN_FIELD, header);
 		pkt_len = FIELD_GET(WILC_PKT_HDR_LEN_FIELD, header);
 
-		if (pkt_len == 0 || tp_len == 0)
+		if (pkt_len == 0 || tp_len == 0) {
+			pr_err("%s: Data corrupted %d, %d\n", __func__,
+			       pkt_len, tp_len);
 			break;
+		}
 
-		if (pkt_offset & IS_MANAGMEMENT) {
-			buff_ptr += HOST_HDR_OFFSET;
-			wilc_wfi_mgmt_rx(wilc, buff_ptr, pkt_len,
-					 pkt_offset & IS_MGMT_AUTH_PKT);
-		} else {
-			if (!is_cfg_packet) {
-				wilc_frmw_to_host(wilc, buff_ptr, pkt_len,
-						  pkt_offset);
-			} else {
-				struct wilc_cfg_rsp rsp;
+		if (is_cfg_packet) {
+			struct wilc_cfg_rsp rsp;
 
-				buff_ptr += pkt_offset;
+			buff_ptr += pkt_offset;
 
-				wilc_wlan_cfg_indicate_rx(wilc, buff_ptr,
-							  pkt_len,
-							  &rsp);
-				if (rsp.type == WILC_CFG_RSP) {
-					if (wilc->cfg_seq_no == rsp.seq_no)
-						complete(&wilc->cfg_event);
-				} else if (rsp.type == WILC_CFG_RSP_STATUS) {
-					wilc_mac_indicate(wilc);
-				}
+			wilc_wlan_cfg_indicate_rx(wilc, buff_ptr, pkt_len,
+						  &rsp);
+			if (rsp.type == WILC_CFG_RSP) {
+				if (wilc->cfg_seq_no == rsp.seq_no)
+					complete(&wilc->cfg_event);
+			} else if (rsp.type == WILC_CFG_RSP_STATUS) {
+				wilc_mac_indicate(wilc);
 			}
+		} else if (pkt_offset & IS_MANAGMEMENT) {
+			buff_ptr += HOST_HDR_OFFSET;
+
+			if (pkt_offset & IS_MON_PKT)
+				wilc_wfi_handle_monitor_rx(wilc, buff_ptr,
+							   pkt_len);
+			else
+				wilc_wfi_mgmt_rx(wilc, buff_ptr, pkt_len,
+						pkt_offset & IS_MGMT_AUTH_PKT);
+		} else {
+			wilc_frmw_to_host(wilc, buff_ptr, pkt_len, pkt_offset);
 		}
 		offset += tp_len;
 	} while (offset < size);
