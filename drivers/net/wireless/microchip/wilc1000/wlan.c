@@ -853,19 +853,68 @@ int wilc_wlan_handle_txq(struct wilc *wilc, u32 *txq_count)
 		if (ret)
 			break;
 
-		ret = func->hif_write_reg(wilc, WILC_HOST_VMM_CTL, 0x2);
-		if (ret)
-			break;
-
-		do {
-			ret = func->hif_read_reg(wilc, WILC_HOST_VMM_CTL, &reg);
-			if (ret)
-				break;
-			if (FIELD_GET(WILC_VMM_ENTRY_AVAILABLE, reg)) {
-				entries = FIELD_GET(WILC_VMM_ENTRY_COUNT, reg);
+		if (wilc->chip == WILC_1000) {
+			ret = wilc->hif_func->hif_write_reg(wilc,
+							    WILC_HOST_VMM_CTL,
+							    0x2);
+			if (ret) {
+				pr_err("fail write reg host_vmm_ctl..\n");
 				break;
 			}
-		} while (--timeout);
+
+			do {
+				ret = func->hif_read_reg(wilc,
+						      WILC_HOST_VMM_CTL,
+						      &reg);
+				if (ret)
+					break;
+				if (FIELD_GET(WILC_VMM_ENTRY_AVAILABLE, reg)) {
+					entries = FIELD_GET(WILC_VMM_ENTRY_COUNT,
+							    reg);
+					break;
+				}
+			} while (--timeout);
+		} else {
+			ret = func->hif_write_reg(wilc,
+					      WILC_HOST_VMM_CTL,
+					      0);
+			if (ret) {
+				pr_err("fail write reg host_vmm_ctl..\n");
+				break;
+			}
+			/* interrupt firmware */
+			ret = func->hif_write_reg(wilc,
+					      WILC_INTERRUPT_CORTUS_0,
+					      1);
+			if (ret) {
+				pr_err("fail write reg WILC_INTERRUPT_CORTUS_0..\n");
+				break;
+			}
+
+			do {
+				ret = func->hif_read_reg(wilc,
+						      WILC_INTERRUPT_CORTUS_0,
+						      &reg);
+				if (ret) {
+					pr_err("fail read reg WILC_INTERRUPT_CORTUS_0..\n");
+					break;
+				}
+				if (reg == 0) {
+					/* Get the entries */
+
+					ret = func->hif_read_reg(wilc,
+							      WILC_HOST_VMM_CTL,
+							      &reg);
+					if (ret) {
+						pr_err("fail read reg host_vmm_ctl..\n");
+						break;
+					}
+					entries = FIELD_GET(WILC_VMM_ENTRY_COUNT,
+							    reg);
+					break;
+				}
+			} while (--timeout);
+		}
 		if (timeout <= 0) {
 			ret = func->hif_write_reg(wilc, WILC_HOST_VMM_CTL, 0x0);
 			break;
@@ -876,10 +925,15 @@ int wilc_wlan_handle_txq(struct wilc *wilc, u32 *txq_count)
 
 		if (entries == 0) {
 			ret = func->hif_read_reg(wilc, WILC_HOST_TX_CTRL, &reg);
-			if (ret)
+			if (ret) {
+				pr_err("fail read reg WILC_HOST_TX_CTRL..\n");
 				break;
+			}
 			reg &= ~BIT(0);
 			ret = func->hif_write_reg(wilc, WILC_HOST_TX_CTRL, reg);
+			if (ret) {
+				pr_err("fail write reg WILC_HOST_TX_CTRL..\n");
+			}
 		}
 	} while (0);
 

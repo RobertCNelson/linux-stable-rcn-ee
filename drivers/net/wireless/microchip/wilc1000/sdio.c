@@ -816,9 +816,15 @@ static int wilc_sdio_read_int(struct wilc *wilc, u32 *int_status)
 		cmd.function = 0;
 		cmd.raw = 0;
 		cmd.data = 0;
-		cmd.address = WILC_SDIO_IRQ_FLAG_REG;
-		wilc_sdio_cmd52(wilc, &cmd);
-		irq_flags = cmd.data & 0x1f;
+		if (wilc->chip == WILC_1000) {
+			cmd.address = WILC1000_SDIO_IRQ_FLAG_REG;
+			wilc_sdio_cmd52(wilc, &cmd);
+			irq_flags = cmd.data & 0x1f;
+		} else {
+			cmd.address = WILC3000_SDIO_IRQ_FLAG_REG;
+			wilc_sdio_cmd52(wilc, &cmd);
+			irq_flags = cmd.data & 0x0f;
+		}
 		tmp |= FIELD_PREP(IRG_FLAGS_MASK, cmd.data);
 
 		*int_status = tmp;
@@ -851,35 +857,87 @@ static int wilc_sdio_clear_int_ext(struct wilc *wilc, u32 val)
 	int ret;
 	u32 reg = 0;
 
-	if (sdio_priv->irq_gpio)
-		reg = val & (BIT(MAX_NUM_INT) - 1);
+	if (wilc->chip == WILC_1000) {
+		if (sdio_priv->irq_gpio)
+			reg = val & (BIT(MAX_NUM_INT) - 1);
 
-	/* select VMM table 0 */
-	if (val & SEL_VMM_TBL0)
-		reg |= BIT(5);
-	/* select VMM table 1 */
-	if (val & SEL_VMM_TBL1)
-		reg |= BIT(6);
-	/* enable VMM */
-	if (val & EN_VMM)
-		reg |= BIT(7);
-	if (reg) {
-		struct sdio_cmd52 cmd;
+		/* select VMM table 0 */
+		if (val & SEL_VMM_TBL0)
+			reg |= BIT(5);
+		/* select VMM table 1 */
+		if (val & SEL_VMM_TBL1)
+			reg |= BIT(6);
+		/* enable VMM */
+		if (val & EN_VMM)
+			reg |= BIT(7);
+		if (reg) {
+			struct sdio_cmd52 cmd;
 
-		cmd.read_write = 1;
-		cmd.function = 0;
-		cmd.raw = 0;
-		cmd.address = WILC_SDIO_IRQ_CLEAR_FLAG_REG;
-		cmd.data = reg;
+			cmd.read_write = 1;
+			cmd.function = 0;
+			cmd.raw = 0;
+			cmd.address = WILC1000_SDIO_IRQ_CLEAR_FLAG_REG;
+			cmd.data = reg;
 
-		ret = wilc_sdio_cmd52(wilc, &cmd);
-		if (ret) {
-			dev_err(&func->dev,
-				"Failed cmd52, set 0xf8 data (%d) ...\n",
-				__LINE__);
-			return ret;
+			ret = wilc_sdio_cmd52(wilc, &cmd);
+			if (ret) {
+				dev_err(&func->dev,
+					"Failed cmd52, set 0xf8 data (%d) ...\n",
+					__LINE__);
+				return ret;
+			}
+		}
+	} else {
+		if (sdio_priv->irq_gpio) {
+			reg = val & (BIT(MAX_NUM_INT) - 1);
+			if (reg) {
+				struct sdio_cmd52 cmd;
+
+				cmd.read_write = 1;
+				cmd.function = 0;
+				cmd.raw = 0;
+				cmd.address = WILC3000_SDIO_IRQ_CLEAR_FLAG_REG;
+				cmd.data = reg;
+
+				ret = wilc_sdio_cmd52(wilc, &cmd);
+				if (ret) {
+					dev_err(&func->dev,
+						"Failed cmd52, set 0xfe data (%d) ...\n",
+						__LINE__);
+					return ret;
+				}
+			}
+		}
+		reg = 0;
+		/* select VMM table 0 */
+		if (val & SEL_VMM_TBL0)
+			reg |= BIT(0);
+		/* select VMM table 1 */
+		if (val & SEL_VMM_TBL1)
+			reg |= BIT(1);
+		/* enable VMM */
+		if (val & EN_VMM)
+			reg |= BIT(2);
+
+		if (reg) {
+			struct sdio_cmd52 cmd;
+
+			cmd.read_write = 1;
+			cmd.function = 0;
+			cmd.raw = 0;
+			cmd.address = WILC3000_SDIO_VMM_TBL_CTRL_REG;
+			cmd.data = reg;
+
+			ret = wilc_sdio_cmd52(wilc, &cmd);
+			if (ret) {
+				dev_err(&func->dev,
+					"Failed cmd52, set 0xf6 data (%d) ...\n",
+					__LINE__);
+				return ret;
+			}
 		}
 	}
+
 	return 0;
 }
 
