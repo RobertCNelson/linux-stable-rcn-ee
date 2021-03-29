@@ -23,6 +23,12 @@
 #define __WILC1000_FW(api)		WILC1000_FW_PREFIX #api ".bin"
 #define WILC1000_FW(api)		__WILC1000_FW(api)
 
+#define WILC3000_API_VER		1
+
+#define WILC3000_FW_PREFIX		"atmel/wilc3000_wifi_firmware-"
+#define __WILC3000_FW(api)		WILC3000_FW_PREFIX #api ".bin"
+#define WILC3000_FW(api)		__WILC3000_FW(api)
+
 static int wilc_mac_open(struct net_device *ndev);
 static int wilc_mac_close(struct net_device *ndev);
 
@@ -369,20 +375,25 @@ static int wilc_wlan_get_firmware(struct net_device *dev)
 {
 	struct wilc_vif *vif = netdev_priv(dev);
 	struct wilc *wilc = vif->wilc;
-	int chip_id;
 	const struct firmware *wilc_fw;
+	char *firmware;
 	int ret;
 
-	chip_id = wilc_get_chipid(wilc, false);
+	if (wilc->chip == WILC_3000) {
+		PRINT_INFO(dev, INIT_DBG, "Detect chip WILC3000\n");
+		firmware = WILC3000_FW(WILC3000_API_VER);
+	} else if (wilc->chip == WILC_1000) {
+		PRINT_INFO(dev, INIT_DBG, "Detect chip WILC1000\n");
+		firmware = WILC1000_FW(WILC1000_API_VER);
+	} else {
+		return -EINVAL;
+	}
 
-	netdev_info(dev, "ChipID [%x] loading firmware [%s]\n", chip_id,
-		    WILC1000_FW(WILC1000_API_VER));
+	PRINT_INFO(dev, INIT_DBG, "loading firmware %s\n", firmware);
 
-	ret = request_firmware(&wilc_fw, WILC1000_FW(WILC1000_API_VER),
-			       wilc->dev);
+	ret = request_firmware(&wilc_fw, firmware, wilc->dev);
 	if (ret != 0) {
-		netdev_err(dev, "%s - firmware not available\n",
-			   WILC1000_FW(WILC1000_API_VER));
+		PRINT_ER(dev, "%s - firmware not available\n", firmware);
 		return -EINVAL;
 	}
 	wilc->firmware = wilc_fw;
@@ -415,7 +426,7 @@ static int wilc_start_firmware(struct net_device *dev)
 	return 0;
 }
 
-static int wilc1000_firmware_download(struct net_device *dev)
+static int wilc_firmware_download(struct net_device *dev)
 {
 	struct wilc_vif *vif = netdev_priv(dev);
 	struct wilc *wilc = vif->wilc;
@@ -425,18 +436,19 @@ static int wilc1000_firmware_download(struct net_device *dev)
 		netdev_err(dev, "Firmware buffer is NULL\n");
 		return -ENOBUFS;
 	}
-
+	PRINT_INFO(vif->ndev, INIT_DBG, "Downloading Firmware ...\n");
 	ret = wilc_wlan_firmware_download(wilc, wilc->firmware->data,
 					  wilc->firmware->size);
-	if (ret)
-		return ret;
+	if (ret < 0)
+		goto fail;
 
+	PRINT_INFO(vif->ndev, INIT_DBG, "Download Succeeded\n");
+
+fail:
 	release_firmware(wilc->firmware);
 	wilc->firmware = NULL;
 
-	netdev_dbg(dev, "Download Succeeded\n");
-
-	return 0;
+	return ret;
 }
 
 static int wilc_init_fw_config(struct net_device *dev, struct wilc_vif *vif)
@@ -760,7 +772,7 @@ static int wilc_wlan_initialize(struct net_device *dev, struct wilc_vif *vif)
 			goto fail_irq_enable;
 		}
 
-		ret = wilc1000_firmware_download(dev);
+		ret = wilc_firmware_download(dev);
 		if (ret) {
 			PRINT_ER(dev, "Failed to download firmware\n");
 			goto fail_irq_enable;
@@ -1329,3 +1341,4 @@ error:
 
 MODULE_LICENSE("GPL");
 MODULE_FIRMWARE(WILC1000_FW(WILC1000_API_VER));
+MODULE_FIRMWARE(WILC3000_FW(WILC3000_API_VER));
