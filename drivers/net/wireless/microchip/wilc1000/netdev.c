@@ -19,13 +19,13 @@
 /* latest API version supported */
 #define WILC1000_API_VER		1
 
-#define WILC1000_FW_PREFIX		"atmel/wilc1000_wifi_firmware-"
+#define WILC1000_FW_PREFIX		"mchp/wilc1000_wifi_firmware"
 #define __WILC1000_FW(api)		WILC1000_FW_PREFIX #api ".bin"
 #define WILC1000_FW(api)		__WILC1000_FW(api)
 
 #define WILC3000_API_VER		1
 
-#define WILC3000_FW_PREFIX		"atmel/wilc3000_wifi_firmware-"
+#define WILC3000_FW_PREFIX		"mchp/wilc3000_wifi_firmware"
 #define __WILC3000_FW(api)		WILC3000_FW_PREFIX #api ".bin"
 #define WILC3000_FW(api)		__WILC3000_FW(api)
 
@@ -381,10 +381,10 @@ static int wilc_wlan_get_firmware(struct net_device *dev)
 
 	if (wilc->chip == WILC_3000) {
 		PRINT_INFO(dev, INIT_DBG, "Detect chip WILC3000\n");
-		firmware = WILC3000_FW(WILC3000_API_VER);
+		firmware = WILC3000_FW();
 	} else if (wilc->chip == WILC_1000) {
 		PRINT_INFO(dev, INIT_DBG, "Detect chip WILC1000\n");
-		firmware = WILC1000_FW(WILC1000_API_VER);
+		firmware = WILC1000_FW();
 	} else {
 		return -EINVAL;
 	}
