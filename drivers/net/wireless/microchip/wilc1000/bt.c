@@ -470,7 +470,6 @@ fail:
 	wilc_bt_power_down(wilc, DEV_BT);
 	return ret;
 }
-EXPORT_SYMBOL_GPL(wilc_bt_power_up);
 
 static void wilc_bt_firmware_download(struct wilc *wilc)
 {
@@ -681,7 +680,6 @@ void wilc_bt_init(struct wilc *wilc)
 	pr_debug("at_pwr_dev: init\n");
 	wilc_bt_create_device();
 }
-EXPORT_SYMBOL_GPL(wilc_bt_init);
 
 void wilc_bt_deinit(void)
 {
@@ -696,4 +694,3 @@ void wilc_bt_deinit(void)
 	unregister_chrdev_region(chc_dev_no, 1);
 	pr_info("at_pwr_dev: unregistered\n");
 }
-EXPORT_SYMBOL_GPL(wilc_bt_deinit);

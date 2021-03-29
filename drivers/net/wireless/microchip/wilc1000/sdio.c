@@ -24,7 +24,7 @@ enum sdio_host_lock {
 
 static enum sdio_host_lock	sdio_intr_lock = WILC_SDIO_HOST_NO_TAKEN;
 static wait_queue_head_t sdio_intr_waitqueue;
-#define SDIO_MODALIAS "wilc1000_sdio"
+#define SDIO_MODALIAS "wilc_sdio"
 
 static const struct sdio_device_id wilc_sdio_ids[] = {
 	{ SDIO_DEVICE(SDIO_VENDOR_ID_MICROCHIP_WILC, SDIO_DEVICE_ID_MICROCHIP_WILC1000) },

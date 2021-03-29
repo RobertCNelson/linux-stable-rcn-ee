@@ -46,7 +46,7 @@ static const struct ieee80211_txrx_stypes
 			BIT(IEEE80211_STYPE_DISASSOC >> 4) |
 			BIT(IEEE80211_STYPE_AUTH >> 4) |
 			BIT(IEEE80211_STYPE_DEAUTH >> 4)
-	}
+	},
 };
 
 #ifdef CONFIG_PM
@@ -2203,7 +2203,6 @@ free_wl:
 	wiphy_free(wl->wiphy);
 	return ret;
 }
-EXPORT_SYMBOL_GPL(wilc_cfg80211_init);
 
 struct wilc *wilc_create_wiphy(struct device *dev)
 {

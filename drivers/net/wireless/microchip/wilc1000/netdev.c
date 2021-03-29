@@ -1256,7 +1256,6 @@ void wilc_netdev_cleanup(struct wilc *wilc)
 	wiphy_free(wilc->wiphy);
 	pr_info("Module_exit Done.\n");
 }
-EXPORT_SYMBOL_GPL(wilc_netdev_cleanup);
 
 static u8 wilc_get_available_idx(struct wilc *wl)
 {

@@ -46,7 +46,6 @@ int wilc_of_parse_power_pins(struct wilc *wilc)
 	ret = devm_gpio_request(wilc->dev, power->gpios.reset, "RESET");
 	return ret;
 }
-EXPORT_SYMBOL_GPL(wilc_of_parse_power_pins);
 
 /**
  * wilc_wlan_power() - handle power on/off commands
@@ -75,4 +74,3 @@ void wilc_wlan_power(struct wilc *wilc, bool on)
 		gpio_direction_output(wilc->power.gpios.reset, 0);
 	}
 }
-EXPORT_SYMBOL_GPL(wilc_wlan_power);
