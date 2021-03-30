@@ -117,26 +117,47 @@ void wilc_mac_indicate(struct wilc *wilc)
 	}
 }
 
-static struct net_device *get_if_handler(struct wilc *wilc, u8 *mac_header)
+static void free_eap_buff_params(void *vp)
 {
-	struct net_device *ndev = NULL;
-	struct wilc_vif *vif;
-	struct ieee80211_hdr *h = (struct ieee80211_hdr *)mac_header;
+	struct wilc_priv *priv;
 
-	list_for_each_entry_rcu(vif, &wilc->vif_list, list) {
-		if (vif->iftype == WILC_STATION_MODE)
-			if (ether_addr_equal_unaligned(h->addr2, vif->bssid)) {
-				ndev = vif->ndev;
-				goto out;
-			}
-		if (vif->iftype == WILC_AP_MODE)
-			if (ether_addr_equal_unaligned(h->addr1, vif->bssid)) {
-				ndev = vif->ndev;
-				goto out;
-			}
+	priv = (struct wilc_priv *)vp;
+
+	if (priv->buffered_eap) {
+		kfree(priv->buffered_eap->buff);
+		priv->buffered_eap->buff = NULL;
+
+		kfree(priv->buffered_eap);
+		priv->buffered_eap = NULL;
 	}
-out:
-	return ndev;
+}
+
+void eap_buff_timeout(struct timer_list *t)
+{
+	u8 null_bssid[ETH_ALEN] = {0};
+	u8 *assoc_bss;
+	static u8 timeout = 5;
+	int status = -1;
+	struct wilc_priv *priv = from_timer(priv, t, eap_buff_timer);
+	struct wilc_vif *vif = netdev_priv(priv->dev);
+
+	assoc_bss = priv->associated_bss;
+	if (!(memcmp(assoc_bss, null_bssid, ETH_ALEN)) && (timeout-- > 0)) {
+		mod_timer(&priv->eap_buff_timer,
+			  (jiffies + msecs_to_jiffies(10)));
+		return;
+	}
+	del_timer(&priv->eap_buff_timer);
+	timeout = 5;
+
+	status = wilc_send_buffered_eap(vif, wilc_frmw_to_host,
+					free_eap_buff_params,
+					priv->buffered_eap->buff,
+					priv->buffered_eap->size,
+					priv->buffered_eap->pkt_offset,
+					(void *)priv);
+	if (status)
+		pr_err("Failed so send buffered eap\n");
 }
 
 void wilc_wlan_set_bssid(struct net_device *wilc_netdev, const u8 *bssid,
@@ -858,45 +879,70 @@ static int wilc_mac_close(struct net_device *ndev)
 	return 0;
 }
 
-void wilc_frmw_to_host(struct wilc *wilc, u8 *buff, u32 size,
-		       u32 pkt_offset)
+void wilc_frmw_to_host(struct wilc_vif *vif, u8 *buff, u32 size,
+		       u32 pkt_offset, u8 status)
 {
 	unsigned int frame_len = 0;
 	int stats;
 	unsigned char *buff_to_send = NULL;
 	struct sk_buff *skb;
-	struct net_device *wilc_netdev;
-	struct wilc_vif *vif;
-
-	if (!wilc)
-		return;
-
-	wilc_netdev = get_if_handler(wilc, buff);
-	if (!wilc_netdev)
-		return;
+	struct wilc_priv *priv;
+	u8 null_bssid[ETH_ALEN] = {0};
 
 	buff += pkt_offset;
-	vif = netdev_priv(wilc_netdev);
+	priv = &vif->priv;
 
-	if (size > 0) {
-		frame_len = size;
-		buff_to_send = buff;
-
-		skb = dev_alloc_skb(frame_len);
-		if (!skb)
-			return;
-
-		skb->dev = wilc_netdev;
-
-		skb_put_data(skb, buff_to_send, frame_len);
-
-		skb->protocol = eth_type_trans(skb, wilc_netdev);
-		vif->netstats.rx_packets++;
-		vif->netstats.rx_bytes += frame_len;
-		skb->ip_summed = CHECKSUM_UNNECESSARY;
-		stats = netif_rx(skb);
-		netdev_dbg(wilc_netdev, "netif_rx ret value is: %d\n", stats);
+	if (size == 0) {
+		pr_err("Discard sending packet with len = %d\n", size);
+		return;
 	}
+
+	frame_len = size;
+	buff_to_send = buff;
+
+	if (status == PKT_STATUS_NEW && buff_to_send[12] == 0x88 &&
+	    buff_to_send[13] == 0x8e &&
+	    (vif->iftype == WILC_STATION_MODE ||
+	     vif->iftype == WILC_CLIENT_MODE) &&
+	    ether_addr_equal_unaligned(priv->associated_bss, null_bssid)) {
+		if (!priv->buffered_eap) {
+			priv->buffered_eap = kmalloc(sizeof(struct
+							    wilc_buffered_eap),
+						     GFP_ATOMIC);
+			if (priv->buffered_eap) {
+				priv->buffered_eap->buff = NULL;
+				priv->buffered_eap->size = 0;
+				priv->buffered_eap->pkt_offset = 0;
+			} else {
+				pr_err("failed to alloc buffered_eap\n");
+				return;
+			}
+		} else {
+			kfree(priv->buffered_eap->buff);
+		}
+		priv->buffered_eap->buff = kmalloc(size + pkt_offset,
+						   GFP_ATOMIC);
+		priv->buffered_eap->size = size;
+		priv->buffered_eap->pkt_offset = pkt_offset;
+		memcpy(priv->buffered_eap->buff, buff -
+		       pkt_offset, size + pkt_offset);
+		mod_timer(&priv->eap_buff_timer, (jiffies +
+			  msecs_to_jiffies(10)));
+		return;
+	}
+	skb = dev_alloc_skb(frame_len);
+	if (!skb) {
+		return;
+	}
+
+	skb->dev = vif->ndev;
+	skb_put_data(skb, buff_to_send, frame_len);
+
+	skb->protocol = eth_type_trans(skb, vif->ndev);
+	vif->netstats.rx_packets++;
+	vif->netstats.rx_bytes += frame_len;
+	skb->ip_summed = CHECKSUM_UNNECESSARY;
+	stats = netif_rx(skb);
 }
 
 void wilc_wfi_mgmt_rx(struct wilc *wilc, u8 *buff, u32 size, bool is_auth)

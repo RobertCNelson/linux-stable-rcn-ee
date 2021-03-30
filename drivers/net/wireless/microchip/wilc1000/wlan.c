@@ -241,6 +241,28 @@ static void wilc_wlan_txq_filter_dup_tcp_ack(struct net_device *dev)
 	}
 }
 
+static struct net_device *get_if_handler(struct wilc *wilc, u8 *mac_header)
+{
+	struct net_device *mon_netdev = NULL;
+	struct wilc_vif *vif;
+	struct ieee80211_hdr *h = (struct ieee80211_hdr *)mac_header;
+
+	list_for_each_entry_rcu(vif, &wilc->vif_list, list) {
+		if (vif->iftype == WILC_STATION_MODE)
+			if (ether_addr_equal_unaligned(h->addr2, vif->bssid))
+				return vif->ndev;
+		if (vif->iftype == WILC_AP_MODE)
+			if (ether_addr_equal_unaligned(h->addr1, vif->bssid))
+				return vif->ndev;
+		if (vif->iftype == WILC_MONITOR_MODE)
+			mon_netdev = vif->ndev;
+	}
+
+	if (!mon_netdev)
+		pr_warn("%s Invalid handle\n", __func__);
+	return mon_netdev;
+}
+
 void wilc_enable_tcp_ack_filter(struct wilc_vif *vif, bool value)
 {
 	vif->ack_filter.enabled = value;
@@ -1001,7 +1023,22 @@ static void wilc_wlan_handle_rx_buff(struct wilc *wilc, u8 *buffer, int size)
 				wilc_wfi_mgmt_rx(wilc, buff_ptr, pkt_len,
 						pkt_offset & IS_MGMT_AUTH_PKT);
 		} else {
-			wilc_frmw_to_host(wilc, buff_ptr, pkt_len, pkt_offset);
+			struct net_device *wilc_netdev;
+			struct wilc_vif *vif;
+			int srcu_idx;
+
+			srcu_idx = srcu_read_lock(&wilc->srcu);
+			wilc_netdev = get_if_handler(wilc, buff_ptr);
+			if (!wilc_netdev) {
+				pr_err("%s: wilc_netdev in wilc is NULL\n",
+				       __func__);
+				srcu_read_unlock(&wilc->srcu, srcu_idx);
+				return;
+			}
+			vif = netdev_priv(wilc_netdev);
+			wilc_frmw_to_host(vif, buff_ptr, pkt_len,
+					  pkt_offset, PKT_STATUS_NEW);
+			srcu_read_unlock(&wilc->srcu, srcu_idx);
 		}
 		offset += tp_len;
 	} while (offset < size);

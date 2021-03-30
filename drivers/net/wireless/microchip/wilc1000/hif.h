@@ -155,6 +155,13 @@ struct host_if_drv {
 };
 
 struct wilc_vif;
+
+signed int wilc_send_buffered_eap(struct wilc_vif *vif,
+				  void (*deliver_to_stack)(struct wilc_vif *,
+							   u8 *, u32, u32, u8),
+				  void (*eap_buf_param)(void *), u8 *buff,
+				  unsigned int size, unsigned int pkt_offset,
+				  void *user_arg);
 int wilc_add_ptk(struct wilc_vif *vif, const u8 *ptk, u8 ptk_key_len,
 		 const u8 *mac_addr, const u8 *rx_mic, const u8 *tx_mic,
 		 u8 mode, u8 cipher_mode, u8 index);

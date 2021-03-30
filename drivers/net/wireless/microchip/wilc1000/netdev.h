@@ -56,6 +56,12 @@ struct wilc_wfi_p2p_listen_params {
 	u64 listen_cookie;
 };
 
+/* Struct to buffer eapol 1/4 frame */
+struct wilc_buffered_eap {
+	unsigned int size;
+	unsigned int pkt_offset;
+	u8 *buff;
+};
 static const u32 wilc_cipher_suites[] = {
 	WLAN_CIPHER_SUITE_TKIP,
 	WLAN_CIPHER_SUITE_CCMP,
@@ -134,6 +140,10 @@ struct wilc_priv {
 
 	/* mutexes */
 	struct mutex scan_req_lock;
+
+	struct wilc_buffered_eap *buffered_eap;
+
+	struct timer_list eap_buff_timer;
 	bool p2p_listen_state;
 	int scanned_cnt;
 
@@ -277,7 +287,8 @@ struct wilc_wfi_mon_priv {
 	struct net_device *real_ndev;
 };
 
-void wilc_frmw_to_host(struct wilc *wilc, u8 *buff, u32 size, u32 pkt_offset);
+void wilc_frmw_to_host(struct wilc_vif *vif, u8 *buff, u32 size,
+		       u32 pkt_offset, u8 status);
 void wilc_mac_indicate(struct wilc *wilc);
 void wilc_netdev_cleanup(struct wilc *wilc);
 void wilc_wfi_mgmt_rx(struct wilc *wilc, u8 *buff, u32 size, bool is_auth);

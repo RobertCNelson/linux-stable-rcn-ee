@@ -10,6 +10,15 @@
 #define WILC_HIF_CONNECT_TIMEOUT_MS             9500
 
 #define WILC_FALSE_FRMWR_CHANNEL		100
+struct send_buffered_eap {
+	void (*deliver_to_stack)(struct wilc_vif *vif, u8 *buff, u32 size,
+			      u32 pkt_offset, u8 status);
+	void (*eap_buf_param)(void *priv);
+	u8 *buff;
+	unsigned int size;
+	unsigned int pkt_offset;
+	void *user_arg;
+};
 
 #define WILC_SCAN_WID_LIST_SIZE		6
 
@@ -39,6 +48,7 @@ union wilc_message_body {
 	struct wilc_remain_ch remain_on_ch;
 	char *data;
 	struct host_if_wowlan_trigger wow_trigger;
+	struct send_buffered_eap send_buff_eap;
 };
 
 struct host_if_msg {
@@ -155,6 +165,32 @@ static int handle_scan_done(struct wilc_vif *vif, enum scan_event evt)
 	}
 
 	return result;
+}
+
+static void handle_send_buffered_eap(struct work_struct *work)
+{
+	struct host_if_msg *msg = container_of(work, struct host_if_msg, work);
+	struct wilc_vif *vif = msg->vif;
+	struct send_buffered_eap *hif_buff_eap = &msg->body.send_buff_eap;
+
+	if (!hif_buff_eap->buff)
+		goto out;
+
+	if (hif_buff_eap->deliver_to_stack)
+		hif_buff_eap->deliver_to_stack(vif, hif_buff_eap->buff,
+					       hif_buff_eap->size,
+					       hif_buff_eap->pkt_offset,
+					       PKT_STATUS_BUFFERED);
+	if (hif_buff_eap->eap_buf_param)
+		hif_buff_eap->eap_buf_param(hif_buff_eap->user_arg);
+
+	if (hif_buff_eap->buff != NULL) {
+		kfree(hif_buff_eap->buff);
+		hif_buff_eap->buff = NULL;
+	}
+
+out:
+	kfree(msg);
 }
 
 int wilc_scan(struct wilc_vif *vif, u8 scan_source, u8 scan_type,
@@ -1178,6 +1214,40 @@ static void timer_connect_cb(struct timer_list *t)
 	result = wilc_enqueue_work(msg);
 	if (result)
 		kfree(msg);
+}
+
+signed int wilc_send_buffered_eap(struct wilc_vif *vif,
+				  void (*deliver_to_stack)(struct wilc_vif *,
+							   u8 *, u32, u32, u8),
+				  void (*eap_buf_param)(void *), u8 *buff,
+				  unsigned int size, unsigned int pkt_offset,
+				  void *user_arg)
+{
+	int result;
+	struct host_if_msg *msg;
+
+	if (!vif || !deliver_to_stack || !eap_buf_param)
+		return -EFAULT;
+
+	msg = wilc_alloc_work(vif, handle_send_buffered_eap, false);
+	if (IS_ERR(msg))
+		return PTR_ERR(msg);
+	msg->body.send_buff_eap.deliver_to_stack = deliver_to_stack;
+	msg->body.send_buff_eap.eap_buf_param = eap_buf_param;
+	msg->body.send_buff_eap.size = size;
+	msg->body.send_buff_eap.pkt_offset = pkt_offset;
+	msg->body.send_buff_eap.buff = kmalloc(size + pkt_offset,
+					       GFP_ATOMIC);
+	memcpy(msg->body.send_buff_eap.buff, buff, size + pkt_offset);
+	msg->body.send_buff_eap.user_arg = user_arg;
+
+	result = wilc_enqueue_work(msg);
+	if (result) {
+		pr_err("enqueue work failed\n");
+		kfree(msg->body.send_buff_eap.buff);
+		kfree(msg);
+	}
+	return result;
 }
 
 int wilc_add_ptk(struct wilc_vif *vif, const u8 *ptk, u8 ptk_key_len,

@@ -1904,6 +1904,7 @@ int wilc_init_host_int(struct net_device *net)
 	struct wilc_vif *vif = netdev_priv(net);
 	struct wilc_priv *priv = &vif->priv;
 
+	timer_setup(&priv->eap_buff_timer, eap_buff_timeout, 0);
 	priv->p2p_listen_state = false;
 
 	mutex_init(&priv->scan_req_lock);
@@ -1925,6 +1926,8 @@ void wilc_deinit_host_int(struct net_device *net)
 	flush_workqueue(vif->wilc->hif_workqueue);
 	mutex_destroy(&priv->scan_req_lock);
 	ret = wilc_deinit(vif);
+
+	del_timer_sync(&priv->eap_buff_timer);
 
 	if (ret)
 		netdev_err(net, "Error while deinitializing host interface\n");
