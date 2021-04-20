@@ -39,7 +39,7 @@ MODULE_PARM_DESC(enable_crc16,
  * zero bytes when the SPI bus operates at 48MHz and none when it
  * operates at 1MHz.
  */
-#define WILC_SPI_RSP_HDR_EXTRA_DATA	8
+#define WILC_SPI_RSP_HDR_EXTRA_DATA	4
 
 struct wilc_spi {
 	bool isinit;		/* true if SPI protocol has been configured */
@@ -74,6 +74,7 @@ static int wilc_spi_reset(struct wilc *wilc);
 #define CMD_SINGLE_READ				0xca
 #define CMD_RESET				0xcf
 
+#define SPI_RESP_RETRY_COUNT			(10)
 #define SPI_RETRY_MAX_LIMIT			10
 #define SPI_ENABLE_VMM_RETRY_LIMIT		2
 
@@ -605,11 +606,11 @@ static int wilc_spi_single_read(struct wilc *wilc, u8 cmd, u32 adr, void *b,
 		return -EINVAL;
 	}
 
-	for (i = 0; i < WILC_SPI_RSP_HDR_EXTRA_DATA; ++i)
+	for (i = 0; i < SPI_RESP_RETRY_COUNT; ++i)
 		if (WILC_GET_RESP_HDR_START(r->data[i]) == 0xf)
 			break;
 
-	if (i >= WILC_SPI_RSP_HDR_EXTRA_DATA) {
+	if (i >= SPI_RESP_RETRY_COUNT) {
 		dev_err(&spi->dev, "Error, data start missing\n");
 		return -EINVAL;
 	}
@@ -790,7 +791,7 @@ static int wilc_spi_dma_rw(struct wilc *wilc, u8 cmd, u32 adr, u8 *b, u32 sz)
 		/*
 		 * Data Response header
 		 */
-		retry = 100;
+		retry = SPI_RESP_RETRY_COUNT;
 		do {
 			if (wilc_spi_rx(wilc, &rsp, 1)) {
 				dev_err(&spi->dev,
