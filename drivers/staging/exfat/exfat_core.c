@@ -561,18 +561,6 @@ void free_alloc_bitmap(struct super_block *sb)
 	p_fs->vol_amap = NULL;
 }
 
-void sync_alloc_bitmap(struct super_block *sb)
-{
-	int i;
-	struct fs_info_t *p_fs = &(EXFAT_SB(sb)->fs_info);
-
-	if (!p_fs->vol_amap)
-		return;
-
-	for (i = 0; i < p_fs->map_sectors; i++)
-		sync_dirty_buffer(p_fs->vol_amap[i]);
-}
-
 /*
  *  Upcase table Management Functions
  */
@@ -856,9 +844,6 @@ static void exfat_set_entry_type(struct dentry_t *p_entry, u32 type)
 	} else if (type == TYPE_FILE) {
 		ep->type = 0x85;
 		SET16_A(ep->attr, ATTR_ARCHIVE);
-	} else if (type == TYPE_SYMLINK) {
-		ep->type = 0x85;
-		SET16_A(ep->attr, ATTR_ARCHIVE | ATTR_SYMLINK);
 	}
 }
 
@@ -1044,8 +1029,7 @@ static s32 exfat_init_dir_entry(struct super_block *sb, struct chain_t *p_dir,
 
 static s32 exfat_init_ext_entry(struct super_block *sb, struct chain_t *p_dir,
 				s32 entry, s32 num_entries,
-				struct uni_name_t *p_uniname,
-				struct dos_name_t *p_dosname)
+				struct uni_name_t *p_uniname)
 {
 	int i;
 	sector_t sector;
@@ -1560,11 +1544,7 @@ static s32 search_deleted_or_unused_entry(struct super_block *sb,
 			if (num_empty >= num_entries) {
 				p_fs->hint_uentry.dir = CLUSTER_32(~0);
 				p_fs->hint_uentry.entry = -1;
-
-				if (p_fs->vol_type == EXFAT)
-					return dentry - (num_entries - 1);
-				else
-					return dentry;
+				return dentry - (num_entries - 1);
 			}
 		}
 
@@ -1691,7 +1671,7 @@ static s32 extract_uni_name_from_name_entry(struct name_dentry_t *ep, u16 *unina
  */
 s32 exfat_find_dir_entry(struct super_block *sb, struct chain_t *p_dir,
 			 struct uni_name_t *p_uniname, s32 num_entries,
-			 struct dos_name_t *p_dosname, u32 type)
+			 u32 type)
 {
 	int i = 0, dentry = 0, num_ext_entries = 0, len, step;
 	s32 order = 0;
@@ -1855,8 +1835,7 @@ s32 exfat_count_ext_entries(struct super_block *sb, struct chain_t *p_dir,
 	return count;
 }
 
-s32 count_dos_name_entries(struct super_block *sb, struct chain_t *p_dir,
-			   u32 type)
+s32 count_dir_entries(struct super_block *sb, struct chain_t *p_dir)
 {
 	int i, count = 0;
 	s32 dentries_per_clu;
@@ -1887,11 +1866,7 @@ s32 count_dos_name_entries(struct super_block *sb, struct chain_t *p_dir,
 
 			if (entry_type == TYPE_UNUSED)
 				return count;
-			if (!(type & TYPE_CRITICAL_PRI) &&
-			    !(type & TYPE_BENIGN_PRI))
-				continue;
-
-			if ((type == TYPE_ALL) || (type == entry_type))
+			if (entry_type == TYPE_DIR)
 				count++;
 		}
 
@@ -1914,7 +1889,7 @@ s32 count_dos_name_entries(struct super_block *sb, struct chain_t *p_dir,
 
 bool is_dir_empty(struct super_block *sb, struct chain_t *p_dir)
 {
-	int i, count = 0;
+	int i;
 	s32 dentries_per_clu;
 	u32 type;
 	struct chain_t clu;
@@ -1943,15 +1918,7 @@ bool is_dir_empty(struct super_block *sb, struct chain_t *p_dir)
 
 			if (type == TYPE_UNUSED)
 				return true;
-			if ((type != TYPE_FILE) && (type != TYPE_DIR))
-				continue;
-
-			if (p_dir->dir == CLUSTER_32(0)) /* FAT16 root_dir */
-				return false;
-
-			if (p_fs->vol_type == EXFAT)
-				return false;
-			if ((p_dir->dir == p_fs->root_dir) || ((++count) > 2))
+			if ((type == TYPE_FILE) || (type == TYPE_DIR))
 				return false;
 		}
 
@@ -1976,11 +1943,10 @@ bool is_dir_empty(struct super_block *sb, struct chain_t *p_dir)
  */
 
 /* input  : dir, uni_name
- * output : num_of_entry, dos_name(format : aaaaaa~1.bbb)
+ * output : num_of_entry
  */
-s32 get_num_entries_and_dos_name(struct super_block *sb, struct chain_t *p_dir,
-				 struct uni_name_t *p_uniname, s32 *entries,
-				 struct dos_name_t *p_dosname)
+s32 get_num_entries(struct super_block *sb, struct chain_t *p_dir,
+		    struct uni_name_t *p_uniname, s32 *entries)
 {
 	s32 num_entries;
 
@@ -2128,7 +2094,6 @@ s32 exfat_mount(struct super_block *sb, struct pbr_sector_t *p_pbr)
 	p_fs->num_clusters = GET32(p_bpb->clu_count) + 2;
 	/* because the cluster index starts with 2 */
 
-	p_fs->vol_type = EXFAT;
 	p_fs->vol_id = GET32(p_bpb->vol_serial);
 
 	p_fs->root_dir = GET32(p_bpb->root_cluster);
@@ -2149,12 +2114,10 @@ s32 create_dir(struct inode *inode, struct chain_t *p_dir,
 	s32 ret, dentry, num_entries;
 	u64 size;
 	struct chain_t clu;
-	struct dos_name_t dos_name;
 	struct super_block *sb = inode->i_sb;
 	struct fs_info_t *p_fs = &(EXFAT_SB(sb)->fs_info);
 
-	ret = get_num_entries_and_dos_name(sb, p_dir, p_uniname, &num_entries,
-					   &dos_name);
+	ret = get_num_entries(sb, p_dir, p_uniname, &num_entries);
 	if (ret)
 		return ret;
 
@@ -2165,7 +2128,7 @@ s32 create_dir(struct inode *inode, struct chain_t *p_dir,
 
 	clu.dir = CLUSTER_32(~0);
 	clu.size = 0;
-	clu.flags = (p_fs->vol_type == EXFAT) ? 0x03 : 0x01;
+	clu.flags = 0x03;
 
 	/* (1) allocate a cluster */
 	ret = exfat_alloc_cluster(sb, 1, &clu);
@@ -2187,8 +2150,7 @@ s32 create_dir(struct inode *inode, struct chain_t *p_dir,
 	if (ret != 0)
 		return ret;
 
-	ret = exfat_init_ext_entry(sb, p_dir, dentry, num_entries, p_uniname,
-				   &dos_name);
+	ret = exfat_init_ext_entry(sb, p_dir, dentry, num_entries, p_uniname);
 	if (ret != 0)
 		return ret;
 
@@ -2198,7 +2160,7 @@ s32 create_dir(struct inode *inode, struct chain_t *p_dir,
 	fid->entry = dentry;
 
 	fid->attr = ATTR_SUBDIR;
-	fid->flags = (p_fs->vol_type == EXFAT) ? 0x03 : 0x01;
+	fid->flags = 0x03;
 	fid->size = size;
 	fid->start_clu = clu.dir;
 
@@ -2210,15 +2172,12 @@ s32 create_dir(struct inode *inode, struct chain_t *p_dir,
 }
 
 s32 create_file(struct inode *inode, struct chain_t *p_dir,
-		struct uni_name_t *p_uniname, u8 mode, struct file_id_t *fid)
+		struct uni_name_t *p_uniname, struct file_id_t *fid)
 {
 	s32 ret, dentry, num_entries;
-	struct dos_name_t dos_name;
 	struct super_block *sb = inode->i_sb;
-	struct fs_info_t *p_fs = &(EXFAT_SB(sb)->fs_info);
 
-	ret = get_num_entries_and_dos_name(sb, p_dir, p_uniname, &num_entries,
-					   &dos_name);
+	ret = get_num_entries(sb, p_dir, p_uniname, &num_entries);
 	if (ret)
 		return ret;
 
@@ -2228,16 +2187,15 @@ s32 create_file(struct inode *inode, struct chain_t *p_dir,
 		return -ENOSPC;
 
 	/* (1) update the directory entry */
-	/* fill the dos name directory entry information of the created file.
+	/* fill the directory entry information of the created file.
 	 * the first cluster is not determined yet. (0)
 	 */
-	ret = exfat_init_dir_entry(sb, p_dir, dentry, TYPE_FILE | mode,
+	ret = exfat_init_dir_entry(sb, p_dir, dentry, TYPE_FILE,
 				   CLUSTER_32(0), 0);
 	if (ret != 0)
 		return ret;
 
-	ret = exfat_init_ext_entry(sb, p_dir, dentry, num_entries, p_uniname,
-				   &dos_name);
+	ret = exfat_init_ext_entry(sb, p_dir, dentry, num_entries, p_uniname);
 	if (ret != 0)
 		return ret;
 
@@ -2246,8 +2204,8 @@ s32 create_file(struct inode *inode, struct chain_t *p_dir,
 	fid->dir.flags = p_dir->flags;
 	fid->entry = dentry;
 
-	fid->attr = ATTR_ARCHIVE | mode;
-	fid->flags = (p_fs->vol_type == EXFAT) ? 0x03 : 0x01;
+	fid->attr = ATTR_ARCHIVE;
+	fid->flags = 0x03;
 	fid->size = 0;
 	fid->start_clu = CLUSTER_32(~0);
 
@@ -2290,7 +2248,6 @@ s32 exfat_rename_file(struct inode *inode, struct chain_t *p_dir, s32 oldentry,
 {
 	s32 ret, newentry = -1, num_old_entries, num_new_entries;
 	sector_t sector_old, sector_new;
-	struct dos_name_t dos_name;
 	struct dentry_t *epold, *epnew;
 	struct super_block *sb = inode->i_sb;
 
@@ -2309,8 +2266,7 @@ s32 exfat_rename_file(struct inode *inode, struct chain_t *p_dir, s32 oldentry,
 	}
 	num_old_entries++;
 
-	ret = get_num_entries_and_dos_name(sb, p_dir, p_uniname,
-					   &num_new_entries, &dos_name);
+	ret = get_num_entries(sb, p_dir, p_uniname, &num_new_entries);
 	if (ret) {
 		exfat_buf_unlock(sb, sector_old);
 		return ret;
@@ -2329,12 +2285,10 @@ s32 exfat_rename_file(struct inode *inode, struct chain_t *p_dir, s32 oldentry,
 			return -ENOENT;
 		}
 
-		memcpy((void *)epnew, (void *)epold, DENTRY_SIZE);
-		if (exfat_get_entry_type(epnew) == TYPE_FILE) {
-			exfat_set_entry_attr(epnew,
-					     exfat_get_entry_attr(epnew) |
-					     ATTR_ARCHIVE);
+		*epnew = *epold;
+		if (fid->type == TYPE_FILE) {
 			fid->attr |= ATTR_ARCHIVE;
+			exfat_set_entry_attr(epnew, fid->attr);
 		}
 		exfat_buf_modify(sb, sector_new);
 		exfat_buf_unlock(sb, sector_old);
@@ -2350,13 +2304,12 @@ s32 exfat_rename_file(struct inode *inode, struct chain_t *p_dir, s32 oldentry,
 			return -ENOENT;
 		}
 
-		memcpy((void *)epnew, (void *)epold, DENTRY_SIZE);
+		*epnew = *epold;
 		exfat_buf_modify(sb, sector_new);
 		exfat_buf_unlock(sb, sector_old);
 
 		ret = exfat_init_ext_entry(sb, p_dir, newentry,
-					   num_new_entries, p_uniname,
-					   &dos_name);
+					   num_new_entries, p_uniname);
 		if (ret != 0)
 			return ret;
 
@@ -2364,18 +2317,15 @@ s32 exfat_rename_file(struct inode *inode, struct chain_t *p_dir, s32 oldentry,
 				       num_old_entries);
 		fid->entry = newentry;
 	} else {
-		if (exfat_get_entry_type(epold) == TYPE_FILE) {
-			exfat_set_entry_attr(epold,
-					     exfat_get_entry_attr(epold) |
-					     ATTR_ARCHIVE);
+		if (fid->type == TYPE_FILE) {
 			fid->attr |= ATTR_ARCHIVE;
+			exfat_set_entry_attr(epold, fid->attr);
 		}
 		exfat_buf_modify(sb, sector_old);
 		exfat_buf_unlock(sb, sector_old);
 
 		ret = exfat_init_ext_entry(sb, p_dir, oldentry,
-					   num_new_entries, p_uniname,
-					   &dos_name);
+					   num_new_entries, p_uniname);
 		if (ret != 0)
 			return ret;
 
@@ -2392,7 +2342,6 @@ s32 move_file(struct inode *inode, struct chain_t *p_olddir, s32 oldentry,
 {
 	s32 ret, newentry, num_new_entries, num_old_entries;
 	sector_t sector_mov, sector_new;
-	struct dos_name_t dos_name;
 	struct dentry_t *epmov, *epnew;
 	struct super_block *sb = inode->i_sb;
 
@@ -2416,8 +2365,7 @@ s32 move_file(struct inode *inode, struct chain_t *p_olddir, s32 oldentry,
 	}
 	num_old_entries++;
 
-	ret = get_num_entries_and_dos_name(sb, p_newdir, p_uniname,
-					   &num_new_entries, &dos_name);
+	ret = get_num_entries(sb, p_newdir, p_uniname, &num_new_entries);
 	if (ret) {
 		exfat_buf_unlock(sb, sector_mov);
 		return ret;
@@ -2435,11 +2383,10 @@ s32 move_file(struct inode *inode, struct chain_t *p_olddir, s32 oldentry,
 		return -ENOENT;
 	}
 
-	memcpy((void *)epnew, (void *)epmov, DENTRY_SIZE);
-	if (exfat_get_entry_type(epnew) == TYPE_FILE) {
-		exfat_set_entry_attr(epnew, exfat_get_entry_attr(epnew) |
-				     ATTR_ARCHIVE);
+	*epnew = *epmov;
+	if (fid->type == TYPE_FILE) {
 		fid->attr |= ATTR_ARCHIVE;
+		exfat_set_entry_attr(epnew, fid->attr);
 	}
 	exfat_buf_modify(sb, sector_new);
 	exfat_buf_unlock(sb, sector_mov);
@@ -2454,12 +2401,12 @@ s32 move_file(struct inode *inode, struct chain_t *p_olddir, s32 oldentry,
 		return -ENOENT;
 	}
 
-	memcpy((void *)epnew, (void *)epmov, DENTRY_SIZE);
+	*epnew = *epmov;
 	exfat_buf_modify(sb, sector_new);
 	exfat_buf_unlock(sb, sector_mov);
 
 	ret = exfat_init_ext_entry(sb, p_newdir, newentry, num_new_entries,
-				   p_uniname, &dos_name);
+				   p_uniname);
 	if (ret != 0)
 		return ret;
 
