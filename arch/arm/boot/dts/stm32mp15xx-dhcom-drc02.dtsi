@@ -43,15 +43,15 @@
 
 &gpiod {
 	gpio-line-names = "", "", "", "",
-			  "", "", "", "",
-			  "", "", "", "Out1",
-			  "Out2", "", "", "";
+			  "", "", "DHCOM-B", "",
+			  "", "", "", "DRC02-Out1",
+			  "DRC02-Out2", "", "", "";
 };
 
 &gpioi {
-	gpio-line-names = "In1", "", "", "",
-			  "", "", "", "",
-			  "In2", "", "", "",
+	gpio-line-names = "DRC02-In1", "DHCOM-O", "DHCOM-H", "DHCOM-I",
+			  "DHCOM-R", "DHCOM-M", "", "",
+			  "DRC02-In2", "", "", "",
 			  "", "", "", "";
 
 	/*
@@ -158,6 +158,4 @@
 
 &usbphyc_port0 {
 	phy-supply = <&vdd_usb>;
-	vdda1v1-supply = <&reg11>;
-	vdda1v8-supply = <&reg18>;
 };
