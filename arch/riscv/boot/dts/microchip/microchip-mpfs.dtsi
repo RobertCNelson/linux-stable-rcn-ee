@@ -325,5 +325,27 @@
 			#size-cells = <0>;
 		};
 
+		mbox: mailbox@37020000 {
+			compatible = "microchip,polarfire-soc-mailbox";
+			reg = <0x0 0x37020000 0x0 0x1000>, <0x0 0x2000318C 0x0 0x40>;
+			interrupt-parent = <&plic>;
+			interrupts = <96>;		
+			#mbox-cells = <1>;
+		};
+		
+		syscontroller: syscontroller {
+			compatible = "microchip,polarfire-soc-sys-controller";
+			#address-cells = <1>;
+			#size-cells = <1>;
+			mboxes = <&mbox 0>;
+		};
+
+		hwrandom: hwrandom {
+			compatible = "microchip,polarfire-soc-rng";
+			#address-cells = <1>;
+			#size-cells = <1>;
+			syscontroller = <&syscontroller>;
+		};
+
 	};
 };
