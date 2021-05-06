@@ -33,7 +33,7 @@
 };
 
 &serial0 {
-	status = "okay";
+	status = "disabled"; /* Reserved for the HSS */
 };
 
 &serial1 {
