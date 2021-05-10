@@ -114,7 +114,7 @@ void __init mem_init(void)
 	print_vm_layout();
 }
 
-void __init setup_bootmem(void)
+static void __init setup_bootmem(void)
 {
 	phys_addr_t vmlinux_end = __pa_symbol(&_end);
 	phys_addr_t vmlinux_start = __pa_symbol(&_start);
@@ -865,6 +865,7 @@ RESERVEDMEM_OF_DECLARE(elfcorehdr, "linux,elfcorehdr", elfcore_hdr_setup);
 
 void __init paging_init(void)
 {
+	setup_bootmem();
 	setup_vm_final();
 }
 
