@@ -347,5 +347,15 @@
 			syscontroller = <&syscontroller>;
 		};
 
+		rtc: rtc@20124000 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			compatible = "microchip,mpfs-rtc";
+			reg = <0x0 0x20124000 0x0 0x1000>;
+			interrupt-parent = <&plic>;
+			interrupts = <80 81>;
+			clocks = <&clkcfg 21>;
+			clock-names = "rtc";
+		};
 	};
 };
