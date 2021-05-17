@@ -58,7 +58,7 @@ struct sfc_temp{
 	int clk;
 };
 
-static ssize_t sfctmp_get_temp(struct device *dev, struct device_attribute *devattr,char *buf)
+static ssize_t sfctmp_get_temp(struct device *dev, struct device_attribute *devattr, char *buf)
 {
 	long temp;
 	const long Y100 = 23750, K100 = 8110, Z100 = 409400;

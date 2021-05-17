@@ -13,7 +13,7 @@
 	cpus {
 		#address-cells = <1>;
 		#size-cells = <0>;
-		cpu@0 {
+		cpu0: cpu@0 {
 			compatible = "sifive,u74-mc", "riscv";
 			d-cache-block-size = <64>;
 			d-cache-sets = <64>;
@@ -40,7 +40,7 @@
 			};
 		};
 
-		cpu@1 {
+		cpu1: cpu@1 {
 			compatible = "sifive,u74-mc", "riscv";
 			d-cache-block-size = <64>;
 			d-cache-sets = <64>;
@@ -247,7 +247,7 @@
 			interrupts = <128 131 129 130>;
 			/*next-level-cache = <&L40 &L36>;*/
 			reg = <0x0 0x2010000 0x0 0x1000>,
-			      <0x0 0x8000000 0x0 0x2000000>;
+				<0x0 0x8000000 0x0 0x2000000>;
 			reg-names = "control", "sideband";
 		};
 
@@ -379,8 +379,8 @@
 		usb3: usb@104c0000 {
 			compatible = "cdns,usb3";
 			reg = <0x0 0x104c0000 0x0 0x10000>,	// memory area for HOST registers
-			      <0x0 0x104d0000 0x0 0x10000>,	// memory area for DEVICE registers
-			      <0x0 0x104e0000 0x0 0x10000>;	// memory area for OTG/DRD registers
+				<0x0 0x104d0000 0x0 0x10000>,	// memory area for DEVICE registers
+				<0x0 0x104e0000 0x0 0x10000>;	// memory area for OTG/DRD registers
 			reg-names = "otg", "xhci", "dev";
 			interrupt-parent = <&plic>;
 			interrupts = <43>, <44>, <52>;
@@ -466,7 +466,7 @@
 		crypto: crypto@100d0000 {
 			compatible = "starfive,vic-sec";
 			reg = <0x0 0x100d0000 0x0 0x20000>,
-			      <0x0 0x11800234 0x0 0xc>;
+				<0x0 0x11800234 0x0 0xc>;
 			reg-names = "secmem", "secclk";
 			interrupt-parent = <&plic>;
 			interrupts = <31>;
@@ -559,7 +559,7 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0x0 0x11860000 0x0 0x10000>,
-			      <0x0 0x20000000 0x0 0x20000000>;
+				<0x0 0x20000000 0x0 0x20000000>;
 			interrupts = <3>;
 			interrupt-parent = <&plic>;
 			clocks = <&qspi_clk>;
@@ -608,9 +608,9 @@
 		xrp@f0000000 {
 			compatible = "cdns,xrp";
 			reg = <0x0  0xf0000000 0x0 0x01ffffff>,
-			      <0x10 0x72000000 0x0 0x00001000>,
-			      <0x10 0x72001000 0x0 0x00fff000>,
-			      <0x0  0x124b0000 0x0 0x00010000>;
+				<0x10 0x72000000 0x0 0x00001000>,
+				<0x10 0x72001000 0x0 0x00fff000>,
+				<0x0  0x124b0000 0x0 0x00010000>;
 			clocks = <&hfclk>;
 			interrupt-parent = <&plic>;
 			firmware-name = "vp6_elf";
@@ -622,7 +622,7 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 			ranges = <0x40000000 0x0  0x40000000 0x01000000
-			          0xb0000000 0x10 0x70000000 0x3000000>;
+					0xb0000000 0x10 0x70000000 0x3000000>;
 			dsp@0 {
 			};
 		};
@@ -681,17 +681,17 @@
 		vin_sysctl: vin_sysctl@19800000 {
 			compatible = "starfive,stf-vin";
 			reg = <0x0 0x19800000 0x0 0x10000>,
-			      <0x0 0x19810000 0x0 0x10000>,
-			      <0x0 0x19820000 0x0 0x10000>,
-			      <0x0 0x19830000 0x0 0x10000>,
-			      <0x0 0x19840000 0x0 0x10000>,
-			      <0x0 0x19870000 0x0 0x30000>,
-			      <0x0 0x198a0000 0x0 0x30000>,
-			      <0x0 0x11800000 0x0 0x10000>,
-			      <0x0 0x11840000 0x0 0x10000>,
-			      <0x0 0x11858000 0x0 0x10000>;
+				<0x0 0x19810000 0x0 0x10000>,
+				<0x0 0x19820000 0x0 0x10000>,
+				<0x0 0x19830000 0x0 0x10000>,
+				<0x0 0x19840000 0x0 0x10000>,
+				<0x0 0x19870000 0x0 0x30000>,
+				<0x0 0x198a0000 0x0 0x30000>,
+				<0x0 0x11800000 0x0 0x10000>,
+				<0x0 0x11840000 0x0 0x10000>,
+				<0x0 0x11858000 0x0 0x10000>;
 			reg-names = "mipi0", "vclk", "vrst", "mipi1", "sctrl",
-			            "isp0", "isp1", "tclk", "trst", "iopad";
+						"isp0", "isp1", "tclk", "trst", "iopad";
 			interrupt-parent = <&plic>;
 			interrupts = <119 109>;
 			memory-region = <&vin_reserved>;
@@ -711,12 +711,40 @@
 			csi-dt = <0x2b>;
 		};
 
-		sfc_tmp: tmpsensor@124a0000 {
+		sfc_tmp: thermal-sensor@124a0000 {
 			compatible = "sfc,tempsensor";
 			reg = <0x0 0x124a0000 0x0 0x1000>;
+			#thermal-sensor-cells = <0>;
 			interrupt-parent = <&plic>;
 			interrupts = <122>;
-			status = "okay";
+		};
+
+		thermal-zones {
+			cpu_thermal: cpu-thermal {
+				polling-delay-passive = <250>;
+				polling-delay = <15000>;
+
+				thermal-sensors = <&sfc_tmp>;
+
+				cooling-maps {
+				};
+
+				trips {
+					cpu_alert0: cpu_alert0 {
+						/* milliCelsius */
+						temperature = <75000>;
+						hysteresis = <2000>;
+						type = "passive";
+					};
+
+					cpu_crit: cpu_crit {
+						/* milliCelsius */
+						temperature = <90000>;
+						hysteresis = <2000>;
+						type = "critical";
+					};
+				};
+			};
 		};
 
 		otp: otp@11810000 {
