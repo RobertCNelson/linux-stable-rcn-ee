@@ -61,13 +61,13 @@ struct sfc_temp{
 
 static ssize_t sfctmp_get_temp(struct device *dev, struct device_attribute *devattr,char *buf)
 {
-	long temp,temp_z,temp_x;
-	const long Y100 = 23750, K100 = 8110,Z100 = 409400;
+	long temp;
+	const long Y100 = 23750, K100 = 8110, Z100 = 409400;
 
 	temp  = ((long)s_temp_sensor_dout*100)*Y100/Z100-K100;
-	temp_z = temp/100;
-	temp_x = temp%100;
-	return	sprintf(buf, "%ld.%ld\n", temp_z,temp_x);
+
+	// multiply by 10 so we can return a value in millideg C
+	return	sprintf(buf, "%ld\n", temp*10);
 }
 
 static SENSOR_DEVICE_ATTR(temp1_input, S_IRUGO, sfctmp_get_temp, NULL, 0);
@@ -76,7 +76,7 @@ static ssize_t sfctmp_temp_show(void)
 {
 	char buf[10];
 	sfctmp_get_temp(NULL, NULL, buf);
-	printk("temp(c): %s",buf);
+	printk("temp(mdeg C): %s",buf);
 	return 0;
 }
 
