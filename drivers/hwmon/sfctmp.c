@@ -22,7 +22,6 @@
 #include <linux/of.h>
 #include <linux/err.h>
 #include <linux/mutex.h>
-#include <linux/device.h>
 #include <asm-generic/io.h>
 #include <linux/regmap.h>
 
@@ -59,7 +58,7 @@ struct sfc_temp{
 	int clk;
 };
 
-static ssize_t sfctmp_get_temp(struct device *dev, struct device_attribute *devattr,char *buf)
+static ssize_t sfctmp_get_temp(struct device *dev, struct device_attribute *devattr, char *buf)
 {
 	long temp;
 	const long Y100 = 23750, K100 = 8110, Z100 = 409400;
@@ -76,7 +75,7 @@ static ssize_t sfctmp_temp_show(void)
 {
 	char buf[10];
 	sfctmp_get_temp(NULL, NULL, buf);
-	printk("temp(mdeg C): %s",buf);
+	printk("temp(milliCelcius): %s",buf);
 	return 0;
 }
 
@@ -160,7 +159,7 @@ static int sfc_temp_probe(struct platform_device *pdev)
 		return PTR_ERR(sfc_temp->regs);
 	}
 
-	sfc_temp->name = "sfc_tempsnsor";
+	sfc_temp->name = "sfc_tempsensor";
 
 	ret = devm_request_irq(temp_dev, sfc_temp->irq, sfc_temp_isr,
 			       IRQF_SHARED, sfc_temp->name, sfc_temp);
@@ -198,7 +197,7 @@ MODULE_DEVICE_TABLE(of, sfc_temp_of_match);
 
 static struct platform_driver sfc_temp_sensor_driver = {
 	.driver = {
-		.name	= "sfc_temp_sensor",
+		.name	= "sfc_tempsensor",
 		.of_match_table = of_match_ptr(sfc_temp_of_match),
 	},
 	.probe		= sfc_temp_probe,
