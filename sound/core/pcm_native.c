@@ -709,13 +709,69 @@ static void snd_pcm_buffer_access_unlock(struct snd_pcm_runtime *runtime)
 #define is_oss_stream(substream)	false
 #endif
 
+void snd_pcm_runtime_set(struct snd_pcm_substream *substream,
+			 struct snd_pcm_hw_params *params)
+{
+	struct snd_pcm_runtime *runtime = substream->runtime;
+	unsigned int bits;
+	snd_pcm_uframes_t frames;
+
+	runtime->access = params_access(params);
+	runtime->format = params_format(params);
+	runtime->subformat = params_subformat(params);
+	runtime->channels = params_channels(params);
+	runtime->rate = params_rate(params);
+	runtime->period_size = params_period_size(params);
+	runtime->periods = params_periods(params);
+	runtime->buffer_size = params_buffer_size(params);
+	runtime->info = params->info;
+	runtime->rate_num = params->rate_num;
+	runtime->rate_den = params->rate_den;
+	runtime->no_period_wakeup =
+			(params->info & SNDRV_PCM_INFO_NO_PERIOD_WAKEUP) &&
+			(params->flags & SNDRV_PCM_HW_PARAMS_NO_PERIOD_WAKEUP);
+
+	bits = snd_pcm_format_physical_width(runtime->format);
+	runtime->sample_bits = bits;
+	bits *= runtime->channels;
+	runtime->frame_bits = bits;
+	frames = 1;
+	while (bits % 8 != 0) {
+		bits *= 2;
+		frames *= 2;
+	}
+	runtime->byte_align = bits / 8;
+	runtime->min_align = frames;
+
+	/* Default sw params */
+	runtime->tstamp_mode = SNDRV_PCM_TSTAMP_NONE;
+	runtime->period_step = 1;
+	runtime->control->avail_min = runtime->period_size;
+	runtime->start_threshold = 1;
+	runtime->stop_threshold = runtime->buffer_size;
+	runtime->silence_threshold = 0;
+	runtime->silence_size = 0;
+	runtime->boundary = runtime->buffer_size;
+	while (runtime->boundary * 2 <= LONG_MAX - runtime->buffer_size)
+		runtime->boundary *= 2;
+
+	/* clear the buffer for avoiding possible kernel info leaks */
+	if (runtime->dma_area &&
+	    !(substream->ops && substream->ops->copy)) {
+		size_t size = runtime->dma_bytes;
+
+		if (runtime->info & SNDRV_PCM_INFO_MMAP)
+			size = PAGE_ALIGN(size);
+		memset(runtime->dma_area, 0, size);
+	}
+}
+EXPORT_SYMBOL(snd_pcm_runtime_set);
+
 static int snd_pcm_hw_params(struct snd_pcm_substream *substream,
 			     struct snd_pcm_hw_params *params)
 {
 	struct snd_pcm_runtime *runtime;
 	int err, usecs;
-	unsigned int bits;
-	snd_pcm_uframes_t frames;
 
 	if (PCM_RUNTIME_CHECK(substream))
 		return -ENXIO;
@@ -769,53 +825,7 @@ static int snd_pcm_hw_params(struct snd_pcm_substream *substream,
 			goto _error;
 	}
 
-	runtime->access = params_access(params);
-	runtime->format = params_format(params);
-	runtime->subformat = params_subformat(params);
-	runtime->channels = params_channels(params);
-	runtime->rate = params_rate(params);
-	runtime->period_size = params_period_size(params);
-	runtime->periods = params_periods(params);
-	runtime->buffer_size = params_buffer_size(params);
-	runtime->info = params->info;
-	runtime->rate_num = params->rate_num;
-	runtime->rate_den = params->rate_den;
-	runtime->no_period_wakeup =
-			(params->info & SNDRV_PCM_INFO_NO_PERIOD_WAKEUP) &&
-			(params->flags & SNDRV_PCM_HW_PARAMS_NO_PERIOD_WAKEUP);
-
-	bits = snd_pcm_format_physical_width(runtime->format);
-	runtime->sample_bits = bits;
-	bits *= runtime->channels;
-	runtime->frame_bits = bits;
-	frames = 1;
-	while (bits % 8 != 0) {
-		bits *= 2;
-		frames *= 2;
-	}
-	runtime->byte_align = bits / 8;
-	runtime->min_align = frames;
-
-	/* Default sw params */
-	runtime->tstamp_mode = SNDRV_PCM_TSTAMP_NONE;
-	runtime->period_step = 1;
-	runtime->control->avail_min = runtime->period_size;
-	runtime->start_threshold = 1;
-	runtime->stop_threshold = runtime->buffer_size;
-	runtime->silence_threshold = 0;
-	runtime->silence_size = 0;
-	runtime->boundary = runtime->buffer_size;
-	while (runtime->boundary * 2 <= LONG_MAX - runtime->buffer_size)
-		runtime->boundary *= 2;
-
-	/* clear the buffer for avoiding possible kernel info leaks */
-	if (runtime->dma_area && !substream->ops->copy) {
-		size_t size = runtime->dma_bytes;
-
-		if (runtime->info & SNDRV_PCM_INFO_MMAP)
-			size = PAGE_ALIGN(size);
-		memset(runtime->dma_area, 0, size);
-	}
+	snd_pcm_runtime_set(substream, params);
 
 	snd_pcm_timer_resolution_change(substream);
 	snd_pcm_set_state(substream, SNDRV_PCM_STATE_SETUP);
