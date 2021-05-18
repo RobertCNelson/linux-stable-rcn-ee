@@ -22,7 +22,6 @@
 #include <linux/of.h>
 #include <linux/err.h>
 #include <linux/mutex.h>
-#include <linux/device.h>
 #include <asm-generic/io.h>
 #include <linux/regmap.h>
 
@@ -61,22 +60,29 @@ struct sfc_temp{
 
 static ssize_t sfctmp_get_temp(struct device *dev, struct device_attribute *devattr,char *buf)
 {
-	long temp,temp_z,temp_x;
-	const long Y100 = 23750, K100 = 8110,Z100 = 409400;
+	long temp;
+	const long Y100 = 23750, K100 = 8110, Z100 = 409400;
 
 	temp  = ((long)s_temp_sensor_dout*100)*Y100/Z100-K100;
-	temp_z = temp/100;
-	temp_x = temp%100;
-	return	sprintf(buf, "%ld.%ld\n", temp_z,temp_x);
+
+	// multiply by 10 so we can return a value in millideg C
+	return	sprintf(buf, "%ld\n", temp*10);
 }
 
 static SENSOR_DEVICE_ATTR(temp1_input, S_IRUGO, sfctmp_get_temp, NULL, 0);
+
+static struct attribute *sfc_attrs[] = {
+	&sensor_dev_attr_temp1_input.dev_attr.attr,
+	NULL
+};
+
+ATTRIBUTE_GROUPS(sfc);
 
 static ssize_t sfctmp_temp_show(void)
 {
 	char buf[10];
 	sfctmp_get_temp(NULL, NULL, buf);
-	printk("temp(c): %s",buf);
+	printk("temp(milliCelcius): %s",buf);
 	return 0;
 }
 
@@ -160,7 +166,7 @@ static int sfc_temp_probe(struct platform_device *pdev)
 		return PTR_ERR(sfc_temp->regs);
 	}
 
-	sfc_temp->name = "sfc_tempsnsor";
+	sfc_temp->name = "sfc_tempsensor";
 
 	ret = devm_request_irq(temp_dev, sfc_temp->irq, sfc_temp_isr,
 			       IRQF_SHARED, sfc_temp->name, sfc_temp);
@@ -172,11 +178,9 @@ static int sfc_temp_probe(struct platform_device *pdev)
 	temp_sensor_power_up(sfc_temp);
 	sfctmp_temp_show();
 
-	ret = device_create_file(temp_dev, &sensor_dev_attr_temp1_input.dev_attr);
-	if (ret){
-		return ret;
-	}
-	hwmon_device_register(temp_dev);
+	hwmon_dev = devm_hwmon_device_register_with_groups(temp_dev,
+						"sfc", sfc_temp, sfc_groups);
+
 	return PTR_ERR_OR_ZERO(hwmon_dev);
 }
 
@@ -198,7 +202,7 @@ MODULE_DEVICE_TABLE(of, sfc_temp_of_match);
 
 static struct platform_driver sfc_temp_sensor_driver = {
 	.driver = {
-		.name	= "sfc_temp_sensor",
+		.name	= "sfc_tempsensor",
 		.of_match_table = of_match_ptr(sfc_temp_of_match),
 	},
 	.probe		= sfc_temp_probe,
