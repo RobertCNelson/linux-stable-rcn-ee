@@ -1,4 +1,5 @@
 /dts-v1/;
+#include <dt-bindings/thermal/thermal.h>
 #include <dt-bindings/starfive_fb.h>
 #include <dt-bindings/gpio/gpio.h>
 
