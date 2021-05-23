@@ -3,6 +3,7 @@
 
 /dts-v1/;
 #include <dt-bindings/clock/starfive-jh7100-clkgen.h>
+#include <dt-bindings/thermal/thermal.h>
 #include <dt-bindings/starfive_fb.h>
 #include <dt-bindings/gpio/gpio.h>
 
