@@ -348,6 +348,8 @@ static int davinci_mdio_probe_dt(struct mdio_platform_data *data,
 
 	return 0;
 }
+#endif
+
 static void davinci_mdio_update_dt_from_phymask(u32 phy_mask)
 {
 	int i, len, skip;
@@ -435,7 +437,6 @@ err_out:
 		kfree(phy_id_property);
 	}
 }
-#endif
 
 #if IS_ENABLED(CONFIG_OF)
 static const struct davinci_mdio_of_param of_cpsw_mdio_data = {
