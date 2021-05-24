@@ -637,7 +637,6 @@
 			data-addr = <0>;
 			fifo-depth = <32>;
 			fifo-watermark-aligned;
-			max-frequency = <10000000>;
 			status = "disabled";
 		};
 
@@ -652,7 +651,6 @@
 			data-addr = <0>;
 			fifo-depth = <32>;
 			fifo-watermark-aligned;
-			max-frequency = <10000000>;
 			status = "disabled";
 		};
 
