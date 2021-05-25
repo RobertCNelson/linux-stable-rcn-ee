@@ -237,7 +237,7 @@
 		physical-height = <114>;
 		panel-width = <1920>;
 		panel-height = <1080>;
-		pixel-clock = <78000000>;
+		pixel-clock = <148500000>;
 		/*dyn_fps;*/		/*dynamic frame rate support*/
 
 		/*.flags = PREFER_CMD_SEND_MONOLITHIC | CE_CMD_SEND_MONOLITHIC | RESUME_WITH_PREFER | RESUME_WITH_CE*/
