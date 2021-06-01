@@ -2,7 +2,7 @@
 /* Copyright (c) 2020 Microchip Technology Inc */
 
 /dts-v1/;
-
+#include "dt-bindings/clock/microchip,mpfs-clock.h"
 / {
 	#address-cells = <2>;
 	#size-cells = <2>;
@@ -204,14 +204,14 @@
 			reg-names = "mss_sysreg";
 			clocks = <&refclk>;
 			#clock-cells = <1>;
-			clock-output-names = "cpu", "axi", "ahb", "envm",	/* 0-3   */
-				 "mac0", "mac1", "mmc", "timer",		/* 4-7   */
-				"mmuart0", "mmuart1", "mmuart2", "mmuart3",	/* 8-11  */
-				"mmuart4", "spi0", "spi1", "i2c0",		/* 12-15 */
-				"i2c1", "can0", "can1", "usb",			/* 16-19 */
-				"rsvd", "rtc", "qspi", "gpio0",			/* 20-23 */
-				"gpio1", "gpio2", "ddrc", "fic0",		/* 24-27 */
-				"fic1", "fic2", "fic3", "athena", "cfm";	/* 28-32 */
+			clock-output-names = "cpu", "axi", "ahb", "envm",
+					     "mac0", "mac1", "mmc", "timer",
+					     "mmuart0", "mmuart1", "mmuart2", "mmuart3",
+					     "mmuart4", "spi0", "spi1", "i2c0",
+					     "i2c1", "can0", "can1", "usb",
+					     "rsvd", "rtc", "qspi", "gpio0",
+					     "gpio1", "gpio2", "ddrc", "fic0",
+					     "fic1", "fic2", "fic3", "athena", "cfm";
 		};
 
 		serial0: serial@20000000 {
@@ -222,7 +222,7 @@
 			interrupt-parent = <&plic>;
 			interrupts = <90>;
 			current-speed = <115200>;
-			clocks = <&clkcfg 8>;
+			clocks = <&clkcfg CLK_MMUART0>;
 			status = "disabled";
 		};
 
@@ -234,7 +234,7 @@
 			interrupt-parent = <&plic>;
 			interrupts = <91>;
 			current-speed = <115200>;
-			clocks = <&clkcfg 9>;
+			clocks = <&clkcfg CLK_MMUART1>;
 			status = "disabled";
 		};
 
@@ -246,7 +246,7 @@
 			interrupt-parent = <&plic>;
 			interrupts = <92>;
 			current-speed = <115200>;
-			clocks = <&clkcfg 10>;
+			clocks = <&clkcfg CLK_MMUART2>;
 			status = "disabled";
 		};
 
@@ -258,7 +258,7 @@
 			interrupt-parent = <&plic>;
 			interrupts = <93>;
 			current-speed = <115200>;
-			clocks = <&clkcfg 11>;
+			clocks = <&clkcfg CLK_MMUART3>;
 			status = "disabled";
 		};
 
@@ -268,7 +268,7 @@
 			interrupt-parent = <&plic>;
 			interrupts = <88 89>;
 			pinctrl-names = "default";
-			clocks = <&clkcfg 6>;
+			clocks = <&clkcfg CLK_MMC>;
 			bus-width = <4>;
 			cap-mmc-highspeed;
 			mmc-ddr-3_3v;
@@ -286,7 +286,7 @@
 			interrupt-parent = <&plic>;
 			interrupts = <88>;
 			pinctrl-names = "default";
-			clocks = <&clkcfg 6>;
+			clocks = <&clkcfg CLK_MMC>;
 			bus-width = <4>;
 			disable-wp;
 			cap-sd-highspeed;
@@ -305,7 +305,7 @@
 			interrupt-parent = <&plic>;
 			interrupts = <64 65 66 67>;
 			local-mac-address = [00 00 00 00 00 00];
-			clocks = <&clkcfg 4>, <&clkcfg 2>;
+			clocks = <&clkcfg CLK_MAC0>, <&clkcfg CLK_AHB>;
 			clock-names = "pclk", "hclk";
 			status = "disabled";
 			#address-cells = <1>;
@@ -318,7 +318,7 @@
 			interrupt-parent = <&plic>;
 			interrupts = <70 71 72 73>;
 			mac-address = [00 00 00 00 00 00];
-			clocks = <&clkcfg 5>, <&clkcfg 2>;
+			clocks = <&clkcfg CLK_MAC1>, <&clkcfg CLK_AHB>;
 			status = "disabled";
 			clock-names = "pclk", "hclk";
 			#address-cells = <1>;
@@ -354,7 +354,7 @@
 			reg = <0x0 0x20124000 0x0 0x1000>;
 			interrupt-parent = <&plic>;
 			interrupts = <80 81>;
-			clocks = <&clkcfg 21>;
+			clocks = <&clkcfg CLK_RTC>;
 			clock-names = "rtc";
 		};
 
@@ -366,7 +366,7 @@
 			interrupt-parent = <&plic>;
 			interrupts = <61>;
 			clock-frequency = <100000>;
-			clocks = <&clkcfg 16>;
+			clocks = <&clkcfg CLK_I2C1>;
 			status = "okay";
 		};
 	};
