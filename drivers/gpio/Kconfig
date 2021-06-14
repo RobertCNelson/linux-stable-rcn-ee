@@ -395,6 +395,14 @@ config GPIO_MENZ127
 	help
 	  Say yes here to support the MEN 16Z127 GPIO Controller
 
+config GPIO_MICROSEMI
+	bool "Microsemi GPIO support"
+	depends on OF_GPIO
+	select GPIOLIB_IRQCHIP
+	help
+	  Say yes here to support the GPIO device on Microsemi FPGAs
+
+
 config GPIO_MM_LANTIQ
 	bool "Lantiq Memory mapped GPIOs"
 	depends on LANTIQ && SOC_XWAY
