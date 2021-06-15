@@ -743,6 +743,19 @@ config SPI_SIFIVE
 	help
 	  This exposes the SPI controller IP from SiFive.
 
+config SPI_MICROSEMI
+	tristate "Microsemi SPI controller"
+	depends on SPI_MASTER
+	help
+	  This selects the Microsemi SPI bus driver
+
+config SPI_MICROSEMI_QSPI
+	tristate "Microsemi/Microchip QSPI controller"
+	depends on SPI_MASTER
+	help
+	  This enables support for the QSPI controller in master
+	  mode.
+
 config SPI_SLAVE_MT27XX
 	tristate "MediaTek SPI slave device"
 	depends on ARCH_MEDIATEK || COMPILE_TEST
