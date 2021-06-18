@@ -209,7 +209,7 @@ static irqreturn_t stm32_rtc_alarm_irq(int irq, void *dev_id)
 	const struct stm32_rtc_events *evts = &rtc->data->events;
 	unsigned int status, cr;
 
-	mutex_lock(&rtc->rtc_dev->ops_lock);
+	rtc_lock(rtc->rtc_dev);
 
 	status = readl_relaxed(rtc->base + regs->sr);
 	cr = readl_relaxed(rtc->base + regs->cr);
@@ -226,7 +226,7 @@ static irqreturn_t stm32_rtc_alarm_irq(int irq, void *dev_id)
 		stm32_rtc_clear_event_flags(rtc, evts->alra);
 	}
 
-	mutex_unlock(&rtc->rtc_dev->ops_lock);
+	rtc_unlock(rtc->rtc_dev);
 
 	return IRQ_HANDLED;
 }
@@ -897,8 +897,11 @@ static int stm32_rtc_resume(struct device *dev)
 	}
 
 	ret = stm32_rtc_wait_sync(rtc);
-	if (ret < 0)
+	if (ret < 0) {
+		if (rtc->data->has_pclk)
+			clk_disable_unprepare(rtc->pclk);
 		return ret;
+	}
 
 	if (device_may_wakeup(dev))
 		return disable_irq_wake(rtc->irq_alarm);
