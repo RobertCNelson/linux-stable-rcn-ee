@@ -36,6 +36,14 @@
 	};
 
 	soc {
+		corePWM0: corePWM@41000000 {
+			compatible = "microchip,corepwm";
+			mchp,mapped-outputs = /bits/ 16 <0xFFFF>;
+			sync-update = <1>;
+			clocks = <&clkcfg CLK_FIC3>;
+			clock-names = "fic3";
+			reg = <0x0 0x41000000 0x0 0xF0>;
+		};
 	};
 };
 
