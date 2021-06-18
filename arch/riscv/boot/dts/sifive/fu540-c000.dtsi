@@ -282,5 +282,28 @@
 			clocks = <&prci PRCI_CLK_TLCLK>;
 			status = "disabled";
 		};
+		pcie: pcie@2030000000 {
+			#address-cells = <3>;
+			#size-cells = <2>;
+			compatible = "microchip,pcie-host-1.0";
+			device_type = "pci";
+			bus-range = <0x00 0x7f>;
+			interrupt-map = <0 0 0 1 &pcie_intc 0>,
+					<0 0 0 2 &pcie_intc 1>,
+					<0 0 0 3 &pcie_intc 2>,
+					<0 0 0 4 &pcie_intc 3>;
+			interrupt-map-mask = <0 0 0 7>;
+			interrupt-parent = <&plic0>;
+			#interrupt-cells = <1>;
+                        ranges = <0x3000000 0x0 0x40000000 0x0 0x40000000 0x0 0x20000000>;
+                        reg = <0x20 0x30000000 0x0 0x4000000 0x20 0x0 0x0 0x100000>;
+                        reg-names = "control", "apb";
+			 pcie_intc: interrupt-controller {
+				#address-cells = <0>;
+				#interrupt-cells = <1>;
+				interrupt-controller;
+			};
+		};
+					
 	};
 };
