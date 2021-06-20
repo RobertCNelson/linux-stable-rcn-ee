@@ -97,6 +97,7 @@ system. How to do that best is out of scope for this README though.
 - [x] Temperature sensor
 - [x] Ethernet, though a little flaky and `stmmac.chain_mode=1` needed on the cmdline
 - [x] Framebuffer, fbdev driver so not upstreamable
+- [x] NVDLA
 - [ ] Clock tree, statically set up by u-boot, WIP clock driver
 - [ ] Pinctrl/Pinmux, statically set up by u-boot
 - [ ] Watchdog
@@ -107,7 +108,6 @@ system. How to do that best is out of scope for this README though.
 - [ ] MIPI-CSI
 - [ ] Video Decode
 - [ ] Video Encode
-- [ ] NVDLA
 - [ ] NNE50
 - [ ] Vision DSP
 
