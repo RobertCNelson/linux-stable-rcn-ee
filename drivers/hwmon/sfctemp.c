@@ -134,8 +134,11 @@ static int sfctemp_convert(struct sfctemp *sfctemp, long *val)
 
 	ret = wait_for_completion_interruptible_timeout(&sfctemp->conversion_done,
 							msecs_to_jiffies(10));
-	if (ret < 0)
+	if (ret <= 0) {
+		if (ret == 0)
+			ret = -ETIMEDOUT;
 		goto out;
+	}
 
 	/* calculate temperature in milli Celcius */
 	*val = (long)((readl(sfctemp->regs) & SFCTEMP_DOUT_MSK) >> SFCTEMP_DOUT_POS)
