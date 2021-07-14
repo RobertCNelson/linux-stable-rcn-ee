@@ -26,14 +26,14 @@
 		compatible = "gpio-leds";
 
 		led2 {
-			label = "beaglebone:green:heartbeat";
+			label = "beaglebone:green:usr0";
 			gpios = <&gpio1 21 GPIO_ACTIVE_HIGH>;
 			linux,default-trigger = "heartbeat";
 			default-state = "off";
 		};
 
 		led3 {
-			label = "beaglebone:green:mmc0";
+			label = "beaglebone:green:usr1";
 			gpios = <&gpio1 22 GPIO_ACTIVE_HIGH>;
 			linux,default-trigger = "mmc0";
 			default-state = "off";
@@ -189,6 +189,7 @@
 	pinctrl-0 = <&uart0_pins>;
 
 	status = "okay";
+	symlink = "bone/uart/0";
 };
 
 &usb0 {
@@ -207,6 +208,7 @@
 
 	status = "okay";
 	clock-frequency = <400000>;
+	symlink = "bone/i2c/0";
 
 	tps: tps@24 {
 		reg = <0x24>;
@@ -230,6 +232,7 @@
 
 	status = "okay";
 	clock-frequency = <100000>;
+	symlink = "bone/i2c/2";
 
 	cape_eeprom0: cape_eeprom0@54 {
 		compatible = "atmel,24c256";
@@ -396,4 +399,13 @@
 &rtc {
 	clocks = <&clk_32768_ck>, <&clk_24mhz_clkctrl AM3_CLK_24MHZ_CLKDIV32K_CLKCTRL 0>;
 	clock-names = "ext-clk", "int-clk";
+};
+
+&tscadc {
+	adc {
+		ti,adc-channels = <0 1 2 3 4 5 6 7>;
+		ti,chan-step-avg = <16 16 16 16 16 16 16 16>;
+		ti,chan-step-opendelay = <0x98 0x98 0x98 0x98 0x98 0x98 0x98 0x98>;
+		ti,chan-step-sampledelay = <0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0>;
+	};
 };
