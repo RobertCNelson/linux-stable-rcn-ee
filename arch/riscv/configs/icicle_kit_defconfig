@@ -1,5 +1,5 @@
 CONFIG_CMDLINE_BOOL=y
-CONFIG_CMDLINE="earlyprintk debug console=ttyS0,115200n8 root=mmcblk0p3 uio_pdrv_genirq.of_id=generic-uio"
+CONFIG_CMDLINE="earlyprintk debug root=mmcblk0p3 uio_pdrv_genirq.of_id=generic-uio"
 
 CONFIG_SYSVIPC=y
 CONFIG_POSIX_MQUEUE=y
