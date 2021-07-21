@@ -104,6 +104,13 @@ static int vsc824x_add_skew(struct phy_device *phydev)
 static int vsc824x_config_init(struct phy_device *phydev)
 {
 	int err;
+        unsigned int val;
+
+        /* Enable MAC interface auto-negotiation */
+        phy_write(phydev, 0x1f, 0);
+        val = phy_read(phydev, 0x17);
+        val |= ((1 << 13) | 0x880);
+        phy_write(phydev, 0x17, val);
 
 	err = phy_write(phydev, MII_VSC8244_AUX_CONSTAT,
 			MII_VSC8244_AUXCONSTAT_INIT);
