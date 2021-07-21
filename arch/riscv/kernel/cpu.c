@@ -4,6 +4,7 @@
  */
 
 #include <linux/init.h>
+#include <linux/cpufreq.h>
 #include <linux/seq_file.h>
 #include <linux/of.h>
 #include <asm/smp.h>
@@ -107,6 +108,11 @@ static int c_show(struct seq_file *m, void *v)
 	unsigned long cpu_id = (unsigned long)v - 1;
 	struct device_node *node = of_get_cpu_node(cpu_id, NULL);
 	const char *compat, *isa, *mmu;
+	unsigned long proc_freq;
+
+	proc_freq = cpufreq_quick_get(cpu_id);
+	if (!proc_freq)
+		proc_freq = 0;
 
 	seq_printf(m, "processor\t: %lu\n", cpu_id);
 	seq_printf(m, "hart\t\t: %lu\n", cpuid_to_hartid_map(cpu_id));
@@ -117,6 +123,7 @@ static int c_show(struct seq_file *m, void *v)
 	if (!of_property_read_string(node, "compatible", &compat)
 	    && strcmp(compat, "riscv"))
 		seq_printf(m, "uarch\t\t: %s\n", compat);
+	seq_printf(m, "cpu MHz\t\t: %lu.%02lu\n", proc_freq / 1000, proc_freq % 1000);
 	seq_puts(m, "\n");
 	of_node_put(node);
 
