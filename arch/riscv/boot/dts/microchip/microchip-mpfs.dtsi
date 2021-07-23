@@ -428,6 +428,32 @@
 			clock-frequency = <100000>;
 			clocks = <&clkcfg CLK_I2C1>;
 			status = "okay";
+			pac193x: pac193x@10 {
+				compatible = "microchip,pac1934";
+				reg = <0x10>;
+				samp-rate = <64>;
+				status = "okay";
+				ch0: channel0 {
+					uohms-shunt-res = <10000>;
+					rail-name = "VDDREG";
+					channel_enabled;
+				};
+				ch1: channel1 {
+					uohms-shunt-res = <10000>;
+					rail-name = "VDDA25";
+					channel_enabled;
+				};
+				ch2: channel2 {
+					uohms-shunt-res = <10000>;
+					rail-name = "VDD25";
+					channel_enabled;
+				};
+				ch3: channel3 {
+					uohms-shunt-res = <10000>;
+					rail-name = "VDDA_REG";
+					channel_enabled;
+				};
+			};
 		};
 		mssgpio: gpio@20122000 {
 			compatible = "microsemi,ms-pf-mss-gpio";
