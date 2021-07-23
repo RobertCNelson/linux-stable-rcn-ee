@@ -432,7 +432,7 @@ int of_reserved_mem_device_init_by_idx(struct device *dev,
 		list_add(&rd->list, &of_rmem_assigned_device_list);
 		mutex_unlock(&of_rmem_assigned_device_mutex);
 
-		dev_info(dev, "assigned reserved memory node %s\n", rmem->name);
+		// dev_info(dev, "assigned reserved memory node %s\n", rmem->name);
 	} else {
 		kfree(rd);
 	}
