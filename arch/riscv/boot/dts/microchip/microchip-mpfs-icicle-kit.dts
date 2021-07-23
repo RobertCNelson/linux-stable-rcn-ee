@@ -77,6 +77,50 @@
 			#dma-cells = <1>;
 		};
 	};
+	reserved-memory {
+		ranges;
+		#size-cells = <2>;
+		#address-cells = <2>;
+		fabricbuf0: fabricbuf@0 {
+			compatible = "shared-dma-pool";
+			reg = <0x00 0xae000000 0x0 0x02000000>;
+			label = "fabricbuf0-ddr-c";
+		};
+		fabricbuf1: fabricbuf@1 {
+			compatible = "shared-dma-pool";
+			reg = <0x00 0xc0000000 0x0 0x08000000>;
+			label = "fabricbuf1-ddr-nc";
+		};
+		fabricbuf2: fabricbuf@2 {
+			compatible = "shared-dma-pool";
+			reg = <0x00 0xd8000000 0x0 0x08000000>;
+			label = "fabricbuf2-ddr-nc-wcb";
+		};
+	};
+	udmabuf@0 {
+		compatible = "ikwzm,u-dma-buf";
+		device-name = "udmabuf-ddr-c0";
+		minor-number = <0>;
+		size = <0x0 0x02000000>;
+		memory-region = <&fabricbuf0>;
+		sync-mode = <3>;
+	}; 
+	udmabuf@1 {
+		compatible = "ikwzm,u-dma-buf";
+		device-name = "udmabuf-ddr-nc0";
+		minor-number = <1>;
+		size = <0x0 0x08000000>;
+		memory-region = <&fabricbuf1>;
+		sync-mode = <3>;
+	};
+	udmabuf@2 {
+		compatible = "ikwzm,u-dma-buf";
+		device-name = "udmabuf-ddr-nc-wcb0";
+		minor-number = <2>;
+		size = <0x0 0x08000000>;
+		memory-region = <&fabricbuf2>;
+		sync-mode = <3>;
+	};
 };
 
 &serial0 {
