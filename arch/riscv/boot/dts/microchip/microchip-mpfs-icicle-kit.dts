@@ -51,6 +51,31 @@
 			clock-names = "fic3";
 			reg = <0x0 0x41000000 0x0 0xF0>;
 		};
+		
+		fpgalsram: fpga_lsram@0x61000000 {
+			compatible = "generic-uio";
+			reg = < 0x0 0x61000000 0x0 0x00010000
+					0x14 0x00000000 0x0 0x00010000 >;
+			status = "okay";
+		};
+
+		dma: dma@0x60020000 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			compatible = "microchip,mpfs-fpga-dma-uio";
+			reg = <0x00 0x60020000 0x0 0x1000>;
+			interrupt-parent = <&plic>;
+			interrupts = <120>;
+			status = "okay";
+		};
+
+		pdma: pdma@3000000 {
+			compatible = "microchip,mpfs-pdma-uio";
+			reg = <0x0 0x3000000 0x0 0x8000>;
+			interrupt-parent = <&plic>;
+			interrupts = <5 6 7 8 9 10 11 12>;
+			#dma-cells = <1>;
+		};
 	};
 };
 

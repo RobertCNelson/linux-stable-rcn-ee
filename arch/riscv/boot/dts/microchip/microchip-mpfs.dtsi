@@ -474,6 +474,26 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 			num-cs = <8>;
+		};
+		mssusb: usb@20201000 {
+			compatible = "microchip,mpfs-usb-host";
+			reg = <0x0 0x20201000 0x00000000 0x00001000>;
+			reg-names = "mc","control";
+			clocks = <&clkcfg CLK_USB>;
+			interrupt-parent = <&plic>;
+			interrupts = <87 86>;
+			interrupt-names = "mc","dma";
+			dr_mode = "host";
+			status = "okay";
+		};
+		msscan: can@2010c000 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			compatible = "microchip,mpfs-can-uio";
+			reg = <0x0 0x2010c000 0x0 0x1000>;
+			interrupt-parent = <&plic>;
+			interrupts = <56>;
+			clocks = <&clkcfg CLK_CAN0>;
 			status = "okay";
 		};
 	};
