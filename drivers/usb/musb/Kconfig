@@ -116,6 +116,11 @@ config USB_MUSB_JZ4740
 	depends on USB=n || USB_OTG_DISABLE_EXTERNAL_HUB
 	select USB_ROLE_SWITCH
 
+config USB_MUSB_MPFS_MICROCHIP
+	tristate "Microchip PolarFire SoC platforms"
+	depends on USB_MUSB_HOST
+	depends on NOP_USB_XCEIV
+
 config USB_MUSB_MEDIATEK
 	tristate "MediaTek platforms"
 	depends on ARCH_MEDIATEK || COMPILE_TEST
