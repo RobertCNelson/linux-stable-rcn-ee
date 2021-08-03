@@ -139,7 +139,7 @@
 	status = "okay";
 };
 
-&sdcard {
+&emmc {
 	status = "okay";
 };
 
