@@ -1,4 +1,9 @@
 # SPDX-License-Identifier: GPL-2.0
+
+ifeq ($(CONFIG_OF_OVERLAY),y)
+DTC_FLAGS += -@
+endif
+
 dtb-$(CONFIG_ARCH_ALPINE) += \
 	alpine-db.dtb
 dtb-$(CONFIG_MACH_ARTPEC6) += \
@@ -1505,3 +1510,8 @@ dtb-$(CONFIG_ARCH_ASPEED) += \
 	aspeed-bmc-portwell-neptune.dtb \
 	aspeed-bmc-quanta-q71l.dtb \
 	aspeed-bmc-supermicro-x11spi.dtb
+
+targets += dtbs dtbs_install
+targets += $(dtb-y)
+
+subdir-y	:= overlays
