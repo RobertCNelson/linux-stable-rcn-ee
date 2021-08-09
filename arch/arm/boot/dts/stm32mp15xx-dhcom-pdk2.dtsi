@@ -34,6 +34,7 @@
 
 	gpio-keys-polled {
 		compatible = "gpio-keys-polled";
+		#size-cells = <0>;
 		poll-interval = <20>;
 
 		/*
@@ -59,6 +60,7 @@
 
 	gpio-keys {
 		compatible = "gpio-keys";
+		#size-cells = <0>;
 
 		button-1 {
 			label = "TA2-GPIO-B";
@@ -182,11 +184,12 @@
 
 	};
 
-	touchscreen@38 {
-		compatible = "edt,edt-ft5406";
+	polytouch@38 {
+		compatible = "edt,edt-ft5x06";
 		reg = <0x38>;
 		interrupt-parent = <&gpiog>;
 		interrupts = <2 IRQ_TYPE_EDGE_FALLING>; /* GPIO E */
+		linux,wakeup;
 	};
 };
 
@@ -297,12 +300,8 @@
 
 &usbphyc_port0 {
 	phy-supply = <&vdd_usb>;
-	vdda1v1-supply = <&reg11>;
-	vdda1v8-supply = <&reg18>;
 };
 
 &usbphyc_port1 {
 	phy-supply = <&vdd_usb>;
-	vdda1v1-supply = <&reg11>;
-	vdda1v8-supply = <&reg18>;
 };
