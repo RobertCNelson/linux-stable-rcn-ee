@@ -588,6 +588,12 @@ static int mss_spi_probe(struct platform_device *pdev)
 		goto error_release_regs;
 	}
 
+	err = clk_prepare_enable(s->clk);
+	if (err) {
+		dev_err(&pdev->dev, "failed to enable clock\n");
+		goto error_release_regs;
+	}
+
 	/* get master's max spi clock rate  from DT */
 	err = of_property_read_u32(pdev->dev.of_node,
 		"spi-max-frequency",
@@ -655,6 +661,7 @@ static int mss_spi_remove(struct platform_device *pdev)
 	free_irq(s->irq, s);
 	iounmap(s->regs);
 	spi_master_put(master);
+	clk_disable_unprepare(s->clk);
 	platform_set_drvdata(pdev, NULL);
 
 	/* shut the hardware down */
