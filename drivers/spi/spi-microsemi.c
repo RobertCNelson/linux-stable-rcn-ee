@@ -457,9 +457,9 @@ static irqreturn_t mss_spi_interrupt(int irq, void *dev_id)
 	if (intfield & MSS_SPI_INT_TXDONE) {
 		mss_spi_wr(s, MSS_SPI_REG_INT_CLEAR,
 			MSS_SPI_INT_TXDONE);
-	/* check if we have data to read */
-	if (s->rx_len)
-		mss_spi_rd_fifo(s);
+		/* check if we have data to read */
+		if (s->rx_len)
+			mss_spi_rd_fifo(s);
 		/* check if we have data to write */
 		if (s->tx_len)
 			mss_spi_wr_fifo(s);
@@ -716,7 +716,13 @@ static int mss_spi_probe(struct platform_device *pdev)
 	if ((!s->clk) || (IS_ERR(s->clk))) {
 		err = PTR_ERR(s->clk);
 		dev_err(&pdev->dev, "could not get clk: %d\n", err);
-	goto error_release_regs;
+		goto error_release_regs;
+	}
+
+	err = clk_prepare_enable(s->clk);
+	if (err) {
+		dev_err(&pdev->dev, "failed to enable clock\n");
+		return err;
 	}
 
 	/* get master's max spi clock rate  from DT */
@@ -781,11 +787,13 @@ static int mss_spi_remove(struct platform_device *pdev)
 	struct spi_master *master  = platform_get_drvdata(pdev);
 	struct mss_spi_dsc *s = spi_master_get_devdata(master);
 
+	mss_spi_disable_ints(s);
 	/* release kernel resources */
 	spi_unregister_master(master);
 	free_irq(s->irq, s);
 	iounmap(s->regs);
 	spi_master_put(master);
+	clk_disable_unprepare(s->clk);
 	platform_set_drvdata(pdev, NULL);
 
 	/* shut the hardware down */
