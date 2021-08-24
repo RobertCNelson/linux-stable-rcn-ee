@@ -115,6 +115,9 @@ static const struct of_device_id mpfs_rng_number_of_match[] = {
 	{
 		.compatible = "microchip,polarfire-soc-rng",
 	},
+	{
+		.compatible = "microchip,mpfs-rng",
+	},
 	{},
 };
 MODULE_DEVICE_TABLE(of, mpfs_rng_number_of_match);
