@@ -148,6 +148,9 @@ static const struct of_device_id mpfs_digest_of_match[] = {
 	{
 		.compatible = "microchip,polarfire-soc-digest",
 	},
+	{
+		.compatible = "microchip,mpfs-digest",
+	},
 	{},
 };
 MODULE_DEVICE_TABLE(of, mpfs_digest_of_match);

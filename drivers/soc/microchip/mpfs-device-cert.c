@@ -123,6 +123,9 @@ static const struct of_device_id mpfs_device_cert_of_match[] = {
 	{
 		.compatible = "microchip,polarfire-soc-device-cert",
 	},
+	{
+		.compatible = "microchip,mpfs-device-cert",
+	},
 	{},
 };
 MODULE_DEVICE_TABLE(of, mpfs_device_cert_of_match);

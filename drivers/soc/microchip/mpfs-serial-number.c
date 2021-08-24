@@ -123,6 +123,9 @@ static const struct of_device_id mpfs_serial_number_of_match[] = {
 	{
 		.compatible = "microchip,polarfire-soc-serial-number",
 	},
+	{
+		.compatible = "microchip,mpfs-serial-number",
+	},
 	{},
 };
 MODULE_DEVICE_TABLE(of, mpfs_serial_number_of_match);

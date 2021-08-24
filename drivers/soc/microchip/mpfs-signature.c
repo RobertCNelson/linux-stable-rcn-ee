@@ -156,6 +156,9 @@ static const struct of_device_id mpfs_signature_of_match[] = {
 	{
 		.compatible = "microchip,polarfire-soc-signature",
 	},
+	{
+		.compatible = "microchip,mpfs-signature",
+	},
 	{},
 };
 MODULE_DEVICE_TABLE(of, mpfs_signature_of_match);
