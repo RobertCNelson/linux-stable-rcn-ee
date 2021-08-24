@@ -509,6 +509,9 @@ static const struct of_device_id microsemi_mss_gpio_match[] = {
 	{
 		.compatible = "microsemi,ms-pf-mss-gpio",
 	},
+	{
+		.compatible = "microchip,mpfs-gpio",
+	},
 	{},
 };
 
