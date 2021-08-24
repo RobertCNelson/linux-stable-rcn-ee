@@ -812,6 +812,7 @@ static int mss_spi_remove(struct platform_device *pdev)
 #if defined(CONFIG_OF)
 static const struct of_device_id mss_spi_dt_ids[] = {
 	{ .compatible = "microsemi,ms-pf-mss-spi" },
+	{ .compatible = "microchip,mpfs-spi" },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, mss_spi_dt_ids);
