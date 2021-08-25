@@ -1936,18 +1936,16 @@ brcmf_pcie_probe(struct pci_dev *pdev, const struct pci_device_id *id)
 	fwreq = brcmf_pcie_prepare_fw_request(devinfo);
 	if (!fwreq) {
 		ret = -ENOMEM;
-		goto fail_brcmf;
+		goto fail_bus;
 	}
 
 	ret = brcmf_fw_get_firmwares(bus->dev, fwreq, brcmf_pcie_setup);
 	if (ret < 0) {
 		kfree(fwreq);
-		goto fail_brcmf;
+		goto fail_bus;
 	}
 	return 0;
 
-fail_brcmf:
-	brcmf_free(&devinfo->pdev->dev);
 fail_bus:
 	kfree(bus->msgbuf);
 	kfree(bus);
@@ -2137,10 +2135,15 @@ static struct pci_driver brcmf_pciedrvr = {
 };
 
 
-int brcmf_pcie_register(void)
+void brcmf_pcie_register(void)
 {
+	int err;
+
 	brcmf_dbg(PCIE, "Enter\n");
-	return pci_register_driver(&brcmf_pciedrvr);
+	err = pci_register_driver(&brcmf_pciedrvr);
+	if (err)
+		brcmf_err(NULL, "PCIE driver registration failed, err=%d\n",
+			  err);
 }
 
 
