@@ -8,6 +8,63 @@
 #ifndef __GBPHY_H
 #define __GBPHY_H
 
+#include <linux/i2c.h>
+#include <linux/gpio/driver.h>
+
+struct gbphy_host {
+	struct gb_bundle *bundle;
+	struct list_head devices;
+};
+
+
+struct gb_i2c_device {
+	struct gb_connection	*connection;
+	struct gbphy_device	*gbphy_dev;
+	u32			functionality;
+	struct i2c_adapter	adapter;
+};
+
+struct gb_spilib {
+	struct gb_connection	*connection;
+	struct device		*parent;
+	struct spi_transfer	*first_xfer;
+	struct spi_transfer	*last_xfer;
+	struct spilib_ops	*ops;
+	u32			rx_xfer_offset;
+	u32			tx_xfer_offset;
+	u32			last_xfer_size;
+	unsigned int		op_timeout;
+	u16			mode;
+	u16			flags;
+	u32			bits_per_word_mask;
+	u8			num_chipselect;
+	u32			min_speed_hz;
+	u32			max_speed_hz;
+};
+struct gb_gpio_line {
+	/* The following has to be an array of line_max entries */
+	/* --> make them just a flags field */
+	u8			active:    1,
+				direction: 1,	/* 0 = output, 1 = input */
+				value:     1;	/* 0 = low, 1 = high */
+	u16			debounce_usec;
+
+	u8			irq_type;
+	bool			irq_type_pending;
+	bool			masked;
+	bool			masked_pending;
+};
+
+struct gb_gpio_controller {
+	struct gbphy_device	*gbphy_dev;
+	struct gb_connection	*connection;
+	u8			line_max;	/* max line number */
+	struct gb_gpio_line	*lines;
+	struct gpio_chip	chip;
+	struct irq_chip		irqc;
+	struct mutex		irq_lock;
+};
+
 struct gbphy_device {
 	u32 id;
 	struct greybus_descriptor_cport *cport_desc;
@@ -36,9 +93,9 @@ struct gbphy_device_id {
 
 struct gbphy_driver {
 	const char *name;
-	int (*probe)(struct gbphy_device *device,
+	int (*probe)(struct gbphy_device *,
 		     const struct gbphy_device_id *id);
-	void (*remove)(struct gbphy_device *device);
+	void (*remove)(struct gbphy_device *);
 	const struct gbphy_device_id *id_table;
 
 	struct device_driver driver;
