@@ -26,6 +26,8 @@
 
 	chosen {
 		stdout-path = &uart1;
+		base_dtb = "am5729-beagleboneai.dts";
+		base_dtb_timestamp = __TIMESTAMP__;
 	};
 
 	memory@0 {
@@ -204,6 +206,7 @@
 &i2c1 {
 	status = "okay";
 	clock-frequency = <400000>;
+	symlink = "bone/i2c/0";
 
 	tps659038: tps659038@58 {
 		compatible = "ti,tps659038";
@@ -486,13 +489,14 @@
 
 &uart1 {
 	status = "okay";
+	symlink = "bone/uart/0";
 };
 
 &davinci_mdio {
 	reset-gpios = <&gpio2 23 GPIO_ACTIVE_LOW>;
 	reset-delay-us = <2>;
 
-	phy0: ethernet-phy@1 {
+	phy0: ethernet-phy@4 {
 		reg = <4>;
 		eee-broken-100tx;
 		eee-broken-1000t;
@@ -671,6 +675,7 @@
 &i2c4 {
 	status = "okay";
 	clock-frequency = <100000>;
+	symlink = "bone/i2c/2";
 };
 
 &cpu0_opp_table {
@@ -697,4 +702,8 @@
 &dsp2 {
 	status = "okay";
 	memory-region = <&dsp2_memory_region>;
+};
+
+&bb2d {
+	status = "okay";
 };
