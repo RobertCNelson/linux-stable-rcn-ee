@@ -2014,14 +2014,53 @@ static int dpcm_fe_dai_hw_free(struct snd_pcm_substream *substream)
 	return 0;
 }
 
+static int dpcm_be_dai_hw_params_init(struct snd_soc_pcm_runtime *fe, int stream)
+{
+	struct snd_pcm_hw_params *params = &fe->dpcm[stream].hw_params;
+	int k;
+
+	for (k = SNDRV_PCM_HW_PARAM_FIRST_MASK;
+	     k <= SNDRV_PCM_HW_PARAM_LAST_MASK; k++)
+		snd_mask_any(hw_param_mask(params, k));
+
+	for (k = SNDRV_PCM_HW_PARAM_FIRST_INTERVAL;
+	     k <= SNDRV_PCM_HW_PARAM_LAST_INTERVAL; k++)
+		snd_interval_any(hw_param_interval(params, k));
+
+	if (fe->dai_link->dpcm_merged_format) {
+		memcpy(hw_param_interval(&fe->dpcm[stream].hw_params,
+					 SNDRV_PCM_HW_PARAM_FORMAT),
+		       hw_param_interval(params, SNDRV_PCM_HW_PARAM_FORMAT),
+		       sizeof(struct snd_interval));
+	}
+	if (fe->dai_link->dpcm_merged_chan) {
+		memcpy(hw_param_interval(&fe->dpcm[stream].hw_params,
+					 SNDRV_PCM_HW_PARAM_CHANNELS),
+		       hw_param_interval(params, SNDRV_PCM_HW_PARAM_CHANNELS),
+		       sizeof(struct snd_interval));
+	}
+	if (fe->dai_link->dpcm_merged_rate) {
+		memcpy(hw_param_interval(&fe->dpcm[stream].hw_params,
+					 SNDRV_PCM_HW_PARAM_RATE),
+		       hw_param_interval(params, SNDRV_PCM_HW_PARAM_RATE),
+		       sizeof(struct snd_interval));
+	}
+
+	return 0;
+}
+
 int dpcm_be_dai_hw_params(struct snd_soc_pcm_runtime *fe, int stream)
 {
 	struct snd_soc_pcm_runtime *be;
 	struct snd_pcm_substream *be_substream;
 	struct snd_soc_dpcm *dpcm;
 	int ret;
+	int current_stream = stream;
 
-	for_each_dpcm_be(fe, stream, dpcm) {
+	/* initialize the BE HW params */
+	dpcm_be_dai_hw_params_init(fe, stream);
+
+	for_each_dpcm_be(fe, current_stream, dpcm) {
 		struct snd_pcm_hw_params hw_params;
 
 		be = dpcm->be;
@@ -2106,64 +2145,14 @@ unwind:
 	return ret;
 }
 
-static int dpcm_be_dai_hw_params_init(struct snd_soc_pcm_runtime *fe, int stream)
-{
-	struct snd_pcm_hw_params *params = &fe->dpcm[stream].hw_params;
-	int k;
-
-	for (k = SNDRV_PCM_HW_PARAM_FIRST_MASK;
-	     k <= SNDRV_PCM_HW_PARAM_LAST_MASK; k++)
-		snd_mask_any(hw_param_mask(params, k));
-
-	for (k = SNDRV_PCM_HW_PARAM_FIRST_INTERVAL;
-	     k <= SNDRV_PCM_HW_PARAM_LAST_INTERVAL; k++)
-		snd_interval_any(hw_param_interval(params, k));
-
-	return 0;
-}
-
 static int dpcm_fe_dai_hw_params(struct snd_pcm_substream *substream,
 				 struct snd_pcm_hw_params *params)
 {
 	struct snd_soc_pcm_runtime *fe = asoc_substream_to_rtd(substream);
 	int ret, stream = substream->stream;
-	struct snd_interval *t, *dpcm_t;
 
 	snd_soc_dpcm_mutex_lock(fe);
 	dpcm_set_fe_update_state(fe, stream, SND_SOC_DPCM_UPDATE_FE);
-
-	/* initialize the BE HW params */
-	dpcm_be_dai_hw_params_init(fe, stream);
-
-	/* FIXME: a very low period time will make the CPU take too many
-	 * interrupts, which might end up not having enough time to actually
-	 * fill the buffer(s); for now, the BE min period time will be half of
-	 * the FE min period time
-	 */
-	t = hw_param_interval(params, SNDRV_PCM_HW_PARAM_PERIOD_TIME);
-	dpcm_t = hw_param_interval(&fe->dpcm[stream].hw_params,
-				   SNDRV_PCM_HW_PARAM_PERIOD_TIME);
-	dpcm_t->min = t->min / 2;
-
-	if (fe->dai_link->dpcm_merged_format) {
-		memcpy(hw_param_interval(&fe->dpcm[stream].hw_params,
-					 SNDRV_PCM_HW_PARAM_FORMAT),
-		       hw_param_interval(params, SNDRV_PCM_HW_PARAM_FORMAT),
-		       sizeof(struct snd_interval));
-	}
-
-	if (fe->dai_link->dpcm_merged_chan) {
-		memcpy(hw_param_interval(&fe->dpcm[stream].hw_params,
-					 SNDRV_PCM_HW_PARAM_CHANNELS),
-		       hw_param_interval(params, SNDRV_PCM_HW_PARAM_CHANNELS),
-		       sizeof(struct snd_interval));
-	}
-	if (fe->dai_link->dpcm_merged_rate) {
-		memcpy(hw_param_interval(&fe->dpcm[stream].hw_params,
-					 SNDRV_PCM_HW_PARAM_RATE),
-		       hw_param_interval(params, SNDRV_PCM_HW_PARAM_RATE),
-		       sizeof(struct snd_interval));
-	}
 
 	ret = dpcm_be_dai_hw_params(fe, stream);
 	if (ret < 0)
