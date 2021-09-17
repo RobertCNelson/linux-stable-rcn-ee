@@ -9,26 +9,8 @@ config POLARFIRE_SOC_SYS_CTRL
 
 	  If unsure, say N.
 
-config POLARFIRE_SOC_SERIAL_NUMBER
-	tristate "PFSOC Serial Number"
-	depends on POLARFIRE_SOC_SYS_CTRL
-	help
-	  This driver adds support for retrieving the PolarFire SoC's serial number via a char device.
-
-config POLARFIRE_SOC_FPGA_DIGEST
-	tristate "PFSOC FPGA Digest"
-	depends on POLARFIRE_SOC_SYS_CTRL
-	help
-	  This driver adds support for retrieving the PolarFire SoC's fpga digest via a char device.
-
-config POLARFIRE_SOC_SIGNATURE
-	tristate "PFSOC FPGA Signature"
-	depends on POLARFIRE_SOC_SYS_CTRL
-	help
-	  This driver adds support for signing a P-384 hash via a char device.
-
-config POLARFIRE_SOC_FPGA_CERT
+config POLARFIRE_SOC_GENERIC_SERVICE
 	tristate "PFSOC FPGA Device Cert"
 	depends on POLARFIRE_SOC_SYS_CTRL
 	help
-	  This driver adds support for retrieving the PolarFire SoC's device supply chain x509 certificate via a char device.
+	  This driver adds support for 
