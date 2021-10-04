@@ -1,15 +1,15 @@
-/* SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause) */
+/* SPDX-License-Identifier: (GPL-2.0 OR MIT) */
 /*
  * Daire McNamara,<daire.mcnamara@microchip.com>
- * Copyright (C) 2020 Microchip Technology Inc.  All rights reserved.
+ * Copyright (C) 2020-2021 Microchip Technology Inc.  All rights reserved.
  */
 
 #ifndef _DT_BINDINGS_CLK_MICROCHIP_MPFS_H_
 #define _DT_BINDINGS_CLK_MICROCHIP_MPFS_H_
 
-#define CLK_CPU		0
-#define CLK_AXI		1
-#define CLK_AHB		2
+#define CLK_CPU	0
+#define CLK_AXI	1
+#define CLK_AHB	2
 
 #define CLK_ENVM	3
 #define CLK_MAC0	4

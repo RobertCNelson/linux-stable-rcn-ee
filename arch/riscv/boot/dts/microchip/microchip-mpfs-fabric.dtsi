@@ -1,0 +1,21 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/* Copyright (c) 2020-2021 Microchip Technology Inc */
+
+/ {
+	fpgadma: fpgadma@60020000 {
+		compatible = "microchip,mpfs-fpga-dma-uio";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x0 0x60020000 0x0 0x1000>;
+		interrupt-parent = <&plic>;
+		interrupts = <PLIC_INT_FABRIC_F2H_3>;
+		status = "okay";
+	};
+
+	fpgalsram: fpgalsram@61000000 {
+		compatible = "generic-uio";
+		reg = < 0x0 0x61000000 0x0 0x10000>;
+		status = "okay";
+	};
+};
+

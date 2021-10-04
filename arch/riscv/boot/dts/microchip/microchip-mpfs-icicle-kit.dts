@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: (GPL-2.0 OR MIT)
-/* Copyright (c) 2020 Microchip Technology Inc */
+/* Copyright (c) 2020-2021 Microchip Technology Inc */
 
 /dts-v1/;
 
@@ -9,155 +9,232 @@
 #define RTCCLK_FREQ		1000000
 
 / {
-	#address-cells = <2>;
-	#size-cells = <2>;
 	model = "Microchip PolarFire-SoC Icicle Kit";
-	compatible = "microchip,mpfs-icicle-kit";
+	compatible = "microchip,mpfs-icicle-kit", "microchip,mpfs";
 
-       aliases {
-               serial0 = &serial0;
-               serial1 = &serial1;
-               serial2 = &serial2;
-               serial3 = &serial3;
-       };
+	aliases {
+		mmuart0 = &mmuart0;
+		mmuart1 = &mmuart1;
+		mmuart2 = &mmuart2;
+		mmuart3 = &mmuart3;
+		mmuart4 = &mmuart4;
+	};
 
 	chosen {
-		stdout-path = "serial1:115200n8";
+		stdout-path = "mmuart1:115200n8";
 	};
 
 	cpus {
 		timebase-frequency = <RTCCLK_FREQ>;
 	};
 
-	DDRC_CACHE_LO: memory@80000000 {
+	reserved-memory {
+		ranges;
+		#size-cells = <2>;
+		#address-cells = <2>;
+
+		fabricbuf0: fabricbuf@0 {
+			compatible = "shared-dma-pool";
+			reg = <0x0 0xae000000 0x0 0x2000000>;
+			label = "fabricbuf0-ddr-c";
+		};
+
+		fabricbuf1: fabricbuf@1 {
+			compatible = "shared-dma-pool";
+			reg = <0x0 0xc0000000 0x0 0x8000000>;
+			label = "fabricbuf1-ddr-nc";
+		};
+
+		fabricbuf2: fabricbuf@2 {
+			compatible = "shared-dma-pool";
+			reg = <0x0 0xd8000000 0x0 0x8000000>;
+			label = "fabricbuf2-ddr-nc-wcb";
+		};
+	};
+
+	udmabuf0 {
+		compatible = "ikwzm,u-dma-buf";
+		device-name = "udmabuf-ddr-c0";
+		minor-number = <0>;
+		size = <0x0 0x2000000>;
+		memory-region = <&fabricbuf0>;
+		sync-mode = <3>;
+	};
+
+	udmabuf1 {
+		compatible = "ikwzm,u-dma-buf";
+		device-name = "udmabuf-ddr-nc0";
+		minor-number = <1>;
+		size = <0x0 0x8000000>;
+		memory-region = <&fabricbuf1>;
+		sync-mode = <3>;
+	};
+
+	udmabuf2 {
+		compatible = "ikwzm,u-dma-buf";
+		device-name = "udmabuf-ddr-nc-wcb0";
+		minor-number = <2>;
+		size = <0x0 0x8000000>;
+		memory-region = <&fabricbuf2>;
+		sync-mode = <3>;
+	};
+
+	ddrc_cache_lo: memory@80000000 {
 		device_type = "memory";
 		reg = <0x0 0x80000000 0x0 0x2e000000>;
 		clocks = <&clkcfg CLK_DDRC>;
 		status = "okay";
 	};
-	DDRC_CACHE_HI: memory@1040000000 {
+
+	ddrc_cache_hi: memory@1000000000 {
 		device_type = "memory";
-		reg = <0x10 0x00000000 0x0 0x40000000>;
+		reg = <0x10 0x0 0x0 0x40000000>;
 		clocks = <&clkcfg CLK_DDRC>;
 		status = "okay";
 	};
-
-	soc {
-		corePWM0: corePWM@41000000 {
-			compatible = "microchip,corepwm";
-			mchp,mapped-outputs = /bits/ 16 <0xFFFF>;
-			sync-update = <1>;
-			clocks = <&clkcfg CLK_FIC3>;
-			clock-names = "fic3";
-			reg = <0x0 0x41000000 0x0 0xF0>;
-		};
-		
-		fpgalsram: fpga_lsram@0x61000000 {
-			compatible = "generic-uio";
-			reg = < 0x0 0x61000000 0x0 0x0001000
-					0x14 0x00000000 0x0 0x00010000 >;
-			status = "okay";
-		};
-
-		dma: dma@0x60020000 {
-			#address-cells = <1>;
-			#size-cells = <0>;
-			compatible = "microchip,mpfs-fpga-dma-uio";
-			reg = <0x00 0x60020000 0x0 0x1000>;
-			interrupt-parent = <&plic>;
-			interrupts = <120>;
-			status = "okay";
-		};
-
-		pdma: pdma@3000000 {
-			compatible = "microchip,mpfs-pdma-uio";
-			reg = <0x0 0x3000000 0x0 0x8000>;
-			interrupt-parent = <&plic>;
-			interrupts = <5 6 7 8 9 10 11 12>;
-			#dma-cells = <1>;
-		};
-	};
-	reserved-memory {
-		ranges;
-		#size-cells = <2>;
-		#address-cells = <2>;
-		fabricbuf0: fabricbuf@0 {
-			compatible = "shared-dma-pool";
-			reg = <0x00 0xae000000 0x0 0x02000000>;
-			label = "fabricbuf0-ddr-c";
-		};
-		fabricbuf1: fabricbuf@1 {
-			compatible = "shared-dma-pool";
-			reg = <0x00 0xc0000000 0x0 0x08000000>;
-			label = "fabricbuf1-ddr-nc";
-		};
-		fabricbuf2: fabricbuf@2 {
-			compatible = "shared-dma-pool";
-			reg = <0x00 0xd8000000 0x0 0x08000000>;
-			label = "fabricbuf2-ddr-nc-wcb";
-		};
-	};
-	udmabuf@0 {
-		compatible = "ikwzm,u-dma-buf";
-		device-name = "udmabuf-ddr-c0";
-		minor-number = <0>;
-		size = <0x0 0x02000000>;
-		memory-region = <&fabricbuf0>;
-		sync-mode = <3>;
-	}; 
-	udmabuf@1 {
-		compatible = "ikwzm,u-dma-buf";
-		device-name = "udmabuf-ddr-nc0";
-		minor-number = <1>;
-		size = <0x0 0x08000000>;
-		memory-region = <&fabricbuf1>;
-		sync-mode = <3>;
-	};
-	udmabuf@2 {
-		compatible = "ikwzm,u-dma-buf";
-		device-name = "udmabuf-ddr-nc-wcb0";
-		minor-number = <2>;
-		size = <0x0 0x08000000>;
-		memory-region = <&fabricbuf2>;
-		sync-mode = <3>;
-	};
 };
 
-&serial0 {
-	status = "disabled"; /* Reserved for the HSS */
-};
-
-&serial1 {
+&mmuart1 {
 	status = "okay";
 };
 
-&serial2 {
+&mmuart2 {
 	status = "okay";
 };
 
-&serial3 {
+&mmuart3 {
 	status = "okay";
 };
 
-&emmc {
+&mmuart4 {
 	status = "okay";
 };
 
-&emac0 {
+&mmc {
+	status = "okay";
+};
+
+&spi0 {
+	status = "okay";
+	spidev@0 {
+		compatible = "linux,spidev";
+		reg = <0>; /* CS 0 */
+		spi-max-frequency = <10000000>;
+		status = "okay";
+	};
+};
+
+&spi1 {
+	status = "okay";
+};
+
+&qspi {
+	status = "okay";
+};
+
+&i2c1 {
+	status = "okay";
+	pac193x: pac193x@10 {
+		compatible = "microchip,pac1934";
+		reg = <0x10>;
+		samp-rate = <64>;
+		status = "okay";
+		ch0: channel0 {
+			uohms-shunt-res = <10000>;
+			rail-name = "VDDREG";
+			channel_enabled;
+		};
+		ch1: channel1 {
+			uohms-shunt-res = <10000>;
+			rail-name = "VDDA25";
+			channel_enabled;
+		};
+		ch2: channel2 {
+			uohms-shunt-res = <10000>;
+			rail-name = "VDD25";
+			channel_enabled;
+		};
+		ch3: channel3 {
+			uohms-shunt-res = <10000>;
+			rail-name = "VDDA_REG";
+			channel_enabled;
+		};
+	};
+};
+
+&can0 {
+	status = "okay";
+};
+
+&mac0 {
+	status = "okay";
 	phy-mode = "sgmii";
 	phy-handle = <&phy0>;
-	phy0: ethernet-phy@8 {
-		reg = <8>;
-		ti,fifo-depth = <0x01>;
-	};
 };
 
-&emac1 {
+&mac1 {
 	status = "okay";
 	phy-mode = "sgmii";
 	phy-handle = <&phy1>;
 	phy1: ethernet-phy@9 {
 		reg = <9>;
-		ti,fifo-depth = <0x01>;
+		ti,fifo-depth = <0x1>;
+	};
+	phy0: ethernet-phy@8 {
+		reg = <8>;
+		ti,fifo-depth = <0x1>;
 	};
 };
+
+&gpio2 {
+	interrupts = <PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT>;
+	status = "okay";
+};
+
+&rtc {
+	status = "okay";
+};
+
+&usb {
+	status = "okay";
+};
+
+&mbox {
+	status = "okay";
+};
+
+&pcie {
+	status = "okay";
+};
+
