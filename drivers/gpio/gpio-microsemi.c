@@ -195,16 +195,13 @@ static int microsemi_mss_gpio_get_value(struct gpio_chip *gc,
 					unsigned int gpio_index)
 {
 	struct microsemi_mss_gpio_chip *mss_gpio = gpiochip_get_data(gc);
-	int result = 0;
 
 	if (gpio_index >= gc->ngpio)
 		return -EINVAL;
 
-	if (!microsemi_mss_gpio_get_direction(gc, gpio_index))
-	result = MSS_GPIO_IOREAD(mss_gpio->gpio_out_base) &
-			BIT(gpio_index);
+	return !!(MSS_GPIO_IOREAD(mss_gpio->gpio_in_base) &
+			BIT(gpio_index));
 
-	return result;
 }
 
 /*
@@ -343,6 +340,7 @@ static struct irq_chip microsemi_mss_gpio_irqchip = {
 	.irq_unmask = microsemi_mss_gpio_irq_unmask,
 	.irq_enable = microsemi_mss_gpio_irq_enable,
 	.irq_disable = microsemi_mss_gpio_irq_disable,
+	.flags = IRQCHIP_MASK_ON_SUSPEND,
 };
 
 /*
@@ -370,6 +368,22 @@ static void microsemi_mss_gpio_irq_handler(struct irq_desc *desc)
 	chained_irq_exit(irqchip, desc);
 }
 
+static irqreturn_t microsemi_gpio_irq_handler(int irq, void *mss_gpio_data)
+{
+	struct microsemi_mss_gpio_chip *mss_gpio = mss_gpio_data;
+	MSS_GPIO_REG_TYPE status;
+	int offset;
+	status = MSS_GPIO_IOREAD(mss_gpio->gpio_irq_base) & MSS_GPIO_IRQ_MASK;
+	//MSS_GPIO_IOWRITE(0xFFFFFFFF, mss_gpio->gpio_irq_base);
+	for_each_set_bit(offset, (const unsigned long *)&status,
+		mss_gpio->gc.ngpio) { 
+		microsemi_mss_gpio_assign_bit(mss_gpio->gpio_irq_base, offset, 1);
+		generic_handle_irq(irq_find_mapping(mss_gpio->gc.irq.domain,
+			offset));
+	}
+	return IRQ_HANDLED;
+}
+
 /*
  * microsemi_mss_gpio_probe() - probe function
  * @pdev Pointer to platform device structure
@@ -381,7 +395,10 @@ static int microsemi_mss_gpio_probe(struct platform_device *pdev)
 	struct microsemi_mss_gpio_chip *mss_gpio;
 	struct resource *res;
 	int gpio_index, irq, ret, ngpio;
+	struct gpio_irq_chip *irq_c;
+	struct irq_chip *irqc;
 	struct clk			*clk;
+	int irq_base = 0;
 
 	mss_gpio = devm_kzalloc(dev, sizeof(*mss_gpio), GFP_KERNEL);
 	if (!mss_gpio) {
@@ -419,6 +436,7 @@ static int microsemi_mss_gpio_probe(struct platform_device *pdev)
 		dev_err(dev, "too many interrupts\n");
 		return -EINVAL;
 	}
+
 	raw_spin_lock_init(&mss_gpio->lock);
 
 	mss_gpio->gc.direction_input = microsemi_mss_gpio_direction_input;
@@ -432,9 +450,36 @@ static int microsemi_mss_gpio_probe(struct platform_device *pdev)
 	mss_gpio->gc.parent = dev;
 	mss_gpio->gc.owner = THIS_MODULE;
 
+	irq_c = &mss_gpio->gc.irq;
+	irq_c->chip = &microsemi_mss_gpio_irqchip;
+	irq_c->chip->parent_device = dev;
+	irq_c->handler = handle_simple_irq;
+	irq_c->default_type = IRQ_TYPE_NONE;
+	irq_c->num_parents = 0;
+
+	irq = platform_get_irq(pdev, 0);
+
+	irq_c->parents = irq;
+
+	irq_base = devm_irq_alloc_descs(mss_gpio->gc.parent,
+					-1, 0, ngpio, 0);
+	if (irq_base < 0) {
+		dev_err(mss_gpio->gc.parent, "Couldn't allocate IRQ numbers\n");
+		return -ENODEV;
+	}
+
+	irq_c->first = irq_base;
+
 	ret = gpiochip_add_data(&mss_gpio->gc, mss_gpio);
 	if (ret)
 		return ret;
+
+	ret = devm_request_irq(mss_gpio->gc.parent, irq,
+			       microsemi_gpio_irq_handler,
+			       IRQF_SHARED, pdev->name, mss_gpio);
+	if (ret) {
+		dev_info(dev, "Microsemi MSS GPIO devm_request_irq failed \n");
+	}
 
 	/* Disable all GPIO interrupts before enabling parent interrupts */
 	for (gpio_index = 0; gpio_index < ngpio; gpio_index++) {
@@ -452,37 +497,6 @@ static int microsemi_mss_gpio_probe(struct platform_device *pdev)
 			gpio_index));
 
 		raw_spin_unlock_irqrestore(&mss_gpio->lock, flags);
-	}
-/*
-	ret = gpiochip_irqchip_add(&mss_gpio->gc, &microsemi_mss_gpio_irqchip,
-		0, handle_simple_irq, IRQ_TYPE_NONE);
-	if (ret) {
-		dev_err(dev, "could not add irqchip\n");
-		gpiochip_remove(&mss_gpio->gc);
-		return ret;
-	}
-*/
-	mss_gpio->gc.irq.num_parents = ngpio;
-	mss_gpio->gc.irq.parents = &mss_gpio->irq_parent[0];
-	mss_gpio->gc.irq.map = &mss_gpio->irq_parent[0];
-
-	for (gpio_index = 0; gpio_index < ngpio; gpio_index++) {
-		irq = platform_get_irq(pdev, gpio_index);
-		if (irq < 0) {
-			dev_err(dev, "invalid IRQ\n");
-			gpiochip_remove(&mss_gpio->gc);
-			return -ENODEV;
-		}
-
-		mss_gpio->irq_parent[gpio_index] = irq;
-	}
-
-	for (gpio_index = 0; gpio_index < ngpio; ++gpio_index) {
-		irq = mss_gpio->irq_parent[gpio_index];
-		irq_set_chained_handler_and_data(irq,
-			microsemi_mss_gpio_irq_handler, &mss_gpio);
-		irq_set_parent(irq_find_mapping(mss_gpio->gc.irq.domain,
-			gpio_index), irq);
 	}
 
 	platform_set_drvdata(pdev, mss_gpio);
