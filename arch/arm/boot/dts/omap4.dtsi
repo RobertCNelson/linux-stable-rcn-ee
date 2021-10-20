@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (C) 2011 Texas Instruments Incorporated - http://www.ti.com/
+ * Copyright (C) 2011 Texas Instruments Incorporated - https://www.ti.com/
  */
 
 #include <dt-bindings/bus/ti-sysc.h>
@@ -76,7 +76,7 @@
 		interrupt-parent = <&gic>;
 	};
 
-	L2: l2-cache-controller@48242000 {
+	L2: cache-controller@48242000 {
 		compatible = "arm,pl310-cache";
 		reg = <0x48242000 0x1000>;
 		cache-unified;
@@ -153,7 +153,7 @@
 		l4_abe: interconnect@40100000 {
 		};
 
-		ocmcram: ocmcram@40304000 {
+		ocmcram: sram@40304000 {
 			compatible = "mmio-sram";
 			reg = <0x40304000 0xa000>; /* 40k */
 		};
@@ -219,6 +219,7 @@
 			#iommu-cells = <0>;
 			ti,iommu-bus-err-back;
 		};
+
 		target-module@4012c000 {
 			compatible = "ti,sysc-omap4", "ti,sysc";
 			ti,hwmods = "slimbus1";
@@ -257,6 +258,7 @@
 			hw-caps-read-idle-ctrl;
 			hw-caps-ll-interface;
 			hw-caps-temp-alert;
+			status = "disabled";
 		};
 
 		emif2: emif@4d000000 {
@@ -269,6 +271,7 @@
 			hw-caps-read-idle-ctrl;
 			hw-caps-ll-interface;
 			hw-caps-temp-alert;
+			status = "disabled";
 		};
 
 		aes1: aes@4b501000 {
