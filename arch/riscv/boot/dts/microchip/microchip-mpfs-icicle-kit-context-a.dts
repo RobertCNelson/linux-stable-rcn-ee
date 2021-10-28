@@ -33,6 +33,14 @@
 		#size-cells = <2>;
 		#address-cells = <2>;
 
+		/*
+		* 0xA200_0000 ~ 0xA23F_FFFF is reserved for context B (BM/RTOS)
+		* Shouldn't be used in Linux (context A)
+		*
+		* 0xA240_0000 ~ 0xA240_FFFF is used by context A and context B
+		  RPMsg vrings
+		*/
+
 		fabricbuf0: fabricbuf@0 {
 			compatible = "shared-dma-pool";
 			reg = <0x0 0xa0000000 0x0 0x2000000>;
@@ -49,6 +57,12 @@
 			compatible = "shared-dma-pool";
 			reg = <0x0 0xd8000000 0x0 0x8000000>;
 			label = "fabricbuf2-ddr-nc-wcb";
+		};
+
+		rpmsg_dma_reserved: rpmsg_dma@0xa2410000 {
+			compatible = "shared-dma-pool";
+			reg = <0x0 0xa2410000 0x0 0x40000>;
+			label = "rpmsg-ddr";
 		};
 	};
 
@@ -91,6 +105,13 @@
 		reg = <0x10 0x0 0x0 0x40000000>;
 		clocks = <&clkcfg CLK_DDRC>;
 		status = "okay";
+	};
+
+	rpmsg: rpmsg {
+		compatible = "microchip,miv-rpmsg";
+		reg =  <0x0 0xa2400000 0x0 0x10000>; // 64Kb reserved for vrings
+		memory-region = <&rpmsg_dma_reserved>;
+		mboxes= <&ihc 0>;
 	};
 };
 
