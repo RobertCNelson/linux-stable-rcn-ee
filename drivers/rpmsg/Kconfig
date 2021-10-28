@@ -34,6 +34,13 @@ config RPMSG_MIV
 	  This uses Mi-V Inter-hart communication (IHC) to
 	  communicate with remote cores.
 
+config RPMSG_MIV_TTY
+	tristate "Mi-V tty driver -- loadable modules only"
+	depends on RPMSG && m
+	help
+	  Build a rpmsg tty sample driver, which demonstrates
+	  string transmissions in an AMP configuration over the rpmsg bus.
+
 config RPMSG_MTK_SCP
 	tristate "MediaTek SCP"
 	depends on MTK_SCP
