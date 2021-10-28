@@ -23,6 +23,17 @@ config RPMSG_NS
 	  channel that probes the associated RPMsg device on remote endpoint
 	  service announcement.
 
+config RPMSG_MIV
+	tristate "Microchip Mi-V RPMsg driver"
+	depends on SOC_MICROCHIP_POLARFIRE
+	depends on MAILBOX
+	select RPMSG
+	help
+	  Say y here to enable support providing communication channels to
+	  remote cores in SoCs with MI-V ecosystem.
+	  This uses Mi-V Inter-hart communication (IHC) to
+	  communicate with remote cores.
+
 config RPMSG_MTK_SCP
 	tristate "MediaTek SCP"
 	depends on MTK_SCP
