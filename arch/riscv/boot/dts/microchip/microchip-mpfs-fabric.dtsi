@@ -18,5 +18,14 @@
 			0x14 0x00000000 0x0 0x00010000>;
 		status = "okay";
 	};
+
+	ihc: ihc {
+		compatible = "microchip,miv-ihc";
+		interrupt-parent = <&plic>;
+		interrupts = <IHC_HART1_INT>;
+		miv-ihc,remote-context-id = <IHC_CONTEXT_B>;
+		#mbox-cells = <1>;
+		status = "disabled";
+	};
 };
 

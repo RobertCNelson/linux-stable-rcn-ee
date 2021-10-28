@@ -4,6 +4,7 @@
 #include "dt-bindings/clock/microchip,mpfs-clock.h"
 #include "dt-bindings/interrupt-controller/microchip,mpfs-plic.h"
 #include "dt-bindings/interrupt-controller/riscv-hart.h"
+#include "dt-bindings/mailbox/miv-ihc.h"
 #include "microchip-mpfs-fabric.dtsi"
 
 / {

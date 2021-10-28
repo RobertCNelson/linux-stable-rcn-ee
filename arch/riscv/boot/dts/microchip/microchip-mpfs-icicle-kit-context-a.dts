@@ -253,6 +253,10 @@
 	status = "okay";
 };
 
+&ihc {
+	status = "okay";
+};
+
 &cpu4 {
 	status = "disabled"; // in use by context b
 };
