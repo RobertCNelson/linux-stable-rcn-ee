@@ -35,7 +35,7 @@
 
 		fabricbuf0: fabricbuf@0 {
 			compatible = "shared-dma-pool";
-			reg = <0x0 0xadb00000 0x0 0x2000000>;
+			reg = <0x0 0xa0000000 0x0 0x2000000>;
 			label = "fabricbuf0-ddr-c";
 		};
 
@@ -79,9 +79,9 @@
 		sync-mode = <3>;
 	};
 
-	DDRC_CACHE_LO: memory@80000000 {
+	ddrc_cache_lo: memory@80000000 {
 		device_type = "memory";
-		reg = <0x0 0x80000000 0x0 0x2db00000>;
+		reg = <0x0 0x80000000 0x0 0x20000000>;
 		clocks = <&clkcfg CLK_DDRC>;
 		status = "okay";
 	};
@@ -201,14 +201,40 @@
 	};
 };
 
-&gpio0 {
-	status = "disabled"; // in use by context b
-};
-&gpio1 {
-	status = "disabled"; // in use by context b
-};
 &gpio2 {
-	status = "disabled"; // in use by context b
+	interrupts = <PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT
+		PLIC_INT_GPIO2_NON_DIRECT>;
+		status = "okay";
 };
 
 &rtc {
@@ -227,6 +253,6 @@
 	status = "okay";
 };
 
-&cpu3 {
+&cpu4 {
 	status = "disabled"; // in use by context b
 };
