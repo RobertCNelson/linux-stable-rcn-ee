@@ -524,7 +524,7 @@ static int mikrobus_device_register(struct mikrobus_port *port,
 		if (!pdev)
 			return -ENOMEM;
 		if (dev->properties)
-			platform_device_add_properties(pdev, dev->properties);
+			device_create_managed_software_node(&pdev->dev, dev->properties, NULL);
 		dev->dev_client = pdev;
 		platform_device_add(dev->dev_client);
 		break;
