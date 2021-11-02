@@ -290,11 +290,6 @@
 			clocks = <&clkcfg CLK_MMC>;
 			interrupt-parent = <&plic>;
 			interrupts = <PLIC_INT_MMC_MAIN PLIC_INT_MMC_WAKEUP>;
-			bus-width = <4>;
-			cap-mmc-highspeed;
-			cap-sd-highspeed;
-			no-1-8-v;
-			disable-wp;
 			max-frequency = <200000000>;
 			status = "disabled";
 		};
@@ -498,7 +493,7 @@
 			clock-names = "fic0", "fic1", "fic3";
 			bus-range = <0x0 0x7f>;
 			interrupt-parent = <&plic>;
-			interrupts = <PLIC_INT_FABRIC_F2H_2>;
+			interrupts = <PLIC_INT_FABRIC_F2H_1>;
 			interrupt-map = <0 0 0 1 &pcie_intc 0>,
 					<0 0 0 2 &pcie_intc 1>,
 					<0 0 0 3 &pcie_intc 2>,

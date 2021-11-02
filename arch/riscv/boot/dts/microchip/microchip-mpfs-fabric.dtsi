@@ -8,13 +8,14 @@
 		#size-cells = <0>;
 		reg = <0x0 0x60020000 0x0 0x1000>;
 		interrupt-parent = <&plic>;
-		interrupts = <PLIC_INT_FABRIC_F2H_3>;
+		interrupts = <PLIC_INT_FABRIC_F2H_2>;
 		status = "okay";
 	};
 
-	fpgalsram: fpgalsram@61000000 {
+	fpgalsram: fpga_lsram@61000000 {
 		compatible = "generic-uio";
-		reg = < 0x0 0x61000000 0x0 0x10000>;
+		reg = <0x0 0x61000000 0x0 0x0001000
+			0x14 0x00000000 0x0 0x00010000>;
 		status = "okay";
 	};
 };

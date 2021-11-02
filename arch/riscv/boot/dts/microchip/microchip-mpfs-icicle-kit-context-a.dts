@@ -112,6 +112,17 @@
 
 &mmc {
 	status = "okay";
+	bus-width = <4>;
+	disable-wp;
+	cap-sd-highspeed;
+	cap-mmc-highspeed;
+	card-detect-delay = <200>;
+	mmc-ddr-1_8v;
+	mmc-hs200-1_8v;
+	sd-uhs-sdr12;
+	sd-uhs-sdr25;
+	sd-uhs-sdr50;
+	sd-uhs-sdr104;
 };
 
 &spi0 {
@@ -129,6 +140,10 @@
 };
 
 &qspi {
+	status = "okay";
+};
+
+&i2c0 {
 	status = "okay";
 };
 
