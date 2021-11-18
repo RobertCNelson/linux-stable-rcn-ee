@@ -1,0 +1,101 @@
+# SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/iio/adc/microchip,pac193x.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Microchip pac193x family of power monitors
+
+maintainers:
+  - Conor Dooley <conor.dooley@microchip.com>
+
+description: |
+   The PAC193{1,2,4} are [one,two,four] channel power/energy monitors with current sensor
+   amplifier and bus voltage monitors that feed high resolution ADCs. Digital circuitry
+   performs power calculations and energy accumulation. The sampling rate and energy
+   integration period can be controlled over I2C. Active channel selection, one-shot
+   measurements and other controls are also configurable by I2C
+
+properties:
+  compatible:
+    enum:
+      - microchip,pac1931
+      - microchip,pac1932
+      - microchip,pac1934
+  reg:
+    maxItems: 1
+
+  microchip,samp-rate:
+    description:
+      User programmable sampling rate of the accumulator
+    $ref: /schemas/types.yaml#/definitions/uint32
+    enum: [8, 64, 256, 1024]
+    default: 64
+
+  "#address-cells":
+    const: 1
+
+  "#size-cells":
+    const: 0
+
+patternProperties:
+  "^channel[0-3]$":
+    type: object
+    description:
+      Configuration details for the individual channels on the device
+    properties:
+      microchip,channel-enabled:
+        description: |
+          Flag that determines whether a given channel is enabled.
+        $ref: "/schemas/types.yaml#/definitions/flag"
+
+      microchip,bi-directional:
+        description: |
+          Flag that determines whether a given channel is in
+          bi-directional mode.
+        $ref: "/schemas/types.yaml#/definitions/flag"
+
+      microchip,uohms-shunt-res:
+        maxItems: 1
+        description: |
+          The size of a channels sense resistor, used to perform
+          current & power measurements in micro-ohms
+        $ref: /schemas/types.yaml#/definitions/uint32
+
+    required:
+      - microchip,uohms-shunt-res
+
+required:
+  - reg
+  - microchip,samp-rate
+
+
+additionalProperties: false
+
+examples:
+  - |
+    i2c {
+      adc@10 {
+        compatible = "microchip,pac1934";
+        reg = <0x10>;
+        microchip,samp-rate = <64>;
+        status = "okay";
+        ch0: channel0 {
+          microchip,uohms-shunt-res = <10000>;
+          microchip,channel-enabled;
+        };
+        ch1: channel1 {
+          microchip,uohms-shunt-res = <10000>;
+          microchip,channel-enabled;
+        };
+        ch2: channel2 {
+          microchip,uohms-shunt-res = <10000>;
+          microchip,channel-enabled;
+        };
+        ch3: channel3 {
+          microchip,uohms-shunt-res = <10000>;
+          microchip,channel-enabled;
+        };
+      };
+    };
+...
