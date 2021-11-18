@@ -102,10 +102,10 @@
 #define PAC193X_VPOWER_ACC_1_ADDR	(PAC193X_VPOWER_ACC_0_ADDR + 1)
 #define PAC193X_VPOWER_ACC_2_ADDR					0x05
 #define PAC193X_VPOWER_ACC_3_ADDR					0x06
-#define PAC193X_VBUS_0_ADDR						0x07
-#define PAC193X_VBUS_1_ADDR						0x08
-#define PAC193X_VBUS_2_ADDR						0x09
-#define PAC193X_VBUS_3_ADDR						0x0A
+#define PAC193X_VBUS_0_ADDR							0x07
+#define PAC193X_VBUS_1_ADDR							0x08
+#define PAC193X_VBUS_2_ADDR							0x09
+#define PAC193X_VBUS_3_ADDR							0x0A
 #define PAC193X_VSENSE_0_ADDR						0x0B
 #define PAC193X_VSENSE_1_ADDR						0x0C
 #define PAC193X_VSENSE_2_ADDR						0x0D
@@ -127,14 +127,14 @@
  * PAC193x phys channel IIO channel descriptor; see the static const struct
  * iio_chan_spec pac193x_single_channel[] declaration
  */
-#define IIO_EN								0
-#define IIO_POW								1
-#define IIO_VOLT							2
-#define IIO_CRT								3
-#define IIO_VOLTAVG							4
-#define IIO_CRTAVG							5
+#define IIO_EN										0
+#define IIO_POW										1
+#define IIO_VOLT									2
+#define IIO_CRT										3
+#define IIO_VOLTAVG									4
+#define IIO_CRTAVG									5
 
-#define PAC193X_ACC_REG_LEN						3
+#define PAC193X_ACC_REG_LEN							3
 #define PAC193X_VPOWER_ACC_REG_LEN					6
 #define PAC193X_VBUS_SENSE_REG_LEN					2
 #define PAC193X_VPOWER_REG_LEN						4
@@ -916,10 +916,9 @@ static int pac193x_write_raw(struct iio_dev *indio_dev,
 		 */
 		mutex_lock(&chip_info->lock);
 		/* enable ALERT pin */
-		ret = pac193x_i2c_write_byte(chip_info->client,
-			PAC193X_CTRL_REG,
-		CTRL_REG(chip_info->chip_reg_data.crt_samp_speed_bitfield,
-		0, 0, 1, 0, 0));
+		ret = pac193x_i2c_write_byte(chip_info->client, 
+			PAC193X_CTRL_REG, 
+			CTRL_REG(chip_info->chip_reg_data.crt_samp_speed_bitfield, 0, 0, 1, 0, 0));
 		if (ret < 0) {
 			dev_err(&client->dev,
 			"%s - cannot write PAC193x ctrl reg at 0x%02X\n",
@@ -953,6 +952,7 @@ static int pac193x_write_raw(struct iio_dev *indio_dev,
 
 static const struct iio_info pac193x_info = {
 	.attrs = &pac193x_group,
+	//.driver_module = THIS_MODULE,
 	.read_raw = pac193x_read_raw,
 	.write_raw = pac193x_write_raw,
 };
@@ -964,6 +964,27 @@ static int pac193x_send_rfsh(struct pac193x_chip_info *chip_info,
 	struct i2c_client *client = chip_info->client;
 	int ret;
 	u8 rfsh_option;
+	u8 bidir_reg;
+	bool revision_bug = false;
+
+	if ((chip_info->chip_revision == 2) ||
+		(chip_info->chip_revision == 3)) {
+		/*rev 2 and 3 bug workaround*/
+		revision_bug = true;
+
+		bidir_reg =
+			NEG_PWR_REG(chip_info->chip_reg_data.bi_dir[0],
+				chip_info->chip_reg_data.bi_dir[1],
+				chip_info->chip_reg_data.bi_dir[2],
+				chip_info->chip_reg_data.bi_dir[3],
+				0, 0, 0, 0);
+		/* write the updated registers back */
+		ret = pac193x_i2c_write_byte(chip_info->client, 
+			PAC193X_CTRL_STAT_REGS_ADDR + PAC193X_NEG_PWR_REG_OFF, 
+			//1, - CND 
+			//(u8 *)&bidir_reg);
+			bidir_reg);
+	}
 	/* if refresh_v is not false, send a REFRESH_V instead
 	 * (doesn't reset the accumulators)
 	 */
@@ -976,6 +997,15 @@ static int pac193x_send_rfsh(struct pac193x_chip_info *chip_info,
 		dev_err(&client->dev,
 "%s - cannot send byte to PAC193x 0x%02X reg\n", __func__, rfsh_option);
 		return ret;
+	}
+	if (revision_bug) {
+		/*rev 3 bug workaround - write again the same register */
+		/* write the updated registers back */
+		ret = pac193x_i2c_write_byte(chip_info->client,
+			PAC193X_CTRL_STAT_REGS_ADDR + PAC193X_NEG_PWR_REG_OFF,
+			//1, - CND 
+			//(u8 *)&bidir_reg);
+			bidir_reg);
 	}
 	/* register data retrieval timestamp */
 	chip_info->chip_reg_data.jiffies_tstamp = jiffies;
@@ -1156,11 +1186,9 @@ static void pac193x_work_periodic_rfsh(struct work_struct *work)
 			PAC193x_MIN_UPDATE_WAIT_TIME);
 }
 
-//void pac193x_read_reg_timeout(unsigned long arg)
 void pac193x_read_reg_timeout(struct timer_list *t)
 {
 	int ret;
-	//struct pac193x_chip_info *chip_info = (struct pac193x_chip_info *)arg;
 	struct pac193x_chip_info *chip_info = from_timer(chip_info, t, tmr_forced_update);
 	struct i2c_client *client = chip_info->client;
 
@@ -1207,18 +1235,10 @@ static int pac193x_setup_periodic_refresh(struct pac193x_chip_info *chip_info)
 	chip_info->wq_chip = create_workqueue("wq_pac193x");
 	INIT_WORK(&chip_info->work_chip_rfsh, pac193x_work_periodic_rfsh);
 
-#if 0
 	/* setup the latest moment for reading the regs before saturation */
-	init_timer(&chip_info->tmr_forced_update);
-	/* register the timer */
-	chip_info->tmr_forced_update.data = (unsigned long)chip_info;
-	chip_info->tmr_forced_update.function = pac193x_read_reg_timeout;
-#endif
 	timer_setup(&chip_info->tmr_forced_update, pac193x_read_reg_timeout, 0);
-	chip_info->tmr_forced_update.expires = jiffies +
-			msecs_to_jiffies(PAC193X_MAX_RFSH_LIMIT);
-	chip_info->forced_reads_triggered = 0;
-	add_timer(&chip_info->tmr_forced_update);
+	/* register the timer */
+	mod_timer(&chip_info->tmr_forced_update, jiffies + msecs_to_jiffies(PAC193X_MAX_RFSH_LIMIT));
 
 	return ret;
 }
@@ -1232,7 +1252,7 @@ static const char *pac193x_match_of_device(struct i2c_client *client,
 
 	ptr_name = pac193x_get_of_match_entry(client);
 
-	if (of_property_read_u32(client->dev.of_node, "samp-rate",
+	if (of_property_read_u32(client->dev.of_node, "microchip,samp-rate",
 				&chip_info->sample_rate_value)) {
 		dev_err(&client->dev, "Cannot read sample rate value ...\n");
 		return NULL;
@@ -1249,7 +1269,7 @@ static const char *pac193x_match_of_device(struct i2c_client *client,
 			return NULL;
 		/* check if the channel is enabled or not */
 		chip_info->chip_reg_data.active_channels[crt_ch] =
-			of_property_read_bool(node, "channel_enabled");
+			of_property_read_bool(node, "microchip,channel-enabled");
 		if (!chip_info->chip_reg_data.active_channels[crt_ch]) {
 		/* set the chunt value to 0 for the disabled channels */
 			chip_info->shunts[crt_ch] = 0;
@@ -1257,14 +1277,14 @@ static const char *pac193x_match_of_device(struct i2c_client *client,
 			continue;
 		}
 		if (of_property_read_u32(node,
-			"uohms-shunt-res", &chip_info->shunts[crt_ch])) {
+			"microchip,uohms-shunt-res", &chip_info->shunts[crt_ch])) {
 			dev_err(&client->dev,
 				"invalid shunt-resistor value on %s\n",
 				node->full_name);
 			return NULL;
 		}
 		chip_info->chip_reg_data.bi_dir[crt_ch] =
-				of_property_read_bool(node, "bi-dir");
+				of_property_read_bool(node, "microchip,bi-directional");
 		/* increment the channel index */
 		crt_ch++;
 	}
@@ -1668,4 +1688,4 @@ module_i2c_driver(pac193x_driver);
 MODULE_AUTHOR("Bogdan Bolocan");
 MODULE_DESCRIPTION("PAC193x");
 MODULE_LICENSE("GPL v2");
-MODULE_VERSION("0.0.1");
+MODULE_VERSION("0.0.2");
