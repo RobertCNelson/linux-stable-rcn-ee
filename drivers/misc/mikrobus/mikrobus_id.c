@@ -16,18 +16,19 @@
 
 #include <linux/mikrobus.h>
 
+#define W1_EEPROM_MIKROBUS_SECONDARY_ID	0x4C
 #define W1_EEPROM_MIKROBUS_ID	0x43
-
-#define W1_MIKROBUS_ID_EEPROM_SIZE	0x0A00
+#define W1_MIKROBUS_ID_EEPROM_SIZE	 0x0A00
+#define W1_MIKROBUS_ID_EEPROM_SECONDARY_SIZE	 0x0200
+#define W1_MIKROBUS_ID_EEPROM_SECONDARY_PAGE_SIZE	32
 #define W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE	32
 #define W1_MIKROBUS_ID_EEPROM_VERIFY_SCRATCH_SIZE	35
 #define W1_MIKROBUS_ID_READ_EEPROM	0xF0
+#define W1_MIKROBUS_ID_READ_SECONDARY_EEPROM 0x69
+#define W1_MIKROBUS_ID_RELEASE_SECONDARY_EEPROM 0xAA
 #define W1_MIKROBUS_ID_EEPROM_READ_RETRIES	10
-#define W1_MIKROBUS_ID_EEPROM_WRITE_RETRIES	5
-#define W1_MIKROBUS_ID_EEPROM_WRITE_SCRATCH	0x0F
-#define W1_MIKROBUS_ID_EEPROM_READ_SCRATCH	0xAA
-#define W1_MIKROBUS_ID_EEPROM_COPY_SCRATCH	0x55
 #define W1_MIKROBUS_ID_EEPROM_TPROG_MS		20
+#define MIKROBUS_ID_USER_EEPROM_ADDR	0x0A0A
 
 static int w1_mikrobus_id_readblock(struct w1_slave *sl, int off, int count, char *buf)
 {
@@ -64,69 +65,68 @@ static int w1_mikrobus_id_readblock(struct w1_slave *sl, int off, int count, cha
 	return -EIO;
 }
 
-static int w1_mikrobus_id_movescratch(struct w1_slave *sl, int addr, char *buf)
+static int w1_mikrobus_id_readpage_secondary(struct w1_slave *sl, int pageaddr, char *buf)
 {
-	u8 wrbuf[4];
-	u8 scratchpad_verify[W1_MIKROBUS_ID_EEPROM_VERIFY_SCRATCH_SIZE];
-	u8 TA1, TA2, ES;
-	int verify_status;
-	int tries;
+	u8 crc_rdbuf[2];
 
-	wrbuf[0] = W1_MIKROBUS_ID_EEPROM_WRITE_SCRATCH;
-	wrbuf[1] = addr & 0xFF;
-	wrbuf[2] = addr >> 8;
-
-	tries = W1_MIKROBUS_ID_EEPROM_WRITE_RETRIES;
-	do {
-		if (w1_reset_select_slave(sl))
-			return -1;
-		w1_write_block(sl->master, wrbuf, 3);
-		w1_write_block(sl->master, buf, W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE);
-		if (w1_reset_select_slave(sl))
-			return -1;
-		w1_write_8(sl->master, W1_MIKROBUS_ID_EEPROM_READ_SCRATCH);
-		TA1 = w1_read_8(sl->master);
-		TA2 = w1_read_8(sl->master);
-		ES = w1_read_8(sl->master);
-		w1_read_block(sl->master, scratchpad_verify, W1_MIKROBUS_ID_EEPROM_VERIFY_SCRATCH_SIZE);
-		verify_status = memcmp(buf, scratchpad_verify, W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE);
-	} while(verify_status && --tries);
-
-	if(!tries && verify_status){
-		dev_err(&sl->dev, "verify scratchpad failed %d times\n",
-			W1_MIKROBUS_ID_EEPROM_WRITE_RETRIES);
-		return -EIO;
-	}
-		
-	wrbuf[0] = W1_MIKROBUS_ID_EEPROM_COPY_SCRATCH;
-	wrbuf[1] = addr & 0xFF;
-	wrbuf[2] = addr >> 8;
-	wrbuf[3] = ES;
 	if (w1_reset_select_slave(sl))
-			return -1;
-	w1_write_block(sl->master, wrbuf, 4);
-	msleep(W1_MIKROBUS_ID_EEPROM_TPROG_MS);
+				return -1;
+	w1_write_8(sl->master, W1_MIKROBUS_ID_READ_SECONDARY_EEPROM);
+	w1_write_8(sl->master, pageaddr);
+	w1_read_block(sl->master, crc_rdbuf, 2);
+	w1_write_8(sl->master, W1_MIKROBUS_ID_RELEASE_SECONDARY_EEPROM);
+	msleep(10);
+	w1_read_block(sl->master, crc_rdbuf, 1);
+	w1_read_block(sl->master, buf, W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE);
+	w1_read_block(sl->master, crc_rdbuf, 2);
 	return 0;
 }
 
-static int w1_mikrobus_id_writeblock(struct w1_slave *sl, int off, int count, char *buf)
+static int w1_mikrobus_id_readbuf_secondary(struct w1_slave *sl, int count, char *buf)
 {
-	u16 wraddr = 0;
-	u16 len = count - (count % W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE);
-	u8 scratchpad_write[W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE] = {0};
+	u8 pageaddr = 0;
+	int iter, index, ret;
+	int	len = count - (count % W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE);
+	u8 temp_rdbuf[W1_MIKROBUS_ID_EEPROM_SECONDARY_PAGE_SIZE];
 
-	while(len > 0) {
-		w1_mikrobus_id_movescratch(sl, wraddr + off, buf + wraddr);
-		wraddr += W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE;
-		len -= W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE;
+	while(len > 0) {			
+			ret = w1_mikrobus_id_readpage_secondary(sl, pageaddr, buf + (W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE*pageaddr));
+			pageaddr += 1;
+			len -= W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE;
 	}
 
 	if(count % W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE){
-		memcpy(scratchpad_write, buf + wraddr, count % W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE);
-		w1_mikrobus_id_movescratch(sl, wraddr + off, scratchpad_write);
+			ret = w1_mikrobus_id_readpage_secondary(sl, pageaddr, temp_rdbuf);
+			for(iter = W1_MIKROBUS_ID_EEPROM_SCRATCH_SIZE*pageaddr, index=0; iter < count; iter++, index++)
+				buf[iter] = temp_rdbuf[index];
+	}
+	return ret;
+}
+
+static int w1_mikrobus_id_readblock_secondary(struct w1_slave *sl, int off, int count, char *buf)
+{
+	u8 *cmp;
+	int tries = W1_MIKROBUS_ID_EEPROM_READ_RETRIES;
+
+	if(off == MIKROBUS_ID_USER_EEPROM_ADDR && count == 1) {
+		buf[0] = 0;
+		return 0;
 	}
 
-	return 0;
+	do {	
+		w1_mikrobus_id_readbuf_secondary(sl, count, buf);
+		cmp = kzalloc(count, GFP_KERNEL);
+		if (!cmp)
+			return -ENOMEM;		
+		w1_mikrobus_id_readbuf_secondary(sl, count, cmp);
+		if (!memcmp(cmp, buf, count)){
+			kfree(cmp);
+			return 0;
+		}
+	} while (--tries);
+
+	kfree(cmp);
+	return -EINVAL;
 }
 
 static int w1_mikrobus_id_nvmem_read(void *priv, unsigned int off, void *buf, size_t count)
@@ -135,19 +135,10 @@ static int w1_mikrobus_id_nvmem_read(void *priv, unsigned int off, void *buf, si
 	int ret;
 
 	mutex_lock(&sl->master->bus_mutex);
-	ret = w1_mikrobus_id_readblock(sl, off, count, buf);
-	mutex_unlock(&sl->master->bus_mutex);
-	
-	return ret;
-}
-
-static int w1_mikrobus_id_nvmem_write(void *priv, unsigned int off, void *buf, size_t count)
-{
-	struct w1_slave *sl = priv;
-	int ret;
-
-	mutex_lock(&sl->master->bus_mutex);
-	ret = w1_mikrobus_id_writeblock(sl, off, count, buf);
+	if (sl->family->fid == W1_EEPROM_MIKROBUS_SECONDARY_ID)
+		ret = w1_mikrobus_id_readblock_secondary(sl, off, count, buf);
+	else
+		ret = w1_mikrobus_id_readblock(sl, off, count, buf);
 	mutex_unlock(&sl->master->bus_mutex);
 	
 	return ret;
@@ -160,12 +151,12 @@ static int w1_mikrobus_id_add_slave(struct w1_slave *sl)
 	struct nvmem_config nvmem_cfg = {
 		.dev = &sl->dev,
 		.reg_read = w1_mikrobus_id_nvmem_read,
-		.reg_write = w1_mikrobus_id_nvmem_write,
 		.type = NVMEM_TYPE_EEPROM,
-		.read_only = false,
+		.read_only = true,
 		.word_size = 1,
 		.stride = 1,
-		.size = W1_MIKROBUS_ID_EEPROM_SIZE,
+		.size = (sl->family->fid == W1_EEPROM_MIKROBUS_SECONDARY_ID) ? 
+		 W1_MIKROBUS_ID_EEPROM_SECONDARY_SIZE: W1_MIKROBUS_ID_EEPROM_SIZE,
 		.priv = sl,
 	};
 
@@ -181,7 +172,7 @@ static int w1_mikrobus_id_add_slave(struct w1_slave *sl)
 	return PTR_ERR_OR_ZERO(nvmem);
 }
 
-static const struct w1_family_ops w1_family_mikrobus_id_fops = {
+static struct w1_family_ops w1_family_mikrobus_id_fops = {
 	.add_slave		= w1_mikrobus_id_add_slave,
 };
 
@@ -189,9 +180,43 @@ static struct w1_family w1_family_mikrobus_id = {
 	.fid = W1_EEPROM_MIKROBUS_ID,
 	.fops = &w1_family_mikrobus_id_fops,
 };
-module_w1_family(w1_family_mikrobus_id);
+
+static struct w1_family w1_family_mikrobus_id_alternate = {
+	.fid = W1_EEPROM_MIKROBUS_SECONDARY_ID,
+	.fops = &w1_family_mikrobus_id_fops,
+};
+
+static int __init w1_mikrobusid_init(void)
+{
+	int err;
+
+	err = w1_register_family(&w1_family_mikrobus_id);
+	if (err)
+		return err;
+
+	err = w1_register_family(&w1_family_mikrobus_id_alternate);
+	if (err)
+		goto err_mikrobusidinit;
+
+
+	return 0;
+
+err_mikrobusidinit:
+	w1_unregister_family(&w1_family_mikrobus_id);
+	return err;
+}
+
+static void __exit w1_mikrobusid_exit(void)
+{
+	w1_unregister_family(&w1_family_mikrobus_id);
+	w1_unregister_family(&w1_family_mikrobus_id_alternate);
+}
+
+module_init(w1_mikrobusid_init);
+module_exit(w1_mikrobusid_exit);
 
 MODULE_AUTHOR("Vaishnav M A <vaishnav@beagleboard.org>");
 MODULE_DESCRIPTION("w1 family ac driver for mikroBUS ID EEPROM");
 MODULE_LICENSE("GPL");
 MODULE_ALIAS("w1-family-" __stringify(W1_EEPROM_MIKROBUS_ID));
+MODULE_ALIAS("w1-family-" __stringify(W1_EEPROM_MIKROBUS_SECONDARY_ID));
