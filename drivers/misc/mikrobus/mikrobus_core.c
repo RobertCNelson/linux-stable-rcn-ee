@@ -78,7 +78,7 @@ int mikrobus_port_scan_eeprom(struct mikrobus_port *port)
 	if (retval != 1) {
 		dev_err(&port->dev, "failed to fetch manifest start address %d\n",
 			retval);
-		return -EINVAL;
+		header[0] = 0;
 	}
 	manifest_start_addr = header[0] << 8;
 	pr_info("manifest start address is 0x%x \n", manifest_start_addr);
@@ -255,7 +255,7 @@ int mikrobus_port_pinctrl_select(struct mikrobus_port *port)
 						port->pinctrl_selected[i]);
 		if (!IS_ERR(state)) {
 			retval = pinctrl_select_state(port->pinctrl, state);
-			pr_info("setting pinctrl %s\n",
+			pr_debug("setting pinctrl %s\n",
 					port->pinctrl_selected[i]);
 			if (retval != 0) {
 				dev_err(&port->dev, "failed to select state %s\n",
@@ -400,26 +400,6 @@ static void mikrobus_board_device_release_all(struct addon_board_info *info)
 	}
 }
 
-static struct software_node *software_node_alloc(const struct property_entry *properties)
-{
-	struct property_entry *props;
-	struct software_node *node;
-
-	props = property_entries_dup(properties);
-	if (IS_ERR(props))
-		return ERR_CAST(props);
-
-	node = kzalloc(sizeof(*node), GFP_KERNEL);
-	if (!node) {
-		property_entries_free(props);
-		return ERR_PTR(-ENOMEM);
-	}
-
-	node->properties = props;
-
-	return node;
-}
-
 static int mikrobus_device_register(struct mikrobus_port *port,
 					struct board_device_info *dev, char *board_name)
 {
@@ -515,7 +495,7 @@ static int mikrobus_device_register(struct mikrobus_port *port,
 		if (dev->irq)
 			i2c->irq = mikrobus_irq_get(port, dev->irq, dev->irq_type);
 		if (dev->properties)
-			i2c->swnode = software_node_alloc(dev->properties);
+			i2c->fwnode = fwnode_create_software_node(dev->properties, NULL);
 		i2c->addr = dev->reg;
 		dev->dev_client = (void *) i2c_new_client_device(port->i2c_adap, i2c);
 		break;
@@ -625,7 +605,6 @@ static int mikrobus_port_id_eeprom_probe(struct mikrobus_port *port)
 	char devname[MIKROBUS_NAME_SIZE];
 	char drvname[MIKROBUS_NAME_SIZE] = "w1-gpio";
 	int retval;
-	int i;
 
 	mikrobus_id_eeprom_w1_device = kzalloc(sizeof(*mikrobus_id_eeprom_w1_device), GFP_KERNEL);
 	if (!mikrobus_id_eeprom_w1_device)
@@ -773,7 +752,7 @@ int mikrobus_port_gb_register(struct gbphy_host *host, void *manifest_blob, size
 	struct gb_connection *spi_connection;
 	struct gb_gpio_controller *ggc;
 	struct mikrobus_port *port;
-	struct gpio_desc *desc;
+	// struct gpio_desc *desc;
 	struct gpio_descs *descs;
 	int retval;
 
@@ -827,7 +806,7 @@ int mikrobus_port_gb_register(struct gbphy_host *host, void *manifest_blob, size
 	INIT_LIST_HEAD(&board->devices);
 	retval = mikrobus_manifest_parse(board, manifest_blob, manifest_size);
 	if (!retval) {
-		dev_err(&port->dev, "failed to parse manifest, size %lu\n",
+		dev_err(&port->dev, "failed to parse manifest, size %u\n",
 			manifest_size);
 		retval = -EINVAL;
 		goto err_free_board;
