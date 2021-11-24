@@ -269,22 +269,6 @@ static irqreturn_t mpfs_i2c_handle_isr(int irq, void *_dev)
 		finish = true;
 		break;
 	case  STATUS_M_SLAW_ACK:
-		if (idev->msg_len > 0) {
-			mpfs_i2c_fill_tx(idev);
-		} else {
-			/* On the last byte to be transmitted, send STOP */
-			mpfs_i2c_stop(idev);
-			finish = true;
-		}
-		break;
-	case STATUS_M_TX_DATA_NACK:
-	case STATUS_M_RX_DATA_NACKED:
-	case STATUS_M_SLAR_NACK:
-	case STATUS_M_SLAW_NACK:
-		idev->msg_err = -ENXIO;
-		mpfs_i2c_stop(idev);
-		finish = true;
-		break;
 	case STATUS_M_TX_DATA_ACK:
 		if (idev->msg_len > 0) {
 			mpfs_i2c_fill_tx(idev);
@@ -294,17 +278,44 @@ static irqreturn_t mpfs_i2c_handle_isr(int irq, void *_dev)
 			finish = true;
 		}
 		break;
+	case STATUS_M_TX_DATA_NACK:
+	case STATUS_M_SLAR_NACK:
+	case STATUS_M_SLAW_NACK:
+		idev->msg_err = -ENXIO;
+		mpfs_i2c_stop(idev);
+		finish = true;
+		break;
 	case STATUS_M_SLAR_ACK:
-		ctrl = readl(idev->base + MPFS_I2C_CTRL);
-		ctrl |= (1 << CTRL_AA);
-		writel(ctrl, idev->base + MPFS_I2C_CTRL);
-		if (idev->msg_len == 0) {
+		if (idev->msg_len > 1u)
+		{
+			ctrl = readl(idev->base + MPFS_I2C_CTRL);
+			ctrl |= (1 << CTRL_AA);
+			writel(ctrl, idev->base + MPFS_I2C_CTRL);
+		}
+		else if (1u == idev->msg_len)
+		{
+			ctrl = readl(idev->base + MPFS_I2C_CTRL);
+			ctrl &= ~(1 << CTRL_AA);
+			writel(ctrl, idev->base + MPFS_I2C_CTRL);
+		}
+		else {
+			ctrl = readl(idev->base + MPFS_I2C_CTRL);
+			ctrl |= (1 << CTRL_AA);
+			writel(ctrl, idev->base + MPFS_I2C_CTRL);
 			/* On the last byte to be transmitted, send STOP */
 			mpfs_i2c_stop(idev);
 			finish = true;
 		}
 		break;
 	case STATUS_M_RX_DATA_ACKED:
+		mpfs_i2c_empty_rx(idev);
+		if (idev->msg_len >= 1) {
+			ctrl = readl(idev->base + MPFS_I2C_CTRL);
+			ctrl &= ~(1 << CTRL_AA);
+			writel(ctrl, idev->base + MPFS_I2C_CTRL);
+		}
+		break;
+	case STATUS_M_RX_DATA_NACKED:
 		mpfs_i2c_empty_rx(idev);
 		if (idev->msg_len == 0) {
 			/* On the last byte to be transmitted, send STOP */
@@ -317,9 +328,6 @@ static irqreturn_t mpfs_i2c_handle_isr(int irq, void *_dev)
 	}
 
 	if (finish) {
-		ctrl = readl(idev->base + MPFS_I2C_CTRL);
-		ctrl &= ~(1 << CTRL_AA);
-		writel(ctrl, idev->base + MPFS_I2C_CTRL);
 		complete(&idev->msg_complete);
 	}
 
