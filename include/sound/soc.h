@@ -751,6 +751,7 @@ struct snd_soc_dai_link {
 
 	/* This DAI link can route to other DAI links at runtime (Frontend)*/
 	unsigned int dynamic:1;
+	unsigned int dpcm_loopback:1;
 
 	/* DPCM capture and Playback support */
 	unsigned int dpcm_capture:1;
