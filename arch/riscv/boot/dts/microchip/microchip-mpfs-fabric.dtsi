@@ -27,5 +27,17 @@
 		#mbox-cells = <1>;
 		status = "disabled";
 	};
+
+	i2c2: i2c@44000000 {
+		compatible = "microchip,core-i2c";
+		reg = <0x0 0x44000000 0x0 0x1000>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		clocks = <&clkcfg CLK_FIC3>;
+		interrupt-parent = <&plic>;
+		interrupts = <PLIC_INT_FABRIC_F2H_4>;
+		clock-frequency = <100000>;
+		status = "disabled";
+	};
 };
 

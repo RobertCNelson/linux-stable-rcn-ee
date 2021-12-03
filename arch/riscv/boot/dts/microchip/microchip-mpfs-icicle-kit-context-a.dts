@@ -198,6 +198,10 @@
 	};
 };
 
+&i2c2 {
+	status = "okay";
+};
+
 &can0 {
 	status = "okay";
 };
