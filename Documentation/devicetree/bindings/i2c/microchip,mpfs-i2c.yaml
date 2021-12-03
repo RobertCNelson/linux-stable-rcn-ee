@@ -19,6 +19,7 @@ properties:
   compatible:
     enum:
       - microchip,mpfs-i2c # Microchip PolarFire SoC compatible SoCs
+      - microchip,core-i2c # Microchip Fabric based i2c IP core
 
   reg:
     maxItems: 1

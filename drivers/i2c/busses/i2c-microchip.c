@@ -507,6 +507,7 @@ static int mpfs_i2c_remove(struct platform_device *pdev)
 /* Match table for of_platform binding */
 static const struct of_device_id mpfs_i2c_of_match[] = {
 	{ .compatible = "microchip,mpfs-i2c" },
+	{ .compatible = "microchip,core-i2c" },
 	{},
 };
 MODULE_DEVICE_TABLE(of, mpfs_i2c_of_match);
