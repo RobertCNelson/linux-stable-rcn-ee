@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (C) 2013 Texas Instruments Incorporated - http://www.ti.com/
+ * Copyright (C) 2013 Texas Instruments Incorporated - https://www.ti.com/
  *
  * Based on "omap4.dtsi"
  */
@@ -724,6 +724,7 @@
 
 		/* OCP2SCP1 */
 		/* IRQ for DWC3_3 and DWC3_4 need IRQ crossbar */
+
 		gpmc: gpmc@50000000 {
 			compatible = "ti,am3352-gpmc";
 			ti,hwmods = "gpmc";
@@ -758,6 +759,22 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 			ranges = <0 0x56000000 0x2000000>;
+
+			/*
+			 * Closed source PowerVR driver, no child device
+			 * binding or driver in mainline
+			 */
+			gpu: gpu@0 {
+				compatible = "ti,dra7-sgx544", "img,sgx544";
+				reg = <0x0 0x10000>;
+				interrupts = <GIC_SPI 16 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&l3_iclk_div>,
+					 <&gpu_core_gclk_mux>,
+					 <&gpu_hyd_gclk_mux>;
+				clock-names = "iclk",
+					      "fclk1",
+					      "fclk2";
+			};
 		};
 
 		crossbar_mpu: crossbar@4a002a48 {
@@ -870,6 +887,16 @@
 			};
 		};
 
+		bb2d: bb2d@59000000 {
+			compatible = "ti,dra7-bb2d", "vivante,gc";
+			reg = <0x59000000 0x0700>;
+			interrupts = <GIC_SPI 120 IRQ_TYPE_LEVEL_HIGH>;
+			ti,hwmods = "bb2d";
+			clocks = <&dss_clkctrl DRA7_BB2D_CLKCTRL 0>;
+			clock-names = "fck";
+			status = "disabled";
+		};
+
 		aes1_target: target-module@4b500000 {
 			compatible = "ti,sysc-omap2", "ti,sysc";
 			reg = <0x4b500080 0x4>,
@@ -932,7 +959,7 @@
 			};
 		};
 
-		sham_target: target-module@4b101000 {
+		sham1_target: target-module@4b101000 {
 			compatible = "ti,sysc-omap3-sham", "ti,sysc";
 			reg = <0x4b101100 0x4>,
 			      <0x4b101110 0x4>,
@@ -951,11 +978,41 @@
 			#size-cells = <1>;
 			ranges = <0x0 0x4b101000 0x1000>;
 
-			sham: sham@0 {
+			sham1: sham@0 {
 				compatible = "ti,omap5-sham";
 				reg = <0 0x300>;
 				interrupts = <GIC_SPI 46 IRQ_TYPE_LEVEL_HIGH>;
 				dmas = <&edma_xbar 119 0>;
+				dma-names = "rx";
+				clocks = <&l3_iclk_div>;
+				clock-names = "fck";
+			};
+		};
+
+		sham2_target: target-module@42701000 {
+			compatible = "ti,sysc-omap3-sham", "ti,sysc";
+			reg = <0x42701100 0x4>,
+			      <0x42701110 0x4>,
+			      <0x42701114 0x4>;
+			reg-names = "rev", "sysc", "syss";
+			ti,sysc-mask = <(SYSC_OMAP2_SOFTRESET |
+					 SYSC_OMAP2_AUTOIDLE)>;
+			ti,sysc-sidle = <SYSC_IDLE_FORCE>,
+					<SYSC_IDLE_NO>,
+					<SYSC_IDLE_SMART>;
+			ti,syss-mask = <1>;
+			/* Domains (P, C): l4per_pwrdm, l4sec_clkdm */
+			clocks = <&l4sec_clkctrl DRA7_L4SEC_SHAM2_CLKCTRL 0>;
+			clock-names = "fck";
+			#address-cells = <1>;
+			#size-cells = <1>;
+			ranges = <0x0 0x42701000 0x1000>;
+
+			sham2: sham@0 {
+				compatible = "ti,omap5-sham";
+				reg = <0 0x300>;
+				interrupts = <GIC_SPI 163 IRQ_TYPE_LEVEL_HIGH>;
+				dmas = <&edma_xbar 165 0>;
 				dma-names = "rx";
 				clocks = <&l3_iclk_div>;
 				clock-names = "fck";
