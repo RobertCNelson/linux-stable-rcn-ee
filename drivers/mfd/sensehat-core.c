@@ -21,7 +21,7 @@
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 #include <linux/regmap.h>
-#include "sensehat.h"
+#include <linux/mfd/sensehat.h>
 
 static struct platform_device *
 sensehat_client_dev_register(struct sensehat *sensehat, const char *name);

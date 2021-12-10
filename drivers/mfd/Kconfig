@@ -14,6 +14,8 @@ config MFD_CORE
 config MFD_SENSEHAT_CORE
 	tristate "Raspberry Pi Sense HAT core functions"
 	depends on I2C
+	select REGMAP
+	select REGMAP_I2C
 	select MFD_CORE
 	help
 	  This is the core driver for the Raspberry Pi Sense HAT. This provides

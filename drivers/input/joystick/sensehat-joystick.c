@@ -18,7 +18,7 @@
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
 
-#include "sensehat.h"
+#include <linux/mfd/sensehat.h>
 
 int sensehat_get_joystick_state(struct sensehat *sensehat);
 

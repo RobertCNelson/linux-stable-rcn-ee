@@ -23,7 +23,7 @@
 #include <linux/mod_devicetable.h>
 #include <linux/regmap.h>
 
-#include "sensehat.h"
+#include <linux/mfd/sensehat.h>
 
 #define GAMMA_SIZE sizeof_field(struct sensehat_display, gamma)
 #define VMEM_SIZE sizeof_field(struct sensehat_display, vmem)
