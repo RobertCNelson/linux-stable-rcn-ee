@@ -42,7 +42,6 @@ required:
   - reg
   - clocks
   - '#clock-cells'
-  - clock-output-names
 
 additionalProperties: false
 
@@ -58,10 +57,5 @@ examples:
                 reg = <0x0 0x20002000 0x0 0x1000>;
                 clocks = <&ref>;
                 #clock-cells = <1>;
-                clock-output-names = "cpu", "axi", "ahb", "envm", "mac0", "mac1", "mmc", "timer",
-                                     "mmuart0", "mmuart1", "mmuart2", "mmuart3", "mmuart4",
-                                     "spi0", "spi1", "i2c0", "i2c1", "can0", "can1", "usb", "rsvd",
-                                     "rtc", "qspi", "gpio0", "gpio1", "gpio2", "ddrc",
-                                     "fic0", "fic1", "fic2", "fic3", "athena", "cfm";
         };
     };

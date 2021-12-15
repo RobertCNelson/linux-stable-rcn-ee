@@ -143,11 +143,6 @@ static struct mpfs_cfg_hw_clock mpfs_cfg_clks[] = {
 	CLK_CFG(CLK_AHB, "clk_ahb", 4, 2, mpfs_div_ahb_table, 0),
 };
 
-static void mpfs_clk_unregister_cfg(struct device *dev, struct clk_hw *hw)
-{
-	devm_clk_hw_unregister(dev, hw);
-}
-
 static struct clk_hw *mpfs_clk_register_cfg(struct device *dev,
 					    struct mpfs_cfg_hw_clock *cfg_hw,
 					    void __iomem *sys_base)
@@ -167,19 +162,15 @@ static struct clk_hw *mpfs_clk_register_cfg(struct device *dev,
 }
 
 static int mpfs_clk_register_cfgs(struct device *dev, struct mpfs_cfg_hw_clock *cfg_hws,
-				  unsigned int num_clks, struct mpfs_clock_data *data)
+				  unsigned int num_clks, struct mpfs_clock_data *data,
+				  struct clk *clk_parent)
 {
 	struct clk_hw *hw;
-	struct clk *clk_parent;
 	void __iomem *sys_base = data->base;
 	unsigned int i, id;
 
 	for (i = 0; i < num_clks; i++) {
 		struct mpfs_cfg_hw_clock *cfg_hw = &cfg_hws[i];
-
-		clk_parent = devm_clk_get(dev, NULL);
-		if (IS_ERR(clk_parent))
-			return -EPROBE_DEFER;
 
 		cfg_hw->cfg.parent = __clk_get_hw(clk_parent);
 		cfg_hw->hw.init = CLK_HW_INIT_HW(cfg_hw->cfg.name, cfg_hw->cfg.parent,
@@ -198,7 +189,7 @@ static int mpfs_clk_register_cfgs(struct device *dev, struct mpfs_cfg_hw_clock *
 
 err_clk:
 	while (i--)
-		mpfs_clk_unregister_cfg(dev, data->hw_data.hws[cfg_hws[i].cfg.id]);
+		devm_clk_hw_unregister(dev, data->hw_data.hws[cfg_hws[i].cfg.id]);
 
 	return PTR_ERR(hw);
 }
@@ -318,11 +309,6 @@ static struct mpfs_periph_hw_clock mpfs_periph_clks[] = {
 	CLK_PERIPH(CLK_CFM, "clk_periph_cfm", PARENT_CLK(AHB), 29, 0),
 };
 
-static void mpfs_clk_unregister_periph(struct device *dev, struct clk_hw *hw)
-{
-	devm_clk_hw_unregister(dev, hw);
-}
-
 static struct clk_hw *mpfs_clk_register_periph(struct device *dev,
 					       struct mpfs_periph_hw_clock *periph_hw,
 					       void __iomem *sys_base)
@@ -368,7 +354,7 @@ static int mpfs_clk_register_periphs(struct device *dev, struct mpfs_periph_hw_c
 
 err_clk:
 	while (i--)
-		mpfs_clk_unregister_periph(dev, data->hw_data.hws[periph_hws[i].periph.id]);
+		devm_clk_hw_unregister(dev, data->hw_data.hws[periph_hws[i].periph.id]);
 
 	return PTR_ERR(hw);
 }
@@ -377,6 +363,7 @@ static int mpfs_clk_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct mpfs_clock_data *clk_data;
+	struct clk *clk_parent;
 	struct resource *res;
 	unsigned int num_clks;
 	int ret;
@@ -395,7 +382,12 @@ static int mpfs_clk_probe(struct platform_device *pdev)
 
 	clk_data->hw_data.num = num_clks;
 
-	ret = mpfs_clk_register_cfgs(dev, mpfs_cfg_clks, ARRAY_SIZE(mpfs_cfg_clks), clk_data);
+	clk_parent = devm_clk_get(dev, NULL);
+	if (IS_ERR(clk_parent))
+		return PTR_ERR(clk_parent);
+
+	ret = mpfs_clk_register_cfgs(dev, mpfs_cfg_clks, ARRAY_SIZE(mpfs_cfg_clks), clk_data,
+				     clk_parent);
 	if (ret)
 		goto err_clk;
 
