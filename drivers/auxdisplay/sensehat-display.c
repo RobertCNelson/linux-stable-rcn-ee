@@ -211,6 +211,25 @@ int sensehat_update_display(struct sensehat *sensehat)
 {
 	int i, j, ret;
 	struct sensehat_display *display = &sensehat->display;
+#if OLD_DRIVER
+	u16 *mem = (u16 *) display->vmem;
+	u8 *gamma = display->gamma;
+	sensehat_fb_t vmem_work;
+
+	for (j = 0; j < 8; j++) {
+		for (i = 0; i < 8; i++) {
+			vmem_work[(j * 24) + i ] =
+				gamma[(mem[(j * 8) + i] >> 11) & 0x1F];
+			vmem_work[(j * 24) + (i + 8) ] =
+				gamma[(mem[(j * 8) + i] >> 6) & 0x1F];
+			vmem_work[(j * 24) + (i + 16) ] =
+				gamma[(mem[(j * 8) + i]) & 0x1F];
+		}
+	}
+	ret = regmap_bulk_write(sensehat->regmap, SENSEHAT_DISPLAY,
+				vmem_work, sizeof(vmem_work));
+
+#else
 	sensehat_fb_t pixel_data;
 
 	for (i = 0; i < 8; ++i) {
@@ -223,6 +242,7 @@ int sensehat_update_display(struct sensehat *sensehat)
 
 	ret = regmap_bulk_write(sensehat->regmap, SENSEHAT_DISPLAY,
 				pixel_data, sizeof(pixel_data));
+#endif
 	if (ret < 0)
 		dev_err(sensehat->dev, "Update to 8x8 LED matrix display failed");
 	return ret;

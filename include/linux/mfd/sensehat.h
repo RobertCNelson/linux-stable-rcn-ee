@@ -14,8 +14,13 @@
 #define __LINUX_MFD_SENSEHAT_H_
 #include <linux/miscdevice.h>
 
+#define OLD_DRIVER 1
 //8x8 display with 3 color channels
+#if OLD_DRIVER
+typedef u8 sensehat_fb_t[192];
+#else
 typedef u8 sensehat_fb_t[8][3][8];
+#endif
 
 #define SENSEHAT_DISPLAY		0x00
 #define SENSEHAT_WAI			0xF0
@@ -49,9 +54,13 @@ struct sensehat {
 		struct miscdevice mdev;
 		struct mutex rw_mtx;
 		u8 gamma[32];
+#if OLD_DRIVER
+		u8 vmem[128];
+#else
 		struct {
 			u16 b:5, u:1, g:5, r:5;
 		} vmem[8][8];
+#endif
 	} display;
 };
 
