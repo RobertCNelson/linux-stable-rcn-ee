@@ -823,6 +823,7 @@
 
 &shdwc {
 	atmel,shdwc-debouncer = <976>;
+	microchip,lpm-connection = <&gmac1 &main_xtal>;
 	status = "okay";
 
 	input@0 {
