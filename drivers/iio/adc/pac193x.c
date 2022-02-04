@@ -1203,28 +1203,30 @@ void pac193x_read_reg_timeout(struct timer_list *t)
 
 static int pac193x_chip_identify(struct pac193x_chip_info *chip_info)
 {
-	int ret = 0;
 	struct i2c_client *client = chip_info->client;
-	u8 chip_rev_info[3];
-	/*try to identify the chip variant
-	 * read the chip ID values
-	 */
-	ret = pac193x_i2c_read(chip_info->client, PAC193X_PID_REG_ADDR,
-				(u8 *) chip_rev_info, 3);
+	u8 chip_rev_info;
+	int ret = 0;
+
+	ret = pac193x_i2c_read(chip_info->client, PAC193X_PID_REG_ADDR, &chip_rev_info, 1);
 	if (ret < 0) {
-		dev_err(&client->dev, "cannot read PAC193x revision\n");
-		goto chip_identify_err;
+		dev_err(&client->dev, "Cannot read PAC193x product ID\n");
+		return ret;
 	}
-	if (chip_rev_info[0] !=
-		pac193x_chip_config[chip_info->chip_variant].prod_id) {
-		ret = -EINVAL;
-		dev_err(&client->dev,
-"chip's product ID doesn't match the exact one for this part\n");
-		goto chip_identify_err;
+	
+	if (chip_rev_info != pac193x_chip_config[chip_info->chip_variant].prod_id) {
+		dev_err(&client->dev, 
+			"Chip's product ID doesn't match the exact one for this part\n");
+		return -EINVAL;
 	}
-	dev_info(&client->dev, "Chip revision: 0x%02X\n", chip_rev_info[2]);
-	chip_info->chip_revision = chip_rev_info[2];
-chip_identify_err:
+
+	ret = pac193x_i2c_read(chip_info->client, PAC193X_PID_REG_ADDR+2, &chip_rev_info, 1);
+	if (ret < 0) {
+		dev_err(&client->dev, "Cannot read PAC193x revision ID\n");
+		return ret;
+	}
+
+	dev_info(&client->dev, "Chip revision: 0x%02X\n", chip_rev_info);
+	chip_info->chip_revision = chip_rev_info;
 	return ret;
 }
 
