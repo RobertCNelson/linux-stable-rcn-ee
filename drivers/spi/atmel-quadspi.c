@@ -1213,8 +1213,9 @@ static int atmel_qspi_dma_init(struct spi_controller *ctrl)
 
 	aq->rx_chan = dma_request_chan(&aq->pdev->dev, "rx");
 	if (IS_ERR(aq->rx_chan)) {
+		ret = PTR_ERR(aq->rx_chan);
 		aq->rx_chan = NULL;
-		return dev_err_probe(&aq->pdev->dev, PTR_ERR(aq->rx_chan),
+		return dev_err_probe(&aq->pdev->dev, ret,
 				     "RX DMA channel is not available\n");
 	}
 
