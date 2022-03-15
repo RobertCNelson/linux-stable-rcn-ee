@@ -670,6 +670,7 @@ enum {
 	WID_TX_POWER			= 0x00CE,
 	WID_WOWLAN_TRIGGER		= 0X00CF,
 	WID_SET_MFP                     = 0x00D0,
+	WID_USE_PRIORITY_EAPOL		= 0x00D1,
 
 	WID_DEFAULT_MGMT_KEY_ID		= 0x00D2,
 	/*  EMAC Short WID list */
