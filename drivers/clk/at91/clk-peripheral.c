@@ -445,7 +445,7 @@ at91_clk_register_sam9x5_peripheral(struct regmap *regmap, spinlock_t *lock,
 				    const struct clk_pcr_layout *layout,
 				    const char *name, const char *parent_name,
 				    u32 id, const struct clk_range *range,
-				    int chg_pid)
+				    int chg_pid, bool critical)
 {
 	struct clk_sam9x5_peripheral *periph;
 	struct clk_init_data init;
@@ -470,6 +470,13 @@ at91_clk_register_sam9x5_peripheral(struct regmap *regmap, spinlock_t *lock,
 			     CLK_SET_RATE_PARENT;
 		init.ops = &sam9x5_peripheral_chg_ops;
 	}
+
+	/*
+	 * If this critical flag is set, the peripheral clock feeds a
+	 * peripheral that should not be disabled like DDR
+	 */
+	if (critical)
+		init.flags |= CLK_IS_CRITICAL;
 
 	periph->id = id;
 	periph->hw.init = &init;

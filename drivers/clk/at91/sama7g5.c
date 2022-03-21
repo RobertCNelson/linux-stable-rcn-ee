@@ -1090,7 +1090,7 @@ static void __init sama7g5_pmc_setup(struct device_node *np)
 						sama7g5_periphck[i].id,
 						&sama7g5_periphck[i].r,
 						sama7g5_periphck[i].chgp ? 0 :
-						INT_MIN);
+						INT_MIN, false);
 		if (IS_ERR(hw))
 			goto err_free;
 

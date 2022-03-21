@@ -236,7 +236,7 @@ static void __init at91sam9n12_pmc_setup(struct device_node *np)
 							 at91sam9n12_periphck[i].n,
 							 "masterck_div",
 							 at91sam9n12_periphck[i].id,
-							 &range, INT_MIN);
+							 &range, INT_MIN, false);
 		if (IS_ERR(hw))
 			goto err_free;
 

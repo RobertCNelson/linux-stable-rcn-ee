@@ -335,7 +335,7 @@ static void __init sam9x60_pmc_setup(struct device_node *np)
 							 sam9x60_periphck[i].n,
 							 "masterck_div",
 							 sam9x60_periphck[i].id,
-							 &range, INT_MIN);
+							 &range, INT_MIN, false);
 		if (IS_ERR(hw))
 			goto err_free;
 

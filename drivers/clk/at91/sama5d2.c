@@ -315,7 +315,7 @@ static void __init sama5d2_pmc_setup(struct device_node *np)
 							 sama5d2_periphck[i].n,
 							 "masterck_div",
 							 sama5d2_periphck[i].id,
-							 &range, INT_MIN);
+							 &range, INT_MIN, false);
 		if (IS_ERR(hw))
 			goto err_free;
 
@@ -329,7 +329,7 @@ static void __init sama5d2_pmc_setup(struct device_node *np)
 							 "h32mxck",
 							 sama5d2_periph32ck[i].id,
 							 &sama5d2_periph32ck[i].r,
-							 INT_MIN);
+							 INT_MIN, false);
 		if (IS_ERR(hw))
 			goto err_free;
 

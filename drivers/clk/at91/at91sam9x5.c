@@ -269,7 +269,7 @@ static void __init at91sam9x5_pmc_setup(struct device_node *np,
 							 at91sam9x5_periphck[i].n,
 							 "masterck_div",
 							 at91sam9x5_periphck[i].id,
-							 &range, INT_MIN);
+							 &range, INT_MIN, false);
 		if (IS_ERR(hw))
 			goto err_free;
 
@@ -282,7 +282,7 @@ static void __init at91sam9x5_pmc_setup(struct device_node *np,
 							 extra_pcks[i].n,
 							 "masterck_div",
 							 extra_pcks[i].id,
-							 &range, INT_MIN);
+							 &range, INT_MIN, false);
 		if (IS_ERR(hw))
 			goto err_free;
 

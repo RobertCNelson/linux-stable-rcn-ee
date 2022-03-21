@@ -504,7 +504,8 @@ of_at91_clk_periph_setup(struct device_node *np, u8 type)
 								 name,
 								 parent_name,
 								 id, &range,
-								 INT_MIN);
+								 INT_MIN,
+								 false);
 		}
 
 		if (IS_ERR(hw))
