@@ -754,6 +754,7 @@ static int mchp_pdmc_pcm_new(struct snd_soc_pcm_runtime *rtd,
 }
 
 static struct snd_soc_dai_driver mchp_pdmc_dai = {
+	.name	= "mchp-pdmc",
 	.probe	= mchp_pdmc_dai_probe,
 	.capture = {
 		.stream_name	= "Capture",
