@@ -69,6 +69,15 @@ properties:
       enabling the PDMC microphones to avoid unwanted noise due to microphones
       not being ready.
 
+  sound-name-prefix:
+    pattern: "^PDMC[0-9]$"
+    $ref: /schemas/types.yaml#/definitions/string
+    description:
+      used as prefix for sink/source names of the component. Must be a
+      unique string among multiple instances of the same component.
+      The name can be "PDMC0" or "PDMC1" ... "PDMCx", where x depends
+      on the maximum available instances on a Microchip SoC.
+
 required:
   - compatible
   - reg
