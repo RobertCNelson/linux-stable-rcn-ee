@@ -43,6 +43,15 @@ properties:
   dma-names:
     const: rx
 
+  sound-name-prefix:
+    pattern: "^SPDIFRX[0-9]$"
+    $ref: /schemas/types.yaml#/definitions/string
+    description:
+      used as prefix for sink/source names of the component. Must be a
+      unique string among multiple instances of the same component.
+      The name can be "SPDIFRX0" or "SPDIFRX1" ... "SPDIFRXx", where x depends
+      on the maximum available instances on a Microchip SoC.
+
 required:
   - "#sound-dai-cells"
   - compatible
