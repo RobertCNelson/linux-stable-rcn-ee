@@ -834,7 +834,6 @@
 	mmc-ddr-1_8v;
 	cap-mmc-highspeed;
 	cap-mmc-hw-reset;
-	mmc-hs200-1_8v;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_sdmmc0_default>;
 	status = "okay";
