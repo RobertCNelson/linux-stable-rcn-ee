@@ -95,7 +95,7 @@
 		assigned-clocks = <&pmc PMC_TYPE_CORE PMC_AUDIOPMCPLL>;
 		assigned-clock-rates = <196608000>;
 		compatible = "microchip,asrc-card";
-		microchip,model = "mchp-asrc-card @ sama5g7 EK";
+		microchip,model = "mchp-asrc-card @ sama7g5 EK";
 		status = "okay";
 
 		microchip,audio-asrc = <&asrc 0>, <&asrc 1>, <&asrc 2>, <&asrc 3>;
