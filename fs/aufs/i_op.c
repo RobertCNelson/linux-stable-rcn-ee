@@ -636,7 +636,11 @@ out:
 
 static void au_pin_hdir_set_owner(struct au_pin *p, struct task_struct *task)
 {
+#ifdef CONFIG_PREEMPT_RT
+	p->hdir->hi_inode->i_rwsem.rwbase.rtmutex.owner = task;
+#else
 	atomic_long_set(&p->hdir->hi_inode->i_rwsem.owner, (long)task);
+#endif
 }
 
 void au_pin_hdir_acquire_nest(struct au_pin *p)
