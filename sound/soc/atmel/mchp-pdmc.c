@@ -527,15 +527,17 @@ static int mchp_pdmc_hw_params(struct snd_pcm_substream *substream,
 	unsigned int osr = 0, osr_start;
 	unsigned int fs = params_rate(params);
 	int sample_bytes = params_physical_width(params) / 8;
+	int period_bytes = params_period_size(params) *
+		params_channels(params) * sample_bytes;
 	int maxburst;
 	u32 mr_val = 0;
 	u32 cfgr_val = 0;
 	int i;
 	int ret;
 
-	dev_dbg(comp->dev, "%s() rate=%u format=%#x width=%u channels=%u\n",
+	dev_dbg(comp->dev, "%s() rate=%u format=%#x width=%u channels=%u period_bytes=%d\n",
 		__func__, params_rate(params), params_format(params),
-		params_width(params), params_channels(params));
+		params_width(params), params_channels(params), period_bytes);
 
 	if (channels > dd->mic_no) {
 		dev_err(comp->dev, "more channels %u than microphones %d\n",
@@ -601,10 +603,9 @@ static int mchp_pdmc_hw_params(struct snd_pcm_substream *substream,
 
 	mr_val |= FIELD_PREP(MCHP_PDMC_MR_SINCORDER_MASK, dd->sinc_order);
 
-	maxburst = mchp_pdmc_period_to_maxburst(snd_pcm_lib_period_bytes(substream),
-						sample_bytes);
+	maxburst = mchp_pdmc_period_to_maxburst(period_bytes, sample_bytes);
 	dd->addr.maxburst = maxburst;
-	mr_val |= MCHP_PDMC_IR_RXCHUNK(dd->addr.maxburst);
+	mr_val |= FIELD_PREP(MCHP_PDMC_MR_CHUNK_MASK, dd->addr.maxburst);
 	dev_dbg(comp->dev, "maxburst set to %d\n", dd->addr.maxburst);
 
 	snd_soc_component_update_bits(comp, MCHP_PDMC_MR,
