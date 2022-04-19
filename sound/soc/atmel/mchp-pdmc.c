@@ -490,13 +490,13 @@ static u32 mchp_pdmc_mr_set_osr(int audio_filter_en, unsigned int osr)
 	return 0;
 }
 
-static inline int mchp_pdmc_period_to_maxburst(int period_size)
+static inline int mchp_pdmc_period_to_maxburst(int period_size, int sample_size)
 {
-	if (!(period_size % 8))
+	if (!(period_size % (sample_size * 8)))
 		return 8;
-	if (!(period_size % 4))
+	if (!(period_size % (sample_size * 4)))
 		return 4;
-	if (!(period_size % 2))
+	if (!(period_size % (sample_size * 2)))
 		return 2;
 	return 1;
 }
@@ -526,6 +526,8 @@ static int mchp_pdmc_hw_params(struct snd_pcm_substream *substream,
 	unsigned int channels = params_channels(params);
 	unsigned int osr = 0, osr_start;
 	unsigned int fs = params_rate(params);
+	int sample_bytes = params_physical_width(params) / 8;
+	int maxburst;
 	u32 mr_val = 0;
 	u32 cfgr_val = 0;
 	int i;
@@ -599,8 +601,10 @@ static int mchp_pdmc_hw_params(struct snd_pcm_substream *substream,
 
 	mr_val |= FIELD_PREP(MCHP_PDMC_MR_SINCORDER_MASK, dd->sinc_order);
 
-	dd->addr.maxburst = mchp_pdmc_period_to_maxburst(snd_pcm_lib_period_bytes(substream));
-	mr_val |= FIELD_PREP(MCHP_PDMC_MR_CHUNK_MASK, dd->addr.maxburst);
+	maxburst = mchp_pdmc_period_to_maxburst(snd_pcm_lib_period_bytes(substream),
+						sample_bytes);
+	dd->addr.maxburst = maxburst;
+	mr_val |= MCHP_PDMC_IR_RXCHUNK(dd->addr.maxburst);
 	dev_dbg(comp->dev, "maxburst set to %d\n", dd->addr.maxburst);
 
 	snd_soc_component_update_bits(comp, MCHP_PDMC_MR,
