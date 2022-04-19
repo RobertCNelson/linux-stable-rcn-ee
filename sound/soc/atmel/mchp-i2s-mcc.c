@@ -504,13 +504,13 @@ static int mchp_i2s_mcc_is_running(struct mchp_i2s_mcc_dev *dev)
 	return !!(sr & (MCHP_I2SMCC_SR_TXEN | MCHP_I2SMCC_SR_RXEN));
 }
 
-static inline int mchp_i2s_mcc_period_to_maxburst(int period_size)
+static inline int mchp_i2s_mcc_period_to_maxburst(int period_size, int sample_size)
 {
-	if (!(period_size % 8))
+	if (!(period_size % (sample_size * 8)))
 		return 8;
-	if (!(period_size % 4))
+	if (!(period_size % (sample_size * 4)))
 		return 4;
-	if (!(period_size % 2))
+	if (!(period_size % (sample_size * 2)))
 		return 2;
 	return 1;
 }
@@ -521,7 +521,9 @@ static int mchp_i2s_mcc_hw_params(struct snd_pcm_substream *substream,
 {
 	unsigned long rate = 0;
 	struct mchp_i2s_mcc_dev *dev = snd_soc_dai_get_drvdata(dai);
+	int sample_bytes = params_physical_width(params) / 8;
 	int period_size = snd_pcm_lib_period_bytes(substream);
+	int maxburst;
 	u32 mra = 0;
 	u32 mrb = 0;
 	unsigned int channels = params_channels(params);
@@ -642,11 +644,12 @@ static int mchp_i2s_mcc_hw_params(struct snd_pcm_substream *substream,
 	 * We must have the same burst size configured
 	 * in the DMA transfer and in out IP
 	 */
-	mrb |= MCHP_I2SMCC_MRB_DMACHUNK(mchp_i2s_mcc_period_to_maxburst(period_size));
+	maxburst = mchp_i2s_mcc_period_to_maxburst(period_size, sample_bytes);
+	mrb |= MCHP_I2SMCC_MRB_DMACHUNK(maxburst);
 	if (is_playback)
-		dev->playback.maxburst = mchp_i2s_mcc_period_to_maxburst(period_size);
+		dev->playback.maxburst = maxburst;
 	else
-		dev->capture.maxburst = mchp_i2s_mcc_period_to_maxburst(period_size);
+		dev->capture.maxburst = maxburst;
 
 	switch (params_format(params)) {
 	case SNDRV_PCM_FORMAT_S8:
