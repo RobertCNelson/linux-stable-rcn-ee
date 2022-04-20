@@ -247,6 +247,7 @@
 	status = "okay";
 
 	i2c1: i2c@600 {
+		dmas = <0>, <0>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_i2c1_default>;
 		i2c-analog-filter;
@@ -415,6 +416,7 @@
 	status = "okay";
 
 	i2c8: i2c@600 {
+		dmas = <0>, <0>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_i2c8_default>;
 		i2c-analog-filter;
@@ -457,6 +459,7 @@
 	status = "okay";
 
 	i2c9: i2c@600 {
+		dmas = <0>, <0>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_i2c9_default>;
 		i2c-analog-filter;
