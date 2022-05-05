@@ -190,4 +190,10 @@ config UIO_MICROCHIP_CAN
 	  Userspace I/O interface for the Microchip CAN device.
 	  If compiled as a module, it will be called uio-microchip-can.
 
+config UIO_MICROCHIP_DMA
+	tristate "Generic driver for Microchip Fabric DMA controller"
+	depends on UIO
+	help
+	  Userspace I/O interface for the Microchip Fabric DMA controller.
+	  If compiled as a module, it will be called uio-microchip-dma.
 endif
