@@ -14,6 +14,8 @@
 
 	chosen {
 		stdout-path = &uart0;
+		base_dtb = "am335x-boneblue.dts";
+		base_dtb_timestamp = __TIMESTAMP__;
 	};
 
 	leds {
@@ -341,7 +343,7 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 			ax8975@c {
-				compatible = "ak,ak8975";
+				compatible = "asahi-kasei,ak8975";
 				reg = <0x0c>;
 			};
 		};
