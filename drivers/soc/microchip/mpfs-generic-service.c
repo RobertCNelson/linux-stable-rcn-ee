@@ -183,7 +183,8 @@ static int mpfs_generic_service_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, generic_service_priv);
 	misc_register(&mpfs_generic_service_dev);
-	dev_info(&pdev->dev, "Registered MPFS generic service\n");
+	dev_warn(&pdev->dev,
+		 "Registered MPFS generic service - FOR DEVELOPMENT ONLY, DO NOT USE IN PRODUCTION\n");
 
 	return 0;
 }
