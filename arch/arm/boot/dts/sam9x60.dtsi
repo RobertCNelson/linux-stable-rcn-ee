@@ -728,6 +728,8 @@
 				compatible = "atmel,sama5d2-flexcom";
 				reg = <0xf801c000 0x200>;
 				clocks = <&pmc PMC_TYPE_PERIPHERAL 5>;
+				#address-cells = <1>;
+				#size-cells = <1>;
 				ranges = <0x0 0xf801c000 0x800>;
 				status = "disabled";
 
@@ -775,6 +777,8 @@
 					compatible = "microchip,sam9x60-i2c";
 					reg = <0x600 0x200>;
 					interrupts = <5 IRQ_TYPE_LEVEL_HIGH 7>;
+					#address-cells = <1>;
+					#size-cells = <0>;
 					clocks = <&pmc PMC_TYPE_PERIPHERAL 5>;
 					dmas = <&dma0
 						(AT91_XDMAC_DT_MEM_IF(0) |
