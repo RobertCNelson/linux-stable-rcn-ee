@@ -59,12 +59,12 @@
 
 		red {
 			label = "red";
-			gpios = <&pioD 19 GPIO_ACTIVE_HIGH>;
+			gpios = <&pioD 17 GPIO_ACTIVE_HIGH>;
 		};
 
 		green {
 			label = "green";
-			gpios = <&pioD 17 GPIO_ACTIVE_HIGH>;
+			gpios = <&pioD 19 GPIO_ACTIVE_HIGH>;
 		};
 
 		blue {
