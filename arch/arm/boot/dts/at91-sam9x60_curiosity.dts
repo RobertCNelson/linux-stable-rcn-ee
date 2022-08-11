@@ -17,6 +17,7 @@
 	aliases {
 		i2c0 = &i2c0;
 		i2c1 = &i2c6;
+		serial2 = &uart7;
 	};
 
 	chosen {
@@ -236,6 +237,19 @@
 	};
 };
 
+&flx7 {
+	atmel,flexcom-mode = <ATMEL_FLEXCOM_MODE_USART>;
+	status = "okay";
+
+	uart7: serial@200 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_flx7_default>;
+		status = "okay";
+	};
+};
+
 &macb0 {
 	phy-mode = "rmii";
 	#address-cells = <1>;
@@ -336,6 +350,12 @@
 			atmel,pins =
 				<AT91_PIOA 30 AT91_PERIPH_A AT91_PINCTRL_PULL_UP
 				 AT91_PIOA 31 AT91_PERIPH_A AT91_PINCTRL_PULL_UP>;
+		};
+
+		pinctrl_flx7_default: flx7_usart {
+			atmel,pins =
+				<AT91_PIOC 0 AT91_PERIPH_C AT91_PINCTRL_NONE
+				 AT91_PIOC 1 AT91_PERIPH_C AT91_PINCTRL_NONE>;
 		};
 	};
 
