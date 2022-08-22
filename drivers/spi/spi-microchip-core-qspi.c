@@ -581,6 +581,7 @@ static int mchp_coreqspi_remove(struct platform_device *pdev)
 
 static const struct of_device_id mchp_coreqspi_of_match[] = {
 	{ .compatible = "microchip,coreqspi-rtl-v2" },
+	{ .compatible = "microchip,mpfs-qspi" },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, mchp_coreqspi_of_match);
