@@ -163,4 +163,3 @@ $(obj)/piggy_data: $(obj)/../Image FORCE
 $(obj)/piggy.o: $(obj)/piggy_data
 
 CFLAGS_font.o := -Dstatic=
-AFLAGS_hyp-stub.o := -Wa,-march=armv7-a
