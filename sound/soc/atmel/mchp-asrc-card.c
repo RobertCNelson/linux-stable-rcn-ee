@@ -475,7 +475,7 @@ static int mchp_asoc_card_parse_convert(struct device *dev, struct device_node *
 		dev_err(dev, "unable to get convert-rate for %s", np->full_name);
 		return ret;
 	}
-	if (priv->convert_rate < 8000 && priv->convert_rate > 192000) {
+	if (priv->convert_rate < 8000 || priv->convert_rate > 192000) {
 		dev_err(dev, "invalid %sconvert-rate value for %s: %d",
 			prefix, np->full_name, priv->convert_rate);
 		return -EINVAL;
@@ -490,7 +490,7 @@ static int mchp_asoc_card_parse_convert(struct device *dev, struct device_node *
 			np->full_name);
 		return ret;
 	}
-	if (priv->convert_channels < 1 && priv->convert_channels > 8) {
+	if (priv->convert_channels < 1 || priv->convert_channels > 8) {
 		dev_err(dev, "invalid %sconvert-channels value for %s: %d",
 			prefix, np->full_name, priv->convert_channels);
 		return -EINVAL;
