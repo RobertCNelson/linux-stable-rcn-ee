@@ -168,8 +168,9 @@ static void mpfs_gpio_irq_unmask(struct irq_data *data)
 {
 	struct gpio_chip *gc = irq_data_get_irq_chip_data(data);
 	struct mpfs_gpio_chip *mpfs_gpio = gpiochip_get_data(gc);
-	int gpio_index = irqd_to_hwirq(data) % MAX_NUM_GPIO;
+	int gpio_index = irqd_to_hwirq(data);
 
+	gpiochip_enable_irq(gc, gpio_index);
 	mpfs_gpio_direction_input(gc, gpio_index);
 	mpfs_gpio_assign_bit(mpfs_gpio->base + MPFS_IRQ_REG, gpio_index, 1);
 	mpfs_gpio_assign_bit(mpfs_gpio->base + MPFS_GPIO_CTRL(gpio_index),
@@ -180,11 +181,12 @@ static void mpfs_gpio_irq_mask(struct irq_data *data)
 {
 	struct gpio_chip *gc = irq_data_get_irq_chip_data(data);
 	struct mpfs_gpio_chip *mpfs_gpio = gpiochip_get_data(gc);
-	int gpio_index = irqd_to_hwirq(data) % MAX_NUM_GPIO;
+	int gpio_index = irqd_to_hwirq(data);
 
 	mpfs_gpio_assign_bit(mpfs_gpio->base + MPFS_IRQ_REG, gpio_index, 1);
 	mpfs_gpio_assign_bit(mpfs_gpio->base + MPFS_GPIO_CTRL(gpio_index),
 			     MPFS_GPIO_EN_INT, 0);
+	gpiochip_disable_irq(gc, gpio_index);
 }
 
 static const struct irq_chip mpfs_gpio_irqchip = {
@@ -192,7 +194,8 @@ static const struct irq_chip mpfs_gpio_irqchip = {
 	.irq_set_type = mpfs_gpio_irq_set_type,
 	.irq_mask	= mpfs_gpio_irq_mask,
 	.irq_unmask	= mpfs_gpio_irq_unmask,
-	.flags = IRQCHIP_MASK_ON_SUSPEND,
+	.flags = IRQCHIP_IMMUTABLE | IRQCHIP_MASK_ON_SUSPEND,
+	GPIOCHIP_IRQ_RESOURCE_HELPERS,
 };
 
 static void mpfs_gpio_irq_handler(struct irq_desc *desc)
