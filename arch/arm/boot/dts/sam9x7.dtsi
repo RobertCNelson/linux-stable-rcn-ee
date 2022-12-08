@@ -817,7 +817,6 @@
 				atmel,fifo-size = <16>;
 				status = "disabled";
 			};
-
 		};
 
 		flx2: flexcom@f8024000 {
