@@ -14,8 +14,8 @@
 #include <linux/pm_runtime.h>
 #include <linux/regmap.h>
 
-#include "atmel-isc-regs.h"
-#include "atmel-isc.h"
+#include "microchip-isc-regs.h"
+#include "microchip-isc.h"
 
 static int isc_wait_clk_stable(struct clk_hw *hw)
 {
@@ -277,7 +277,7 @@ static int isc_clk_register(struct isc_device *isc, unsigned int id)
 	return 0;
 }
 
-int isc_clk_init(struct isc_device *isc)
+int microchip_isc_clk_init(struct isc_device *isc)
 {
 	unsigned int i;
 	int ret;
@@ -293,9 +293,9 @@ int isc_clk_init(struct isc_device *isc)
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(isc_clk_init);
+EXPORT_SYMBOL_GPL(microchip_isc_clk_init);
 
-void isc_clk_cleanup(struct isc_device *isc)
+void microchip_isc_clk_cleanup(struct isc_device *isc)
 {
 	unsigned int i;
 
@@ -308,4 +308,4 @@ void isc_clk_cleanup(struct isc_device *isc)
 			clk_unregister(isc_clk->clk);
 	}
 }
-EXPORT_SYMBOL_GPL(isc_clk_cleanup);
+EXPORT_SYMBOL_GPL(microchip_isc_clk_cleanup);

@@ -46,8 +46,8 @@
 #include <media/v4l2-subdev.h>
 #include <media/videobuf2-dma-contig.h>
 
-#include "atmel-isc-regs.h"
-#include "atmel-isc.h"
+#include "microchip-isc-regs.h"
+#include "microchip-isc.h"
 
 #define ISC_SAMA5D2_MAX_SUPPORT_WIDTH   2592
 #define ISC_SAMA5D2_MAX_SUPPORT_HEIGHT  1944
@@ -80,20 +80,40 @@ static const struct isc_format sama5d2_controller_formats[] = {
 		.fourcc		= V4L2_PIX_FMT_Y10,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_SBGGR8,
+		.raw		= true,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_SGBRG8,
+		.raw		= true,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_SGRBG8,
+		.raw		= true,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_SRGGB8,
+		.raw		= true,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_SBGGR10,
+		.raw		= true,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_SGBRG10,
+		.raw		= true,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_SGRBG10,
+		.raw		= true,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_SRGGB10,
+		.raw		= true,
+	}, {
+		.fourcc		= V4L2_PIX_FMT_SBGGR12,
+		.raw		= true,
+	}, {
+		.fourcc		= V4L2_PIX_FMT_SGBRG12,
+		.raw		= true,
+	}, {
+		.fourcc		= V4L2_PIX_FMT_SGRBG12,
+		.raw		= true,
+	}, {
+		.fourcc		= V4L2_PIX_FMT_SRGGB12,
+		.raw		= true,
 	},
 };
 
@@ -385,7 +405,7 @@ static int isc_parse_dt(struct device *dev, struct isc_device *isc)
 	return ret;
 }
 
-static int atmel_isc_probe(struct platform_device *pdev)
+static int microchip_isc_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct isc_device *isc;
@@ -408,7 +428,7 @@ static int atmel_isc_probe(struct platform_device *pdev)
 	if (IS_ERR(io_base))
 		return PTR_ERR(io_base);
 
-	isc->regmap = devm_regmap_init_mmio(dev, io_base, &isc_regmap_config);
+	isc->regmap = devm_regmap_init_mmio(dev, io_base, &microchip_isc_regmap_config);
 	if (IS_ERR(isc->regmap)) {
 		ret = PTR_ERR(isc->regmap);
 		dev_err(dev, "failed to init register map: %d\n", ret);
@@ -419,8 +439,8 @@ static int atmel_isc_probe(struct platform_device *pdev)
 	if (irq < 0)
 		return irq;
 
-	ret = devm_request_irq(dev, irq, isc_interrupt, 0,
-			       "atmel-sama5d2-isc", isc);
+	ret = devm_request_irq(dev, irq, microchip_isc_interrupt, 0,
+			       "microchip-sama5d2-isc", isc);
 	if (ret < 0) {
 		dev_err(dev, "can't register ISR for IRQ %u (ret=%i)\n",
 			irq, ret);
@@ -464,7 +484,7 @@ static int atmel_isc_probe(struct platform_device *pdev)
 	/* sama5d2-isc : ISPCK is required and mandatory */
 	isc->ispck_required = true;
 
-	ret = isc_pipeline_init(isc);
+	ret = microchip_isc_pipeline_init(isc);
 	if (ret)
 		return ret;
 
@@ -481,7 +501,7 @@ static int atmel_isc_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	ret = isc_clk_init(isc);
+	ret = microchip_isc_clk_init(isc);
 	if (ret) {
 		dev_err(dev, "failed to init isc clock: %d\n", ret);
 		goto unprepare_hclk;
@@ -523,7 +543,7 @@ static int atmel_isc_probe(struct platform_device *pdev)
 			goto cleanup_subdev;
 		}
 
-		subdev_entity->notifier.ops = &isc_async_ops;
+		subdev_entity->notifier.ops = &microchip_isc_async_ops;
 
 		ret = v4l2_async_nf_register(&isc->v4l2_dev,
 					     &subdev_entity->notifier);
@@ -535,6 +555,12 @@ static int atmel_isc_probe(struct platform_device *pdev)
 		if (video_is_registered(&isc->video_dev))
 			break;
 	}
+
+	regmap_read(isc->regmap, ISC_VERSION + isc->offsets.version, &ver);
+
+	ret = isc_mc_init(isc, ver);
+	if (ret < 0)
+		goto isc_probe_mc_init_err;
 
 	pm_runtime_set_active(dev);
 	pm_runtime_enable(dev);
@@ -555,7 +581,6 @@ static int atmel_isc_probe(struct platform_device *pdev)
 		goto unprepare_clk;
 	}
 
-	regmap_read(isc->regmap, ISC_VERSION + isc->offsets.version, &ver);
 	dev_info(dev, "Microchip ISC version %x\n", ver);
 
 	return 0;
@@ -566,8 +591,11 @@ unprepare_clk:
 disable_pm:
 	pm_runtime_disable(dev);
 
+isc_probe_mc_init_err:
+	isc_mc_cleanup(isc);
+
 cleanup_subdev:
-	isc_subdev_cleanup(isc);
+	microchip_isc_subdev_cleanup(isc);
 
 unregister_v4l2_device:
 	v4l2_device_unregister(&isc->v4l2_dev);
@@ -575,25 +603,27 @@ unregister_v4l2_device:
 unprepare_hclk:
 	clk_disable_unprepare(isc->hclock);
 
-	isc_clk_cleanup(isc);
+	microchip_isc_clk_cleanup(isc);
 
 	return ret;
 }
 
-static int atmel_isc_remove(struct platform_device *pdev)
+static int microchip_isc_remove(struct platform_device *pdev)
 {
 	struct isc_device *isc = platform_get_drvdata(pdev);
 
 	pm_runtime_disable(&pdev->dev);
 
-	isc_subdev_cleanup(isc);
+	isc_mc_cleanup(isc);
+
+	microchip_isc_subdev_cleanup(isc);
 
 	v4l2_device_unregister(&isc->v4l2_dev);
 
 	clk_disable_unprepare(isc->ispck);
 	clk_disable_unprepare(isc->hclock);
 
-	isc_clk_cleanup(isc);
+	microchip_isc_clk_cleanup(isc);
 
 	return 0;
 }
@@ -624,30 +654,30 @@ static int __maybe_unused isc_runtime_resume(struct device *dev)
 	return ret;
 }
 
-static const struct dev_pm_ops atmel_isc_dev_pm_ops = {
+static const struct dev_pm_ops microchip_isc_dev_pm_ops = {
 	SET_RUNTIME_PM_OPS(isc_runtime_suspend, isc_runtime_resume, NULL)
 };
 
 #if IS_ENABLED(CONFIG_OF)
-static const struct of_device_id atmel_isc_of_match[] = {
+static const struct of_device_id microchip_isc_of_match[] = {
 	{ .compatible = "atmel,sama5d2-isc" },
 	{ }
 };
-MODULE_DEVICE_TABLE(of, atmel_isc_of_match);
+MODULE_DEVICE_TABLE(of, microchip_isc_of_match);
 #endif
 
-static struct platform_driver atmel_isc_driver = {
-	.probe	= atmel_isc_probe,
-	.remove	= atmel_isc_remove,
+static struct platform_driver microchip_isc_driver = {
+	.probe	= microchip_isc_probe,
+	.remove	= microchip_isc_remove,
 	.driver	= {
-		.name		= "atmel-sama5d2-isc",
-		.pm		= &atmel_isc_dev_pm_ops,
-		.of_match_table = of_match_ptr(atmel_isc_of_match),
+		.name		= "microchip-sama5d2-isc",
+		.pm		= &microchip_isc_dev_pm_ops,
+		.of_match_table = of_match_ptr(microchip_isc_of_match),
 	},
 };
 
-module_platform_driver(atmel_isc_driver);
+module_platform_driver(microchip_isc_driver);
 
 MODULE_AUTHOR("Songjun Wu");
-MODULE_DESCRIPTION("The V4L2 driver for Atmel-ISC");
+MODULE_DESCRIPTION("The V4L2 driver for Microchip-ISC");
 MODULE_LICENSE("GPL v2");
