@@ -13,6 +13,7 @@
 #include <linux/of.h>
 #include <asm/alternative.h>
 #include <asm/cacheflush.h>
+#include <asm/dma-noncoherent.h>
 #include <asm/errata_list.h>
 #include <asm/hwcap.h>
 #include <asm/patch.h>
@@ -275,6 +276,7 @@ static bool __init_or_module cpufeature_probe_zicbom(unsigned int stage)
 		return false;
 
 	riscv_noncoherent_supported();
+	riscv_noncoherent_register_cache_ops(&zicbom_cmo_ops);
 	return true;
 }
 
