@@ -104,6 +104,10 @@ optional properties:
 optional microchip,sam9x60-shdwc or microchip,sama7g5-shdwc properties:
 - atmel,wakeup-rtt-timer: boolean to enable Real-time Timer Wake-up.
 
+optional microchip,sama7g5-shdwc properties:
+- microchip,lpm-connection: list of phandles to devices which are connected
+  to SHDWC's LPM pin
+
 The node contains child nodes for each wake-up input that the platform uses.
 
 2) input nodes
