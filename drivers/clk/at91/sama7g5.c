@@ -104,11 +104,17 @@ static const struct clk_range pll_outputs[] = {
 	{ .min = 2343750, .max = 1200000000 },
 };
 
+/* Fractional PLL core output range. */
+static const struct clk_range core_outputs[] = {
+	{ .min = 600000000, .max = 1200000000 },
+};
+
 /* CPU PLL characteristics. */
 static const struct clk_pll_characteristics cpu_pll_characteristics = {
 	.input = { .min = 12000000, .max = 50000000 },
 	.num_output = ARRAY_SIZE(cpu_pll_outputs),
 	.output = cpu_pll_outputs,
+	.core_output = core_outputs,
 };
 
 /* PLL characteristics. */
@@ -116,6 +122,7 @@ static const struct clk_pll_characteristics pll_characteristics = {
 	.input = { .min = 12000000, .max = 50000000 },
 	.num_output = ARRAY_SIZE(pll_outputs),
 	.output = pll_outputs,
+	.core_output = core_outputs,
 };
 
 /*
@@ -494,7 +501,7 @@ static const struct {
 	  .pp = { "audiopll_divpmcck", },
 	  .pp_mux_table = { 9, },
 	  .pp_count = 1,
-	  .pp_chg_id = 3, },
+	  .pp_chg_id = INT_MIN, },
 
 	{ .n  = "csi_gclk",
 	  .id = 33,
@@ -638,7 +645,7 @@ static const struct {
 	  .pp = { "syspll_divpmcck", "audiopll_divpmcck", },
 	  .pp_mux_table = { 5, 9, },
 	  .pp_count = 2,
-	  .pp_chg_id = 4, },
+	  .pp_chg_id = INT_MIN, },
 
 	{ .n  = "i2smcc1_gclk",
 	  .id = 58,
@@ -646,7 +653,7 @@ static const struct {
 	  .pp = { "syspll_divpmcck", "audiopll_divpmcck", },
 	  .pp_mux_table = { 5, 9, },
 	  .pp_count = 2,
-	  .pp_chg_id = 4, },
+	  .pp_chg_id = INT_MIN, },
 
 	{ .n  = "mcan0_gclk",
 	  .id = 61,
@@ -812,7 +819,7 @@ static const struct {
 	  .pp = { "syspll_divpmcck", "audiopll_divpmcck", },
 	  .pp_mux_table = { 5, 9, },
 	  .pp_count = 2,
-	  .pp_chg_id = 4, },
+	  .pp_chg_id = INT_MIN, },
 
 	{ .n = "spdiftx_gclk",
 	  .id = 85,
@@ -820,7 +827,7 @@ static const struct {
 	  .pp = { "syspll_divpmcck", "audiopll_divpmcck", },
 	  .pp_mux_table = { 5, 9, },
 	  .pp_count = 2,
-	  .pp_chg_id = 4, },
+	  .pp_chg_id = INT_MIN, },
 
 	{ .n  = "tcb0_ch0_gclk",
 	  .id = 88,
@@ -1068,7 +1075,7 @@ static void __init sama7g5_pmc_setup(struct device_node *np)
 	for (i = 0; i < ARRAY_SIZE(sama7g5_systemck); i++) {
 		hw = at91_clk_register_system(regmap, sama7g5_systemck[i].n,
 					      sama7g5_systemck[i].p,
-					      sama7g5_systemck[i].id);
+					      sama7g5_systemck[i].id, 0);
 		if (IS_ERR(hw))
 			goto err_free;
 
@@ -1083,7 +1090,7 @@ static void __init sama7g5_pmc_setup(struct device_node *np)
 						sama7g5_periphck[i].id,
 						&sama7g5_periphck[i].r,
 						sama7g5_periphck[i].chgp ? 0 :
-						INT_MIN);
+						INT_MIN, 0);
 		if (IS_ERR(hw))
 			goto err_free;
 
