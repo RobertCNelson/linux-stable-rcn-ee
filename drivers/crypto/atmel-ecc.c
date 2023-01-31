@@ -317,7 +317,7 @@ static int atmel_ecc_probe(struct i2c_client *client,
 	struct atmel_i2c_client_priv *i2c_priv;
 	int ret;
 
-	ret = atmel_i2c_probe(client, id);
+	ret = atmel_i2c_probe(client);
 	if (ret)
 		return ret;
 
