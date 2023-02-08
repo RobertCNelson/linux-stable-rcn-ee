@@ -273,6 +273,8 @@ static void __init setup_bootmem(void)
 	dma_contiguous_reserve(dma32_phys_limit);
 	if (IS_ENABLED(CONFIG_64BIT))
 		hugetlb_cma_reserve(PUD_SHIFT - PAGE_SHIFT);
+
+	memblock_set_bottom_up(true);
 }
 
 #ifdef CONFIG_MMU
