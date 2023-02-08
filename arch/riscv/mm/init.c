@@ -266,6 +266,7 @@ static void __init setup_bootmem(void)
 	if (IS_ENABLED(CONFIG_64BIT))
 		hugetlb_cma_reserve(PUD_SHIFT - PAGE_SHIFT);
 	memblock_allow_resize();
+	memblock_set_bottom_up(true);
 }
 
 #ifdef CONFIG_MMU
