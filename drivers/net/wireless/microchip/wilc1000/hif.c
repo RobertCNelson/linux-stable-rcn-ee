@@ -690,6 +690,10 @@ static void handle_rcvd_gnrl_async_info(struct work_struct *work)
 					       GFP_KERNEL);
                 hif_drv->hif_state = HOST_IF_WAITING_CONN_RESP;
         } else if (hif_drv->hif_state == HOST_IF_WAITING_CONN_RESP) {
+		/* check connecting state before parsing the ASSOC response */
+		if (!vif->connecting)
+			goto free_msg;
+
 		host_int_parse_assoc_resp_info(vif, mac_info->status);
 	} else if (mac_info->status == WILC_MAC_STATUS_DISCONNECTED) {
 		if (hif_drv->hif_state == HOST_IF_CONNECTED) {
