@@ -65,6 +65,7 @@ properties:
           - const: generic-ehci
       - items:
           - enum:
+              - atmel,at91sam9g45-ehci
               - cavium,octeon-6335-ehci
               - ibm,usb-ehci-440epx
               - ibm,usb-ehci-460ex
@@ -94,6 +95,10 @@ properties:
         - if a host only channel: first clock should be host.
         - if a USB DRD channel: first clock should be host and second
           one should be peripheral
+
+  clock-names:
+    minItems: 1
+    maxItems: 4
 
   power-domains:
     maxItems: 1
