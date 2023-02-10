@@ -1532,8 +1532,6 @@ void wilc_wlan_cleanup(struct net_device *dev)
 	while ((rqe = wilc_wlan_rxq_remove(wilc)))
 		kfree(rqe);
 
-	kfree(wilc->vmm_table);
-	wilc->vmm_table = NULL;
 	kfree(wilc->rx_buffer);
 	wilc->rx_buffer = NULL;
 	kfree(wilc->tx_buffer);
@@ -1796,14 +1794,6 @@ int wilc_wlan_init(struct net_device *dev)
 			goto fail;
 	}
 
-	if (!wilc->vmm_table)
-		wilc->vmm_table = kzalloc(WILC_VMM_TBL_SIZE, GFP_KERNEL);
-
-	if (!wilc->vmm_table) {
-		ret = -ENOBUFS;
-		goto fail;
-	}
-
 	if (!wilc->tx_buffer)
 		wilc->tx_buffer = kmalloc(WILC_TX_BUFF_SIZE, GFP_KERNEL);
 
@@ -1830,8 +1820,7 @@ int wilc_wlan_init(struct net_device *dev)
 	return 0;
 
 fail:
-	kfree(wilc->vmm_table);
-	wilc->vmm_table = NULL;
+
 	kfree(wilc->rx_buffer);
 	wilc->rx_buffer = NULL;
 	kfree(wilc->tx_buffer);

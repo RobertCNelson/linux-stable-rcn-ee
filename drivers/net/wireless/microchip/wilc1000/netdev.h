@@ -290,7 +290,7 @@ struct wilc {
 	u8 *rx_buffer;
 	u32 rx_buffer_offset;
 	u8 *tx_buffer;
-	u32 *vmm_table;
+	u32 vmm_table[WILC_VMM_TBL_SIZE];
 
 	struct txq_handle txq[NQUEUES];
 	int txq_entries;
