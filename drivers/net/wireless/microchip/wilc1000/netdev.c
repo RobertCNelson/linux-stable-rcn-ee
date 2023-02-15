@@ -212,7 +212,7 @@ static int wilc_start_firmware(struct net_device *dev)
 		return ret;
 
 	if (!wait_for_completion_timeout(&wilc->sync_event,
-					 msecs_to_jiffies(5000)))
+					 msecs_to_jiffies(500)))
 		return -ETIME;
 
 	return 0;
