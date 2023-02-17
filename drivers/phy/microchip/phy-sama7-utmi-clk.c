@@ -90,9 +90,14 @@ static void sama7_utmi_clk_disable(struct clk_hw *hw)
 
 static int sama7_utmi_clk_is_enabled(struct clk_hw *hw)
 {
+	int ret;
 	struct sama7_utmi_clk *utmi = to_sama7_utmi_clk(hw);
 
-	return reset_control_status(utmi->reset);
+	ret = reset_control_status(utmi->reset);
+	if (IS_ERR_VALUE(ret))
+		return ret;
+
+	return (ret == 0);
 }
 
 static const struct clk_ops sama7_utmi_ops = {
