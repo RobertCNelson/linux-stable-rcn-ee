@@ -482,7 +482,8 @@
 	bus-width = <4>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_sdmmc1_default>;
-	status = "disabled";
+	disable-wp;
+	status = "okay";
 };
 
 &rtt {
