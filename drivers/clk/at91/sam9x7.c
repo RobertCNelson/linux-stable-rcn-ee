@@ -650,7 +650,7 @@ static const struct {
 	{
 		.n = "qspi_gclk",
 		.id = 35,
-		.r = { .max = 20000000 },
+		.r = { .max = 200000000 },
 		.pp = { "audiopll_divpmcck", "plla_div2pmcck", },
 		.pp_mux_table = { 6, 8, },
 		.pp_count = 2,
