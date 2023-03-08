@@ -9,6 +9,7 @@
 #include <linux/mmc/sdio_ids.h>
 #include <linux/mmc/host.h>
 #include <linux/mmc/card.h>
+#include <linux/module.h>
 #include <linux/pm_runtime.h>
 #include <linux/mmc/sdio.h>
 #include <linux/of_irq.h>
@@ -1154,3 +1155,4 @@ module_driver(wilc_sdio_driver,
 	      sdio_register_driver,
 	      sdio_unregister_driver);
 MODULE_LICENSE("GPL");
+MODULE_VERSION("16.1 rc1");
