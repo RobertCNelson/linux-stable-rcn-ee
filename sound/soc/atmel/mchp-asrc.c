@@ -1020,7 +1020,6 @@ static int mchp_asrc_hw_params(struct snd_pcm_substream *substream,
 	bool is_playback = substream->stream == SNDRV_PCM_STREAM_PLAYBACK;
 	u32 ratio;
 	unsigned int channels = params ? params_channels(params) : 0;
-	unsigned int dsps_req = (channels + 1) / 2;
 	u32 ch_conf = 0;
 	u32 ch_conf_mask = 0;
 	int ret;
@@ -1091,8 +1090,6 @@ static int mchp_asrc_hw_params(struct snd_pcm_substream *substream,
 	ret = mchp_asrc_validate_bes(priv, list_head_bes, channels);
 	if (ret < 0)
 		goto __cleanup_bes;
-
-	dsps_req = (ret + 1) / 2;
 
 	if (!pcm->is_hostless) {
 		int period_size = snd_pcm_lib_period_bytes(substream);
