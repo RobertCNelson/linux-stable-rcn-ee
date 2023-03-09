@@ -97,7 +97,7 @@ static int atmel_sha204a_probe(struct i2c_client *client,
 	struct atmel_i2c_client_priv *i2c_priv;
 	int ret;
 
-	ret = atmel_i2c_probe(client, id);
+	ret = atmel_i2c_probe(client);
 	if (ret)
 		return ret;
 
