@@ -8,6 +8,7 @@
 #define WILC_WLAN_IF_H
 
 #include <linux/netdevice.h>
+#include "debugfs.h"
 #include "fw.h"
 
 /********************************************
@@ -15,6 +16,7 @@
  *      Wlan Configuration ID
  *
  ********************************************/
+#define	FW_WILC3000_BLE		"mchp/wilc3000_ble_firmware.bin"
 
 enum bss_types {
 	WILC_FW_BSS_TYPE_INFRA = 0,
@@ -34,6 +36,10 @@ enum {
 	WILC_FW_PREAMBLE_LONG = 1,	/* Long Preamble */
 	WILC_FW_PREAMBLE_AUTO = 2,	/* Auto Preamble Selection */
 };
+
+#define DEV_WIFI	0
+#define DEV_BT		1
+#define DEV_MAX		2
 
 enum {
 	WILC_FW_PASSIVE_SCAN = 0,
@@ -196,6 +202,13 @@ enum wid_type {
 	WID_STR			= 3,
 	WID_BIN_DATA		= 4,
 	WID_BIN			= 5,
+};
+
+enum {
+	ANTENNA1		= 0,
+	ANTENNA2		= 1,
+	DIVERSITY		= 2,
+	NUM_ANT_MODE
 };
 
 struct wid {
@@ -668,6 +681,7 @@ enum {
 	WID_TX_POWER			= 0x00CE,
 	WID_WOWLAN_TRIGGER		= 0X00CF,
 	WID_SET_MFP                     = 0x00D0,
+	WID_USE_PRIORITY_EAPOL		= 0x00D1,
 
 	WID_DEFAULT_MGMT_KEY_ID		= 0x00D2,
 	/*  EMAC Short WID list */
@@ -803,7 +817,9 @@ enum {
 	WID_ADD_BEACON			= 0x408a,
 
 	WID_SETUP_MULTICAST_FILTER	= 0x408b,
+	WID_ANTENNA_SELECTION		= 0x408c,
 	WID_EXTERNAL_AUTH_PARAM		= 0x408d,
+
 	/* Miscellaneous WIDs */
 	WID_ALL				= 0x7FFE,
 	WID_MAX				= 0xFFFF
