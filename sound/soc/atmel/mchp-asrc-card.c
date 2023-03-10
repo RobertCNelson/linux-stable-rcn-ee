@@ -391,8 +391,6 @@ static int mchp_asrc_card_dai_link_init(struct snd_soc_pcm_runtime *rtd)
 	int err = 0;
 	struct mchp_card_priv *card_priv = snd_soc_card_get_drvdata(card);
 	struct mchp_dai_link_priv *priv = card_priv->dai_link;
-	bool codec_playback_avail = false;
-	bool codec_capture_avail = false;
 
 	for (i = 0; i < card->num_links; i++, priv++) {
 		if (dai_link->id == priv->id)
@@ -423,11 +421,6 @@ static int mchp_asrc_card_dai_link_init(struct snd_soc_pcm_runtime *rtd)
 
 	for (i = 0; i < rtd->dai_link->num_codecs; i++) {
 		struct snd_soc_dai *codec_dai = asoc_rtd_to_codec(rtd, i);
-
-		if (codec_dai->driver->playback.stream_name)
-			codec_playback_avail = true;
-		if (codec_dai->driver->capture.stream_name)
-			codec_capture_avail = true;
 
 		/* Mikroe Proto Board uses a 12.288MhZ XTAL */
 		if (strstr(codec_dai->driver->name, "wm8731")) {
@@ -475,7 +468,7 @@ static int mchp_asoc_card_parse_convert(struct device *dev, struct device_node *
 		dev_err(dev, "unable to get convert-rate for %s", np->full_name);
 		return ret;
 	}
-	if (priv->convert_rate < 8000 && priv->convert_rate > 192000) {
+	if (priv->convert_rate < 8000 || priv->convert_rate > 192000) {
 		dev_err(dev, "invalid %sconvert-rate value for %s: %d",
 			prefix, np->full_name, priv->convert_rate);
 		return -EINVAL;
@@ -490,7 +483,7 @@ static int mchp_asoc_card_parse_convert(struct device *dev, struct device_node *
 			np->full_name);
 		return ret;
 	}
-	if (priv->convert_channels < 1 && priv->convert_channels > 8) {
+	if (priv->convert_channels < 1 || priv->convert_channels > 8) {
 		dev_err(dev, "invalid %sconvert-channels value for %s: %d",
 			prefix, np->full_name, priv->convert_channels);
 		return -EINVAL;

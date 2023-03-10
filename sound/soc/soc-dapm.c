@@ -4501,7 +4501,7 @@ static void dapm_connect_dai_pair(struct snd_soc_card *card,
 				  struct snd_soc_dai *cpu_dai)
 {
 	struct snd_soc_dai_link *dai_link = rtd->dai_link;
-	struct snd_soc_dapm_widget *dai, *codec, *playback_cpu, *capture_cpu;
+	struct snd_soc_dapm_widget *dai = NULL, *codec, *playback_cpu, *capture_cpu;
 	struct snd_pcm_substream *substream;
 	struct snd_pcm_str *streams = rtd->pcm->streams;
 	int stream;
