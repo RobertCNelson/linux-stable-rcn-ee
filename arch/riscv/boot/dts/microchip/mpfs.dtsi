@@ -494,7 +494,7 @@
 			interrupt-parent = <&plic>;
 			interrupts = <86>, <87>;
 			clocks = <&clkcfg CLK_USB>;
-			interrupt-names = "dma","mc";
+			interrupt-names = "dma", "mc";
 			status = "disabled";
 		};
 
