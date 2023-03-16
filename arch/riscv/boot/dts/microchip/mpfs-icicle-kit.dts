@@ -16,6 +16,14 @@
 	compatible = "microchip,mpfs-icicle-reference-rtlv2210", "microchip,mpfs-icicle-kit",
 		     "microchip,mpfs";
 
+	soc {
+		dma-ranges = <0x14 0x0 0x0 0x80000000 0x0 0x4000000>,
+			     <0x14 0x4000000 0x0 0xc4000000 0x0 0x6000000>,
+			     <0x14 0xa000000 0x0 0x8a000000 0x0 0x8000000>,
+			     <0x14 0x12000000 0x14 0x12000000 0x0 0x10000000>,
+			     <0x14 0x22000000 0x10 0x22000000 0x0 0x5e000000>;
+	};
+
 	aliases {
 		ethernet0 = &mac1;
 		serial0 = &mmuart0;
@@ -85,7 +93,19 @@
 	};
 };
 
+&can0 {
+	status = "okay";
+};
+
 &core_pwm0 {
+	status = "okay";
+};
+
+&fpgadma {
+	status = "okay";
+};
+
+&fpgalsram {
 	status = "okay";
 };
 
