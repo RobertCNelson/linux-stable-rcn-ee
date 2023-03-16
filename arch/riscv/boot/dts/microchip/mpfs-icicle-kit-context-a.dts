@@ -232,12 +232,14 @@
 };
 
 &mac0 {
+	dma-noncoherent;
 	status = "okay";
 	phy-mode = "sgmii";
 	phy-handle = <&phy0>;
 };
 
 &mac1 {
+	dma-noncoherent;
 	status = "okay";
 	phy-mode = "sgmii";
 	phy-handle = <&phy1>;
@@ -256,6 +258,7 @@
 };
 
 &mmc {
+	dma-noncoherent;
 	bus-width = <4>;
 	disable-wp;
 	cap-sd-highspeed;
@@ -339,6 +342,7 @@
 };
 
 &usb {
+	dma-noncoherent;
 	status = "okay";
 	dr_mode = "otg";
 };
