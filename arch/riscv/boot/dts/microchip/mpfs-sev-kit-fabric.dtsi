@@ -1,7 +1,23 @@
 // SPDX-License-Identifier: (GPL-2.0 OR MIT)
 /* Copyright (c) 2022 Microchip Technology Inc */
 
+#include <dt-bindings/gpio/gpio.h>
+
 / {
+	imx334_clk: imx334-clk {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <24000000>;
+	};
+
+	imx334_gate_clock0: imx334-gate-clock0 {
+		compatible = "gpio-gate-clock";
+		clocks = <&imx334_clk>;
+		#clock-cells = <0>;
+		enable-gpios = <&gpio2 9 GPIO_ACTIVE_HIGH>;
+		status = "okay";
+	};
+
 	fabric_clk3: fabric-clk3 {
 		compatible = "fixed-clock";
 		#clock-cells = <0>;
@@ -12,5 +28,51 @@
 		compatible = "fixed-clock";
 		#clock-cells = <0>;
 		clock-frequency = <125000000>;
+	};
+
+	mpfs_dma_proxy: mpfs-dma-proxy {
+		compatible = "microchip,mpfs-dma-proxy";
+		dmas = <&pdma 2>, <&pdma 3>;
+		dma-names = "dma-proxy0", "dma-proxy1";
+	};
+
+	reserved-memory {
+		cambuf0: buffer@C0000000 {
+			reg = <0x0 0xC0000000 0x0 0x1FFFFFF>;
+		};
+	};
+
+	mchp_dscmi_cam0: video-pipeline@40000000 {
+		compatible = "microchip,fpga-dscmi";
+		reg = <0x0 0x40000000 0x0 0x2000>;
+		interrupt-parent = <&plic>;
+		interrupts = <118>;
+		reset-gpios = <&gpio2 4 GPIO_ACTIVE_HIGH>;
+		memory-region = <&cambuf0>;
+		dmas = <&pdma 0>;
+		dma-names = "rx";
+		port {
+			mchp_dscmi_ep_cam0: endpoint {
+				remote-endpoint = <&imx334_ep_cam0>;
+			};
+		};
+	};
+};
+
+&i2c0 {
+	imx334_cam0: camera@1a {
+		compatible = "sony,imx334";
+		reset-gpios = <&gpio2 8 GPIO_ACTIVE_HIGH>;
+		clocks = <&imx334_gate_clock0>;
+		assigned-clocks = <&imx334_gate_clock0>;
+		assigned-clock-rates = <24000000>;
+		reg = <0x1a>;
+		port {
+			imx334_ep_cam0: endpoint {
+				remote-endpoint = <&mchp_dscmi_ep_cam0>;
+				data-lanes = <1 2 3 4>;
+				link-frequencies = /bits/ 64 <891000000>;
+			};
+		};
 	};
 };
