@@ -319,5 +319,5 @@
 
 &usb {
 	status = "okay";
-	dr_mode = "host";
+	dr_mode = "otg";
 };
