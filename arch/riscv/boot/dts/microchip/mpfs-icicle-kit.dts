@@ -211,15 +211,17 @@
 };
 
 &mac0 {
+	dma-noncoherent;
+	status = "okay";
 	phy-mode = "sgmii";
 	phy-handle = <&phy0>;
-	status = "okay";
 };
 
 &mac1 {
+	dma-noncoherent;
+	status = "okay";
 	phy-mode = "sgmii";
 	phy-handle = <&phy1>;
-	status = "okay";
 
 	phy1: ethernet-phy@9 {
 		reg = <9>;
@@ -235,6 +237,7 @@
 };
 
 &mmc {
+	dma-noncoherent;
 	bus-width = <4>;
 	disable-wp;
 	cap-sd-highspeed;
@@ -318,6 +321,7 @@
 };
 
 &usb {
+	dma-noncoherent;
 	status = "okay";
 	dr_mode = "otg";
 };
