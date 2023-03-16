@@ -27,8 +27,8 @@ allOf:
 
 properties:
   compatible:
-oneOf:
-    - items:
+    oneOf:
+      - items:
           - const: microchip,mpfs-pdma # Microchip out of order DMA transfer
           - const: sifive,fu540-c000-pdma # Sifive in-order DMA transfer
       - items:
