@@ -15,13 +15,13 @@
 void acquire_bus(struct wilc *wilc, enum bus_acquire acquire, int source)
 {
 	mutex_lock(&wilc->hif_cs);
-	if (acquire == WILC_BUS_ACQUIRE_AND_WAKEUP && wilc->power_save_mode)
+	if (acquire == WILC_BUS_ACQUIRE_AND_WAKEUP)
 		chip_wakeup(wilc, source);
 }
 
 void release_bus(struct wilc *wilc, enum bus_release release, int source)
 {
-	if (release == WILC_BUS_RELEASE_ALLOW_SLEEP && wilc->power_save_mode)
+	if (release == WILC_BUS_RELEASE_ALLOW_SLEEP)
 		chip_allow_sleep(wilc, source);
 	mutex_unlock(&wilc->hif_cs);
 }

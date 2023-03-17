@@ -2373,7 +2373,6 @@ static void handle_power_management(struct work_struct *work)
 {
 	struct host_if_msg *msg = container_of(work, struct host_if_msg, work);
 	struct wilc_vif *vif = msg->vif;
-	struct wilc *wilc = vif->wilc;
 	struct power_mgmt_param *pm_param = &msg->body.pwr_mgmt_info;
 	int result;
 	struct wid wid;
@@ -2394,8 +2393,6 @@ static void handle_power_management(struct work_struct *work)
 	result = wilc_send_config_pkt(vif, WILC_SET_CFG, &wid, 1);
 	if (result)
 		netdev_err(vif->ndev, "Failed to send power management\n");
-	else
-		wilc->power_save_mode = pm_param->enabled;
 
 	kfree(msg);
 }
