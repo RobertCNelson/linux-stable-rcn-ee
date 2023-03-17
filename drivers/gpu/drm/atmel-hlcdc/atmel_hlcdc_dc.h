@@ -14,6 +14,8 @@
 #include <linux/regmap.h>
 
 #include <drm/drm_plane.h>
+#include <drm/drm_modes.h>
+#include <drm/drm_crtc.h>
 
 #define ATMEL_HLCDC_LAYER_CHER			0x0
 #define ATMEL_HLCDC_LAYER_CHDR			0x4
@@ -343,6 +345,12 @@ struct atmel_hlcdc_dc {
 		u32 imr;
 		struct drm_atomic_state *state;
 	} suspend;
+	struct {
+		wait_queue_head_t wait;
+		bool pending;
+	} commit;
+	struct gfx2d_gpu *gpu;
+	struct platform_device *gpu_pdev;
 };
 
 extern struct atmel_hlcdc_formats atmel_hlcdc_plane_rgb_formats;

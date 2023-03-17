@@ -2,6 +2,9 @@
 atmel-hlcdc-dc-y := atmel_hlcdc_crtc.o \
 		atmel_hlcdc_dc.o \
 		atmel_hlcdc_output.o \
-		atmel_hlcdc_plane.o
+		atmel_hlcdc_plane.o \
+		gfx2d/gfx2d_device.o \
+		gfx2d/gfx2d_gpu.o \
+		gfx2d/gfx2d_ringbuffer.o
 
 obj-$(CONFIG_DRM_ATMEL_HLCDC)	+= atmel-hlcdc-dc.o
