@@ -272,11 +272,11 @@ static int mchp_asrc_dmaengine_pcm_prepare_slave_config(struct device *dev,
 
 	snd_dmaengine_pcm_set_config_from_dai_data(substream, dma_data, slave_config);
 	dev_dbg(dev,
-		"%s() FE AIF dir %s, src addr %#x, dst addr: %#x, src_addr_width %d, dst_addr_width %d, src maxburst %u, dst maxburst %u\n",
+		"%s() FE AIF dir %s, src addr %pap, dst addr: %pap, src_addr_width %d, dst_addr_width %d, src maxburst %u, dst maxburst %u\n",
 		__func__,
 		slave_config->direction == DMA_MEM_TO_DEV ? "DMA_MEM_TO_DEV" :
 							"DMA_DEV_TO_MEM",
-		slave_config->src_addr, slave_config->dst_addr,
+		&slave_config->src_addr, &slave_config->dst_addr,
 		slave_config->src_addr_width, slave_config->dst_addr_width,
 		slave_config->src_maxburst, slave_config->dst_maxburst);
 
@@ -354,11 +354,11 @@ mchp_asrc_be_dmaengine_slave_config(struct mchp_asrc_dmaengine_dai_dma *dma,
 	config_be.device_fc = false;
 
 	dev_dbg(dev,
-		"%s() AIF %s dir %s, src addr %#x, dst addr: %#x, src_addr_width %d, dst_addr_width %d, src maxburst %u, dst maxburst %u\n",
+		"%s() AIF %s dir %s, src addr %pap, dst addr: %pap, src_addr_width %d, dst_addr_width %d, src maxburst %u, dst maxburst %u\n",
 		__func__, dai->name,
 		config_be.direction == DMA_MEM_TO_DEV ? "DMA_MEM_TO_DEV" :
 							"DMA_DEV_TO_MEM",
-		config_be.src_addr, config_be.dst_addr,
+		&config_be.src_addr, &config_be.dst_addr,
 		config_be.src_addr_width, config_be.dst_addr_width,
 		config_be.src_maxburst, config_be.dst_maxburst);
 
@@ -493,11 +493,11 @@ static int mchp_asrc_dma_hw_params(struct snd_soc_component *component,
 	}
 
 	dev_dbg(dev,
-		"%s() config %s: dir %s, src addr %#x, dst addr %#x, src_addr_width %d, dst_addr_width %d, src maxburst %u, dst maxburst %u\n",
+		"%s() config %s: dir %s, src addr %pap, dst addr %pap, src_addr_width %d, dst_addr_width %d, src maxburst %u, dst maxburst %u\n",
 		__func__, cpu_dai->name,
 		config_fe.direction == DMA_MEM_TO_DEV ? "MEM_TO_DEV" :
 							"DEV_TO_MEM",
-		config_fe.src_addr, config_fe.dst_addr,
+		&config_fe.src_addr, &config_fe.dst_addr,
 		config_fe.src_addr_width, config_fe.dst_addr_width,
 		config_fe.src_maxburst, config_fe.dst_maxburst);
 
@@ -674,7 +674,7 @@ static int mchp_asrc_dma_prepare(struct snd_soc_component *component,
 		rtm_be = subs_be->runtime;
 
 		dev_dbg(dev,
-			"%s() BE buffer_size(periods) %ld, buffer_size(bytes) %u period_size(frames) %ld period_size(bytes) %u\n",
+			"%s() BE buffer_size(periods) %ld, buffer_size(bytes) %zu period_size(frames) %ld period_size(bytes) %zu\n",
 			__func__,
 			rtm_be->buffer_size, snd_pcm_lib_buffer_bytes(subs_be),
 			rtm_be->period_size, snd_pcm_lib_period_bytes(subs_be));
@@ -735,7 +735,7 @@ static int mchp_asrc_dma_prepare(struct snd_soc_component *component,
 		rtm_be = subs_be->runtime;
 
 		dev_dbg(dev,
-			"%s() BE buffer_size(periods) %ld, buffer_size(bytes) %u period_size(frames) %ld period_size(bytes) %u\n",
+			"%s() BE buffer_size(periods) %ld, buffer_size(bytes) %zu period_size(frames) %ld period_size(bytes) %zu\n",
 			__func__,
 			rtm_be->buffer_size, snd_pcm_lib_buffer_bytes(subs_be),
 			rtm_be->period_size, snd_pcm_lib_period_bytes(subs_be));
@@ -769,7 +769,7 @@ static int mchp_asrc_dma_prepare(struct snd_soc_component *component,
 		dma_fe_priv->desc = desc;
 
 		dev_dbg(dev,
-			"%s() FE buffer_size(periods) %ld, buffer_size(bytes) %u period_size(frames) %ld period_size(bytes) %u\n",
+			"%s() FE buffer_size(periods) %ld, buffer_size(bytes) %zu period_size(frames) %ld period_size(bytes) %zu\n",
 			__func__,
 			subs->runtime->buffer_size, snd_pcm_lib_buffer_bytes(subs),
 			subs->runtime->period_size, snd_pcm_lib_period_bytes(subs));
