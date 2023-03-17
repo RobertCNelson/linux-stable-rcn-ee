@@ -538,8 +538,8 @@ static int dw_csi_probe(struct platform_device *pdev)
 	if (ret) {
 		if (dev->of_node)
 			dev_err(dev, "irq csi %s failed\n", of_id->name);
-	else
-		dev_err(dev, "irq csi %d failed\n", pdata->id);
+		else
+			dev_err(dev, "irq csi %d failed\n", pdata->id);
 
 		goto end;
 	}
