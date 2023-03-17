@@ -1275,9 +1275,9 @@ static int mchp_asrc_hw_params(struct snd_pcm_substream *substream,
 		list_add_tail(&dma_be->list, &dma->dma_in_list);
 
 		dev_dbg(priv->dev,
-			"%s() IN AIF %s: DMA addr %#x DMA chan %s DMA maxburst %d\n",
+			"%s() IN AIF %s: DMA addr %pad DMA chan %s DMA maxburst %d\n",
 			__func__, trig_be ? trig_be->phandle->np->full_name : dai->name,
-			dma_data_be->addr, dma_data_be->chan_name, dma_data_be->maxburst);
+			&dma_data_be->addr, dma_data_be->chan_name, dma_data_be->maxburst);
 	}
 
 	INIT_LIST_HEAD(&dma->dma_out_list);
@@ -1315,9 +1315,9 @@ static int mchp_asrc_hw_params(struct snd_pcm_substream *substream,
 		list_add_tail(&dma_be->list, &dma->dma_out_list);
 
 		dev_dbg(priv->dev,
-			"%s() OUT AIF %s: DMA addr %#x DMA chan %s DMA maxburst %d\n",
+			"%s() OUT AIF %s: DMA addr %pad DMA chan %s DMA maxburst %d\n",
 			__func__, trig_be ? trig_be->phandle->np->full_name : dai->name,
-			dma_data_be->addr, dma_data_be->chan_name, dma_data_be->maxburst);
+			&dma_data_be->addr, dma_data_be->chan_name, dma_data_be->maxburst);
 	}
 
 	/* get the number of free DSPs */
