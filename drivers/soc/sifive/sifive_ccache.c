@@ -14,7 +14,9 @@
 #include <linux/of_address.h>
 #include <linux/device.h>
 #include <linux/bitfield.h>
+#include <asm/cacheflush.h>
 #include <asm/cacheinfo.h>
+#include <asm/dma-noncoherent.h>
 #include <soc/sifive/sifive_ccache.h>
 
 #define SIFIVE_CCACHE_DIRECCFIX_LOW 0x100
@@ -41,6 +43,9 @@
 
 #define SIFIVE_CCACHE_WAYENABLE 0x08
 #define SIFIVE_CCACHE_ECCINJECTERR 0x40
+
+#define SIFIVE_CCACHE_FLUSH64 0x200
+#define SIFIVE_CCACHE_FLUSH32 0x240
 
 #define SIFIVE_CCACHE_MAX_ECCINTR 4
 
@@ -205,6 +210,32 @@ static irqreturn_t ccache_int_handler(int irq, void *device)
 	return IRQ_HANDLED;
 }
 
+static void sifive_ccache_wback_inval(unsigned long vaddr, unsigned long size)
+{
+	u64 addr;
+	void * __iomem flush = ccache_base + SIFIVE_CCACHE_FLUSH64;
+	phys_addr_t start = virt_to_phys((void *)vaddr);
+	phys_addr_t aligned_start = start & ~0x3f;
+	u64 end = start + size;
+	u64 aligned_end;
+
+	if (!size)
+		return;
+
+	aligned_end = end + 0x3f;
+	aligned_end &= ~0x3f;
+
+	mb();
+	for (addr = aligned_start; addr < aligned_end; addr += 64)
+		writeq(addr, flush);
+}
+
+static struct riscv_cache_ops sifive_ccache_cmo_ops = {
+	.clean_range = sifive_ccache_wback_inval,
+	.inval_range = sifive_ccache_wback_inval,
+	.flush_range = sifive_ccache_wback_inval,
+};
+
 static int __init sifive_ccache_init(void)
 {
 	struct device_node *np;
@@ -252,7 +283,11 @@ static int __init sifive_ccache_init(void)
 	ccache_config_read();
 
 	ccache_cache_ops.get_priv_group = ccache_get_priv_group;
+
 	riscv_set_cacheinfo_ops(&ccache_cache_ops);
+	riscv_noncoherent_register_cache_ops(&sifive_ccache_cmo_ops);
+	riscv_cbom_block_size = true;
+	riscv_noncoherent_supported();
 
 #ifdef CONFIG_DEBUG_FS
 	setup_sifive_debug();
@@ -269,4 +304,4 @@ err_node_put:
 	return rc;
 }
 
-device_initcall(sifive_ccache_init);
+arch_initcall(sifive_ccache_init);

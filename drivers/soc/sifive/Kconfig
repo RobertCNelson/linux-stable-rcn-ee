@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: GPL-2.0
 
-if SOC_SIFIVE
+if SOC_SIFIVE || SOC_MICROCHIP_POLARFIRE
 
 config SIFIVE_CCACHE
 	bool "Sifive Composable Cache controller"
+	select RISCV_DMA_NONCOHERENT
 	help
 	  Support for the composable cache controller on SiFive platforms.
 
