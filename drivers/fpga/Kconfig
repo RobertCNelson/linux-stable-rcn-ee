@@ -257,6 +257,15 @@ config FPGA_M10_BMC_SEC_UPDATE
 	  (BMC) and provides support for secure updates for the BMC image,
 	  the FPGA image, the Root Entry Hashes, etc.
 
+config FPGA_MGR_MICROCHIP_AUTO_UPDATE
+	tristate "Microchip PolarFire SoC AUTO UPDATE"
+	depends on POLARFIRE_SOC_SYS_CTRL
+	help
+	  FPGA manager driver support for reprogramming PolarFire SoC from
+	  within Linux, using the Auto Upgrade feature of the system controller.
+
+	  If built as a module, it will be called microchip-auto-update.
+
 config FPGA_MGR_MICROCHIP_SPI
 	tristate "Microchip Polarfire SPI FPGA manager"
 	depends on SPI
