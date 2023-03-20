@@ -22,6 +22,8 @@ properties:
   reg:
     maxItems: 1
 
+  dma-noncoherent: true
+
   interrupts:
     minItems: 2
     maxItems: 2
