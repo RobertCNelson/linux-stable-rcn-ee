@@ -304,4 +304,4 @@ err_node_put:
 	return rc;
 }
 
-device_initcall(sifive_ccache_init);
+arch_initcall(sifive_ccache_init);
