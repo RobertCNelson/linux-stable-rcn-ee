@@ -57,8 +57,8 @@ examples:
       #clock-cells = <1>;
       clocks = <&pmc PMC_TYPE_CORE PMC_UTMI>;
       clock-names = "utmi_clk";
-      resets = <&reset_controller RESET_USB_PHY1>,
-        <&reset_controller RESET_USB_PHY2>,
-        <&reset_controller RESET_USB_PHY3>;
+      resets = <&reset_controller SAMA7G5_RESET_USB_PHY1>,
+               <&reset_controller SAMA7G5_RESET_USB_PHY2>,
+               <&reset_controller SAMA7G5_RESET_USB_PHY3>;
       reset-names = "usb0_reset", "usb1_reset", "usb2_reset";
     };
