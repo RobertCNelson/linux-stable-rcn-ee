@@ -9,6 +9,8 @@
 #include <linux/module.h>
 #include <linux/dma-direct.h>
 #include <linux/dma-map-ops.h>
+#include <linux/of_address.h>
+#include <linux/libfdt.h>
 
 struct dma_coherent_mem {
 	void		*virt_base;
@@ -306,19 +308,27 @@ int dma_mmap_from_global_coherent(struct vm_area_struct *vma, void *vaddr,
 					vaddr, size, ret);
 }
 
-int dma_init_global_coherent(phys_addr_t phys_addr, size_t size)
+static int __dma_init_global_coherent(phys_addr_t phys_addr, dma_addr_t device_addr, size_t size)
 {
 	struct dma_coherent_mem *mem;
 
-	mem = dma_init_coherent_memory(phys_addr, phys_addr, size, true);
+	if (phys_addr == device_addr)
+		mem = dma_init_coherent_memory(phys_addr, device_addr, size, true);
+	else
+		mem = dma_init_coherent_memory(phys_addr, device_addr, size, false);
+
 	if (IS_ERR(mem))
 		return PTR_ERR(mem);
 	dma_coherent_default_memory = mem;
 	pr_info("DMA: default coherent area is set\n");
 	return 0;
 }
-#endif /* CONFIG_DMA_GLOBAL_POOL */
 
+int dma_init_global_coherent(phys_addr_t phys_addr, size_t size)
+{
+	return __dma_init_global_coherent(phys_addr, phys_addr, size);
+}
+#endif /* CONFIG_DMA_GLOBAL_POOL */
 /*
  * Support for reserved memory regions defined in device tree
  */
@@ -336,8 +346,8 @@ static int rmem_dma_device_init(struct reserved_mem *rmem, struct device *dev)
 	if (!rmem->priv) {
 		struct dma_coherent_mem *mem;
 
-		mem = dma_init_coherent_memory(rmem->base, rmem->base,
-					       rmem->size, true);
+		mem = dma_init_coherent_memory(rmem->base, rmem->base, rmem->size, true);
+
 		if (IS_ERR(mem))
 			return PTR_ERR(mem);
 		rmem->priv = mem;
@@ -365,7 +375,7 @@ static int __init rmem_dma_setup(struct reserved_mem *rmem)
 	if (of_get_flat_dt_prop(node, "reusable", NULL))
 		return -EINVAL;
 
-#ifdef CONFIG_ARM
+#if defined(CONFIG_ARM) || defined(CONFIG_RISCV)
 	if (!of_get_flat_dt_prop(node, "no-map", NULL)) {
 		pr_err("Reserved memory: regions without no-map are not yet supported\n");
 		return -EINVAL;
@@ -374,8 +384,7 @@ static int __init rmem_dma_setup(struct reserved_mem *rmem)
 
 #ifdef CONFIG_DMA_GLOBAL_POOL
 	if (of_get_flat_dt_prop(node, "linux,dma-default", NULL)) {
-		WARN(dma_reserved_default_memory,
-		     "Reserved memory: region for default DMA coherent area is redefined\n");
+		pr_warn("Reserved memory: region for default DMA coherent area is redefined\n");
 		dma_reserved_default_memory = rmem;
 	}
 #endif
@@ -389,10 +398,33 @@ static int __init rmem_dma_setup(struct reserved_mem *rmem)
 #ifdef CONFIG_DMA_GLOBAL_POOL
 static int __init dma_init_reserved_memory(void)
 {
+	struct device_node *np;
+	const struct bus_dma_region *map = NULL;
+	int ret;
+	s64 uc_offset = 0;
+
 	if (!dma_reserved_default_memory)
 		return -ENOMEM;
-	return dma_init_global_coherent(dma_reserved_default_memory->base,
-					dma_reserved_default_memory->size);
+
+	/* dma-ranges is only valid for global pool i.e. dma-default is set */
+	np = of_find_node_with_property(NULL, "linux,dma-default");
+	if (!np)
+		goto global_init;
+	of_node_put(np);
+
+	ret = of_dma_get_range(np, &map);
+	if (ret < 0)
+		goto global_init;
+
+	/* Sanity check for the non-coherent global pool from uncached region */
+	if (map->dma_start == dma_reserved_default_memory->base &&
+	    map->size == dma_reserved_default_memory->size)
+		uc_offset = map->offset;
+
+global_init:
+	return __dma_init_global_coherent(dma_reserved_default_memory->base + uc_offset,
+					  dma_reserved_default_memory->base,
+					  dma_reserved_default_memory->size);
 }
 core_initcall(dma_init_reserved_memory);
 #endif /* CONFIG_DMA_GLOBAL_POOL */

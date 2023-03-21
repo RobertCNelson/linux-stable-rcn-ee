@@ -154,4 +154,16 @@ static inline const __be32 *of_get_pci_address(struct device_node *dev, int bar_
 	return __of_get_address(dev, -1, bar_no, size, flags);
 }
 
+struct bus_dma_region;
+#if defined(CONFIG_OF_ADDRESS) && defined(CONFIG_HAS_DMA)
+int of_dma_get_range(struct device_node *np,
+		     const struct bus_dma_region **map);
+#else
+static inline int of_dma_get_range(struct device_node *np,
+				   const struct bus_dma_region **map)
+{
+	return -ENODEV;
+}
+#endif
+
 #endif /* __OF_ADDRESS_H */

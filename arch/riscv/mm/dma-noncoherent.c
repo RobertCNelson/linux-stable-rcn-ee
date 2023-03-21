@@ -9,8 +9,59 @@
 #include <linux/dma-map-ops.h>
 #include <linux/mm.h>
 #include <asm/cacheflush.h>
+#include <asm/dma-noncoherent.h>
 
 static bool noncoherent_supported;
+
+struct riscv_cache_ops noncoherent_cache_ops = {
+	.clean_range = NULL,
+	.inval_range = NULL,
+	.flush_range = NULL,
+};
+EXPORT_SYMBOL_GPL(noncoherent_cache_ops);
+
+#ifdef CONFIG_RISCV_ISA_ZICBOM
+#define ZICBOM_CMO_OP(_op, _start, _size, _cachesize)				\
+	asm volatile("mv a0, %1\n\t"						\
+		     "j 2f\n\t"							\
+		     "3:\n\t"							\
+		     "cbo." __stringify(_op) " (a0)\n\t"			\
+		     "add a0, a0, %0\n\t"					\
+		     "2:\n\t"							\
+		     "bltu a0, %2, 3b\n\t"					\
+		     : : "r"(_cachesize),					\
+			 "r"((unsigned long)(_start) & ~((_cachesize) - 1UL)),	\
+			 "r"((unsigned long)(_start) + (_size))			\
+		     : "a0")
+
+static void zicbom_cmo_clean_range(unsigned long addr, unsigned long size)
+{
+	ZICBOM_CMO_OP(clean, addr, size, riscv_cbom_block_size);
+}
+
+static void zicbom_cmo_flush_range(unsigned long addr, unsigned long size)
+{
+	ZICBOM_CMO_OP(flush, addr, size, riscv_cbom_block_size);
+}
+
+static void zicbom_cmo_inval_range(unsigned long addr, unsigned long size)
+{
+	ZICBOM_CMO_OP(inval, addr, size, riscv_cbom_block_size);
+}
+
+struct riscv_cache_ops zicbom_cmo_ops = {
+	.clean_range = &zicbom_cmo_clean_range,
+	.inval_range = &zicbom_cmo_inval_range,
+	.flush_range = &zicbom_cmo_flush_range,
+};
+#else
+struct riscv_cache_ops zicbom_cmo_ops = {
+	.clean_range = NULL,
+	.inval_range = NULL,
+	.flush_range = NULL,
+};
+#endif
+EXPORT_SYMBOL_GPL(zicbom_cmo_ops);
 
 void arch_sync_dma_for_device(phys_addr_t paddr, size_t size,
 			      enum dma_data_direction dir)
@@ -19,13 +70,13 @@ void arch_sync_dma_for_device(phys_addr_t paddr, size_t size,
 
 	switch (dir) {
 	case DMA_TO_DEVICE:
-		ALT_CMO_OP(clean, vaddr, size, riscv_cbom_block_size);
+		riscv_dma_noncoherent_clean(vaddr, size);
 		break;
 	case DMA_FROM_DEVICE:
-		ALT_CMO_OP(clean, vaddr, size, riscv_cbom_block_size);
+		riscv_dma_noncoherent_clean(vaddr, size);
 		break;
 	case DMA_BIDIRECTIONAL:
-		ALT_CMO_OP(flush, vaddr, size, riscv_cbom_block_size);
+		riscv_dma_noncoherent_flush(vaddr, size);
 		break;
 	default:
 		break;
@@ -42,7 +93,7 @@ void arch_sync_dma_for_cpu(phys_addr_t paddr, size_t size,
 		break;
 	case DMA_FROM_DEVICE:
 	case DMA_BIDIRECTIONAL:
-		ALT_CMO_OP(flush, vaddr, size, riscv_cbom_block_size);
+		riscv_dma_noncoherent_flush(vaddr, size);
 		break;
 	default:
 		break;
@@ -53,7 +104,7 @@ void arch_dma_prep_coherent(struct page *page, size_t size)
 {
 	void *flush_addr = page_address(page);
 
-	ALT_CMO_OP(flush, flush_addr, size, riscv_cbom_block_size);
+	riscv_dma_noncoherent_flush(flush_addr, size);
 }
 
 void arch_setup_dma_ops(struct device *dev, u64 dma_base, u64 size,
@@ -78,3 +129,12 @@ void riscv_noncoherent_supported(void)
 	     "Non-coherent DMA support enabled without a block size\n");
 	noncoherent_supported = true;
 }
+
+void riscv_noncoherent_register_cache_ops(struct riscv_cache_ops *ops)
+{
+	if (!ops)
+		return;
+
+	noncoherent_cache_ops = *ops;
+}
+EXPORT_SYMBOL_GPL(riscv_noncoherent_register_cache_ops);
