@@ -1176,6 +1176,7 @@ struct macb_config {
 			    struct clk **rx_clk, struct clk **tsu_clk);
 	int	(*init)(struct platform_device *pdev);
 	int	jumbo_max_len;
+	unsigned int		max_tx_length;
 	const struct macb_usrio_config *usrio;
 };
 
