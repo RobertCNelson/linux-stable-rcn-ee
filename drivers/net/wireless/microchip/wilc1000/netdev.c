@@ -1310,15 +1310,8 @@ struct wilc_vif *wilc_netdev_ifc_init(struct wilc *wl, const char *name,
 		ret = register_netdev(ndev);
 
 	if (ret) {
-		ret = -EFAULT;
-		goto error;
-	}
-
-	wl->hif_workqueue = alloc_ordered_workqueue("%s-wq", WQ_MEM_RECLAIM,
-						    ndev->name);
-	if (!wl->hif_workqueue) {
-		ret = -ENOMEM;
-		goto error;
+		free_netdev(ndev);
+		return ERR_PTR(-EFAULT);
 	}
 
 	ndev->needs_free_netdev = true;
@@ -1332,10 +1325,6 @@ struct wilc_vif *wilc_netdev_ifc_init(struct wilc *wl, const char *name,
 	synchronize_srcu(&wl->srcu);
 
 	return vif;
-
-error:
-	free_netdev(ndev);
-	return ERR_PTR(ret);
 }
 
 MODULE_LICENSE("GPL");
