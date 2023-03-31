@@ -1324,6 +1324,9 @@ void wilc_handle_isr(struct wilc *wilc)
 {
 	u32 int_status;
 
+	if (wilc->close)
+		return;
+
 	acquire_bus(wilc, WILC_BUS_ACQUIRE_AND_WAKEUP, DEV_WIFI);
 	wilc->hif_func->hif_read_int(wilc, &int_status);
 

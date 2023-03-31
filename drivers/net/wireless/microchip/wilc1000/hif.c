@@ -671,7 +671,8 @@ static void handle_rcvd_ntwrk_info(struct work_struct *work)
 {
 	struct host_if_msg *msg = container_of(work, struct host_if_msg, work);
 	struct wilc_rcvd_net_info *rcvd_info = &msg->body.net_info;
-	struct wilc_user_scan_req *scan_req = &msg->vif->hif_drv->usr_scan_req;
+	struct host_if_drv *hif_drv;
+	struct wilc_user_scan_req *scan_req;
 	const u8 *ch_elm;
 	u8 *ies;
 	int ies_len;
@@ -698,6 +699,11 @@ static void handle_rcvd_ntwrk_info(struct work_struct *work)
 	if (ch_elm && ch_elm[1] > 0)
 		rcvd_info->ch = ch_elm[2];
 
+	if (!msg->vif || !msg->vif->hif_drv)
+		goto done;
+
+	hif_drv = msg->vif->hif_drv;
+	scan_req = &hif_drv->usr_scan_req;
 	if (scan_req->scan_result)
 		scan_req->scan_result(SCAN_EVENT_NETWORK_FOUND, rcvd_info,
 				      scan_req->priv);
@@ -1295,6 +1301,9 @@ int wilc_set_external_auth_param(struct wilc_vif *vif,
 static void handle_scan_timer(struct work_struct *work)
 {
 	struct host_if_msg *msg = container_of(work, struct host_if_msg, work);
+
+	if(!msg->vif || !msg->vif->wilc || msg->vif->wilc->close)
+		return;
 
 	handle_scan_done(msg->vif, SCAN_EVENT_ABORTED);
 	kfree(msg);
