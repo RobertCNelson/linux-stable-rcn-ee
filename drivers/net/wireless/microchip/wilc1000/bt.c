@@ -99,7 +99,7 @@ static ssize_t wilc_bt_dev_write(struct file *f, const char __user *buff,
 
 
 	if (len == 0) {
-		pr_debug("received invalid size <=0: %d\n", len);
+		pr_debug("received invalid size <=0: %zu\n", len);
 		return len;
 	}
 
@@ -551,7 +551,7 @@ static void wilc_bt_firmware_download(struct wilc *wilc)
 		pr_err("Can't allocate buffer for BT firmware download IO error\n");
 		goto fail_1;
 	}
-	pr_info("Downloading BT firmware size = %d ...\n", buffer_size);
+	pr_info("Downloading BT firmware size = %zu ...\n", buffer_size);
 
 	offset = 0;
 	addr = 0x400000;

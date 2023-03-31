@@ -210,7 +210,7 @@ static void cfg_connect_result(enum conn_event conn_disconn_evt, u8 mac_status,
 		}
 
 		PRINT_INFO(vif->ndev, CFG80211_DBG,
-			   "Association request info elements length = %d\n",
+			   "Association request info elements length = %zu\n",
 			   conn_info->req_ies_len);
 		PRINT_INFO(vif->ndev, CFG80211_DBG,
 			   "Association response info elements length = %d\n",
@@ -316,7 +316,7 @@ static int scan(struct wiphy *wiphy, struct cfg80211_scan_request *request)
 
 	PRINT_INFO(vif->ndev, CFG80211_DBG, "Requested num of channel %d\n",
 		   request->n_channels);
-	PRINT_INFO(vif->ndev, CFG80211_DBG, "Scan Request IE len =  %d\n",
+	PRINT_INFO(vif->ndev, CFG80211_DBG, "Scan Request IE len =  %zu\n",
 		   request->ie_len);
 	PRINT_INFO(vif->ndev, CFG80211_DBG, "Number of SSIDs %d\n",
 		   request->n_ssids);
@@ -1673,7 +1673,7 @@ static int start_ap(struct wiphy *wiphy, struct net_device *dev,
 	PRINT_INFO(vif->ndev, HOSTAPD_DBG, "Starting ap\n");
 
 	PRINT_INFO(vif->ndev, CFG80211_DBG,
-		   "Interval= %d\n DTIM period= %d\n Head length= %d Tail length= %d channelnum[%d]\n",
+		   "Interval= %d\n DTIM period= %d\n Head length= %zu Taillength= %zu channelnum[%d]\n",
 		   settings->beacon_interval, settings->dtim_period,
 		   settings->beacon.head_len, settings->beacon.tail_len,
 		   channelnum);
@@ -2181,16 +2181,24 @@ int wilc_cfg80211_init(struct wilc **wilc, struct device *dev, int io_type,
 	INIT_LIST_HEAD(&wl->rxq_head.list);
 	INIT_LIST_HEAD(&wl->vif_list);
 
+	wl->hif_workqueue = create_singlethread_workqueue("wlan0_wq");
+	if (!wl->hif_workqueue) {
+		ret = -ENOMEM;
+		goto free_cfg;
+	}
 	vif = wilc_netdev_ifc_init(wl, "wlan%d", WILC_STATION_MODE,
 				   NL80211_IFTYPE_STATION, false);
 	if (IS_ERR(vif)) {
 		ret = PTR_ERR(vif);
-		goto free_cfg;
+		goto free_hq;
 	}
 
 	wilc_sysfs_init(wl);
 
 	return 0;
+
+free_hq:
+	destroy_workqueue(wl->hif_workqueue);
 
 free_cfg:
 #ifdef WILC_DEBUGFS

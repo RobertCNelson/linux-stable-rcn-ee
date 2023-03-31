@@ -16,13 +16,13 @@
 void acquire_bus(struct wilc *wilc, enum bus_acquire acquire, int source)
 {
 	mutex_lock(&wilc->hif_cs);
-	if (acquire == WILC_BUS_ACQUIRE_AND_WAKEUP && wilc->power_save_mode)
+	if (acquire == WILC_BUS_ACQUIRE_AND_WAKEUP)
 		chip_wakeup(wilc, source);
 }
 
 void release_bus(struct wilc *wilc, enum bus_release release, int source)
 {
-	if (release == WILC_BUS_RELEASE_ALLOW_SLEEP && wilc->power_save_mode)
+	if (release == WILC_BUS_RELEASE_ALLOW_SLEEP)
 		chip_allow_sleep(wilc, source);
 	mutex_unlock(&wilc->hif_cs);
 }
@@ -1322,6 +1322,9 @@ static void wilc_wlan_handle_isr_ext(struct wilc *wilc, u32 int_status)
 void wilc_handle_isr(struct wilc *wilc)
 {
 	u32 int_status;
+
+	if (wilc->close)
+		return;
 
 	acquire_bus(wilc, WILC_BUS_ACQUIRE_AND_WAKEUP, DEV_WIFI);
 	wilc->hif_func->hif_read_int(wilc, &int_status);

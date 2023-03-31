@@ -248,7 +248,6 @@ struct wilc {
 	struct clk *rtc_clk;
 	bool initialized;
 	u32 chipid;
-	bool power_save_mode;
 	int dev_irq_num;
 	int close;
 	u8 vif_num;

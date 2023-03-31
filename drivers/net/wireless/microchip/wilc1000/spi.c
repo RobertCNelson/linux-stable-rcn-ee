@@ -301,7 +301,7 @@ static struct spi_driver wilc_spi_driver = {
 };
 module_spi_driver(wilc_spi_driver);
 MODULE_LICENSE("GPL");
-MODULE_VERSION("16.1 rc1");
+MODULE_VERSION("16.1 rc2");
 
 static int wilc_spi_tx(struct wilc *wilc, u8 *b, u32 len)
 {
