@@ -72,15 +72,6 @@ static int __sched __rwbase_read_lock(struct rwbase_rt *rwb,
 	int ret;
 
 	raw_spin_lock_irq(&rtm->wait_lock);
-	/*
-	 * Allow readers, as long as the writer has not completely
-	 * acquired the semaphore for write.
-	 */
-	if (atomic_read(&rwb->readers) != WRITER_BIAS) {
-		atomic_inc(&rwb->readers);
-		raw_spin_unlock_irq(&rtm->wait_lock);
-		return 0;
-	}
 
 	/*
 	 * Call into the slow lock path with the rtmutex->wait_lock
@@ -142,6 +133,14 @@ static __always_inline int rwbase_read_lock(struct rwbase_rt *rwb,
 {
 	if (rwbase_read_trylock(rwb))
 		return 0;
+
+	if (state != TASK_RTLOCK_WAIT) {
+		/*
+		 * If we are going to sleep and we have plugged IO queued,
+		 * make sure to submit it to avoid deadlocks.
+		 */
+		blk_flush_plug(current->plug, true);
+	}
 
 	return __rwbase_read_lock(rwb, state);
 }
