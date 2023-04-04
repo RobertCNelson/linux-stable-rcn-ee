@@ -79,6 +79,7 @@ enum drm_sched_policy {
 	DRM_SCHED_POLICY_DEFAULT,
 	DRM_SCHED_POLICY_RR,
 	DRM_SCHED_POLICY_FIFO,
+	DRM_SCHED_POLICY_SINGLE_ENTITY,
 	DRM_SCHED_POLICY_MAX,
 };
 
@@ -101,16 +102,20 @@ struct drm_sched_entity {
 	 */
 	struct list_head		list;
 
-	/**
-	 * @rq:
-	 *
-	 * Runqueue on which this entity is currently scheduled.
-	 *
-	 * FIXME: Locking is very unclear for this. Writers are protected by
-	 * @rq_lock, but readers are generally lockless and seem to just race
-	 * with not even a READ_ONCE.
-	 */
-	struct drm_sched_rq		*rq;
+	union {
+		/**
+		 * @rq:
+		 *
+		 * Runqueue on which this entity is currently scheduled.
+		 *
+		 * FIXME: Locking is very unclear for this. Writers are
+		 * protected by @rq_lock, but readers are generally lockless and
+		 * seem to just race with not even a READ_ONCE.
+		 */
+		struct drm_sched_rq		*rq;
+		/** @single_sched: Single scheduler */
+		struct drm_gpu_scheduler	*single_sched;
+	};
 
 	/**
 	 * @sched_list:
@@ -476,6 +481,7 @@ struct drm_sched_backend_ops {
  * struct drm_gpu_scheduler - scheduler instance-specific data
  *
  * @ops: backend operations provided by the driver.
+ * @single_entity: Single entity for the scheduler
  * @hw_submission_limit: the max size of the hardware queue.
  * @timeout: the time after which a job is removed from the scheduler.
  * @name: name of the ring for which this scheduler is being used.
@@ -506,6 +512,7 @@ struct drm_sched_backend_ops {
  */
 struct drm_gpu_scheduler {
 	const struct drm_sched_backend_ops	*ops;
+	struct drm_sched_entity		*single_entity;
 	uint32_t			hw_submission_limit;
 	long				timeout;
 	const char			*name;
@@ -587,6 +594,8 @@ int drm_sched_entity_init(struct drm_sched_entity *entity,
 			  struct drm_gpu_scheduler **sched_list,
 			  unsigned int num_sched_list,
 			  atomic_t *guilty);
+struct drm_gpu_scheduler *
+drm_sched_entity_to_scheduler(struct drm_sched_entity *entity);
 long drm_sched_entity_flush(struct drm_sched_entity *entity, long timeout);
 void drm_sched_entity_fini(struct drm_sched_entity *entity);
 void drm_sched_entity_destroy(struct drm_sched_entity *entity);
