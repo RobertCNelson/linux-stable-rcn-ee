@@ -37,8 +37,8 @@
 	};
 
 	reserved-memory {
-		cambuf0: buffer@C0000000 {
-			reg = <0x0 0xC0000000 0x0 0x1FFFFFF>;
+		cambuf0: buffer@C6000000 {
+			reg = <0x0 0xC6000000 0x0 0x2000000>;
 		};
 	};
 

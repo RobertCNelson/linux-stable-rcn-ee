@@ -16,7 +16,11 @@
 	compatible = "microchip,mpfs-sev-kit", "microchip,mpfs";
 
 	soc {
-		dma-ranges = <0 0 0 0 0x40 0>;
+		dma-ranges = <0x14 0x0 0x0 0x80000000 0x0 0x4000000>,
+			     <0x14 0x4000000 0x0 0xc4000000 0x0 0x6000000>,
+			     <0x14 0xa000000 0x0 0x8a000000 0x0 0x8000000>,
+			     <0x14 0x12000000 0x14 0x12000000 0x0 0x10000000>,
+			     <0x14 0x22000000 0x10 0x22000000 0x0 0x5e000000>;
 	};
 
 	aliases {
@@ -36,26 +40,73 @@
 		timebase-frequency = <MTIMER_FREQ>;
 	};
 
+	kernel: memory@80000000 {
+		device_type = "memory";
+		reg = <0x0 0x80000000 0x0 0x4000000>;
+	};
+
+	ddr_cached_low: memory@8a000000 {
+		device_type = "memory";
+		reg = <0x0 0x8a000000 0x0 0x8000000>;
+	};
+
+	ddr_non_cached_low: memory@c4000000 {
+		device_type = "memory";
+		reg = <0x0 0xc4000000 0x0 0x6000000>;
+	};
+
+	ddr_cached_high: memory@1022000000 {
+		device_type = "memory";
+		reg = <0x10 0x22000000 0x0 0x5e000000>;
+	};
+
+	ddr_non_cached_high: memory@1412000000 {
+		device_type = "memory";
+		reg = <0x14 0x12000000 0x0 0x10000000>;
+	};
+
 	reserved-memory {
 		#address-cells = <2>;
 		#size-cells = <2>;
 		ranges;
 
-		fabricbuf0ddrc: buffer@80000000 {
+		hss: hss-buffer@103fc00000 {
 			compatible = "shared-dma-pool";
-			reg = <0x0 0x80000000 0x0 0x2000000>;
+			reg = <0x10 0x3fc00000 0x0 0x400000>;
 			no-map;
 		};
 
-		fabricbuf1ddrnc: buffer@c4000000 {
+		dma_non_cached_low: non-cached-low-buffer {
 			compatible = "shared-dma-pool";
-			reg = <0x0 0xc4000000 0x0 0x4000000>;
+			size = <0x0 0x2000000>;
+			no-map;
+			linux,dma-default;
+			alloc-ranges = <0x0 0xc4000000 0x0 0x2000000>;
+		};
+
+		dma_non_cached_high: non-cached-high-buffer {
+			compatible = "shared-dma-pool";
+			size = <0x0 0x10000000>;
+			no-map;
+			linux,dma-default;
+			alloc-ranges = <0x14 0x12000000 0x0 0x10000000>;
+		};
+
+		fabricbuf0ddrc: buffer@88000000 {
+			compatible = "shared-dma-pool";
+			reg = <0x0 0x88000000 0x0 0x2000000>;
 			no-map;
 		};
 
-		fabricbuf2ddrncwcb: buffer@d4000000 {
+		fabricbuf1ddrnc: buffer@c8000000 {
 			compatible = "shared-dma-pool";
-			reg = <0x0 0xd4000000 0x0 0x4000000>;
+			reg = <0x0 0xc8000000 0x0 0x2000000>;
+			no-map;
+		};
+
+		fabricbuf2ddrncwcb: buffer@d8000000 {
+			compatible = "shared-dma-pool";
+			reg = <0x0 0xd8000000 0x0 0x2000000>;
 			no-map;
 		};
 	};
@@ -73,7 +124,7 @@
 		compatible = "ikwzm,u-dma-buf";
 		device-name = "udmabuf-ddr-nc0";
 		minor-number = <1>;
-		size = <0x0 0x4000000>;
+		size = <0x0 0x2000000>;
 		memory-region = <&fabricbuf1ddrnc>;
 		sync-mode = <3>;
 	};
@@ -82,15 +133,9 @@
 		compatible = "ikwzm,u-dma-buf";
 		device-name = "udmabuf-ddr-nc-wcb0";
 		minor-number = <2>;
-		size = <0x0 0x4000000>;
+		size = <0x0 0x2000000>;
 		memory-region = <&fabricbuf2ddrncwcb>;
 		sync-mode = <3>;
-	};
-
-	ddrc_cache: memory@1000000000 {
-		device_type = "memory";
-		reg = <0x10 0x0 0x0 0x76000000>;
-		status = "okay";
 	};
 };
 
@@ -111,6 +156,7 @@
 };
 
 &mac0 {
+	dma-noncoherent;
 	status = "okay";
 	phy-mode = "sgmii";
 	phy-handle = <&phy0>;
@@ -123,6 +169,7 @@
 };
 
 &mac1 {
+	dma-noncoherent;
 	status = "okay";
 	phy-mode = "sgmii";
 	phy-handle = <&phy1>;
@@ -133,6 +180,7 @@
 };
 
 &mmc {
+	dma-noncoherent;
 	status = "okay";
 	bus-width = <4>;
 	disable-wp;
@@ -189,6 +237,7 @@
 };
 
 &usb {
+	dma-noncoherent;
 	status = "okay";
 	dr_mode = "otg";
 };
