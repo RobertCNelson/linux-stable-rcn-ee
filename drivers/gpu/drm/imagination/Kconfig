@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: GPL-2.0 OR MIT
+# Copyright (c) 2022 Imagination Technologies Ltd.
+
+config DRM_POWERVR
+	tristate "Imagination Technologies PowerVR Graphics"
+	depends on ARM64
+	depends on DRM
+	select FW_LOADER
+	help
+	  Choose this option if you have a system that has an Imagination
+	  Technologies PowerVR Rogue GPU.
