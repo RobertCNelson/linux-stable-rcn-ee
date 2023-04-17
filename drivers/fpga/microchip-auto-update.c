@@ -234,6 +234,12 @@ static int mpfs_auto_update_write(struct fpga_manager *mgr, const char *buf, siz
 		goto out;
 	}
 
+	if (*(u32 *)buffer == GENMASK(31, 0)) {
+		dev_err(priv->dev, "No Golden Image programmed, aborting\n");
+		ret = -EINVAL;
+		goto out;
+	}
+
 	ret = mtd_erase(priv->flash, &erase);
 	if (ret)
 		goto out;
