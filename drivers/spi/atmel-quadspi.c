@@ -13,6 +13,7 @@
 
 #include <linux/bitfield.h>
 #include <linux/clk.h>
+#include <linux/clk-provider.h>
 #include <linux/delay.h>
 #include <linux/dma-mapping.h>
 #include <linux/dmaengine.h>
@@ -949,13 +950,15 @@ static int atmel_qspi_exec_op(struct spi_mem *mem, const struct spi_mem_op *op)
 		return err;
 
 	err = aq->ops->set_cfg(aq, op, &offset);
-	if (err) {
-		pm_runtime_mark_last_busy(&aq->pdev->dev);
-		pm_runtime_put_autosuspend(&aq->pdev->dev);
-		return err;
-	}
+	if (err)
+		goto pm_runtime_put;
 
-	return aq->ops->transfer(mem, op, offset);
+	err = aq->ops->transfer(mem, op, offset);
+
+pm_runtime_put:
+	pm_runtime_mark_last_busy(&aq->pdev->dev);
+	pm_runtime_put_autosuspend(&aq->pdev->dev);
+	return err;
 }
 
 static const char *atmel_qspi_get_name(struct spi_mem *spimem)
@@ -1073,14 +1076,18 @@ static int atmel_qspi_sama7g5_init(struct atmel_qspi *aq)
 	u32 val;
 	int ret;
 
+	ret = pm_runtime_resume_and_get(&aq->pdev->dev);
+	if (ret < 0)
+		return ret;
+
 	ret = atmel_qspi_set_gclk(aq);
 	if (ret)
-		return ret;
+		goto pm_runtime_put;
 
 	if (aq->caps->octal) {
 		ret = atmel_qspi_set_pad_calibration(aq);
 		if (ret)
-			return ret;
+			goto pm_runtime_put;
 	} else {
 		atmel_qspi_write(QSPI_CR_DLLON, aq, QSPI_CR);
 		ret =  readl_poll_timeout(aq->regs + QSPI_SR2, val,
@@ -1093,7 +1100,7 @@ static int atmel_qspi_sama7g5_init(struct atmel_qspi *aq)
 	aq->mr = QSPI_MR_SMM;
 	ret = atmel_qspi_update_config(aq);
 	if (ret)
-		return ret;
+		goto pm_runtime_put;
 
 	/* Enable the QSPI controller. */
 	atmel_qspi_write(QSPI_CR_QSPIEN, aq, QSPI_CR);
@@ -1101,7 +1108,7 @@ static int atmel_qspi_sama7g5_init(struct atmel_qspi *aq)
 				 val & QSPI_SR2_QSPIENS, 40,
 				 ATMEL_QSPI_SYNC_TIMEOUT);
 	if (ret)
-		return ret;
+		goto pm_runtime_put;
 
 	if (aq->caps->octal) {
 		ret = readl_poll_timeout(aq->regs + QSPI_SR, val,
@@ -1110,6 +1117,10 @@ static int atmel_qspi_sama7g5_init(struct atmel_qspi *aq)
 	}
 
 	atmel_qspi_write(QSPI_TOUT_TCNTM, aq, QSPI_TOUT);
+
+pm_runtime_put:
+	pm_runtime_mark_last_busy(&aq->pdev->dev);
+	pm_runtime_put_autosuspend(&aq->pdev->dev);
 	return ret;
 }
 
@@ -1439,14 +1450,9 @@ static int atmel_qspi_sama7g5_suspend(struct atmel_qspi *aq)
 	if (ret)
 		return ret;
 
-	ret =  readl_poll_timeout(aq->regs + QSPI_SR2, val,
+	return readl_poll_timeout(aq->regs + QSPI_SR2, val,
 				  !(val & QSPI_SR2_CALBSY), 40,
 				  ATMEL_QSPI_TIMEOUT);
-	if (ret)
-		return ret;
-
-	clk_disable_unprepare(aq->pclk);
-	return 0;
 }
 
 static int atmel_qspi_remove(struct platform_device *pdev)
@@ -1489,17 +1495,18 @@ static int __maybe_unused atmel_qspi_suspend(struct device *dev)
 		return ret;
 
 	if (aq->caps->has_gclk)
-		return atmel_qspi_sama7g5_suspend(aq);
-
-	atmel_qspi_write(QSPI_CR_QSPIDIS, aq, QSPI_CR);
+		ret = atmel_qspi_sama7g5_suspend(aq);
+	else
+		atmel_qspi_write(QSPI_CR_QSPIDIS, aq, QSPI_CR);
 
 	pm_runtime_mark_last_busy(dev);
 	pm_runtime_force_suspend(dev);
 
-	clk_unprepare(aq->qspick);
+	if (aq->caps->has_qspick)
+		clk_unprepare(aq->qspick);
 	clk_unprepare(aq->pclk);
 
-	return 0;
+	return ret;
 }
 
 static int __maybe_unused atmel_qspi_resume(struct device *dev)
@@ -1509,23 +1516,24 @@ static int __maybe_unused atmel_qspi_resume(struct device *dev)
 	int ret;
 
 	clk_prepare(aq->pclk);
-	clk_prepare(aq->qspick);
-
-	if (aq->caps->has_gclk)
-		return atmel_qspi_sama7g5_init(aq);
+	if (aq->caps->has_qspick)
+		clk_prepare(aq->qspick);
 
 	ret = pm_runtime_force_resume(dev);
 	if (ret < 0)
 		return ret;
 
-	atmel_qspi_init(aq);
-
-	atmel_qspi_write(aq->scr, aq, QSPI_SCR);
+	if (aq->caps->has_gclk) {
+		ret = atmel_qspi_sama7g5_init(aq);
+	} else {
+		atmel_qspi_init(aq);
+		atmel_qspi_write(aq->scr, aq, QSPI_SCR);
+	}
 
 	pm_runtime_mark_last_busy(dev);
 	pm_runtime_put_autosuspend(dev);
 
-	return 0;
+	return ret;
 }
 
 static int __maybe_unused atmel_qspi_runtime_suspend(struct device *dev)
@@ -1533,7 +1541,8 @@ static int __maybe_unused atmel_qspi_runtime_suspend(struct device *dev)
 	struct spi_controller *ctrl = dev_get_drvdata(dev);
 	struct atmel_qspi *aq = spi_controller_get_devdata(ctrl);
 
-	clk_disable(aq->qspick);
+	if (aq->caps->has_qspick)
+		clk_disable(aq->qspick);
 	clk_disable(aq->pclk);
 
 	return 0;
@@ -1548,8 +1557,10 @@ static int __maybe_unused atmel_qspi_runtime_resume(struct device *dev)
 	ret = clk_enable(aq->pclk);
 	if (ret)
 		return ret;
+	if (aq->caps->has_qspick)
+		ret = clk_enable(aq->qspick);
 
-	return clk_enable(aq->qspick);
+	return ret;
 }
 
 static const struct dev_pm_ops __maybe_unused atmel_qspi_pm_ops = {
