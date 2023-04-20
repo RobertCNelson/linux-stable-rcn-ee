@@ -60,7 +60,6 @@
 #define PAC193X_ENERGY_U_RES			48
 
 #define PAC193X_ENERGY_S_RES			47
-#define PAC193X_ENERGY_SHIFT_MAIN_VAL		32
 
 #define BIT_INDEX_31				31
 
@@ -191,8 +190,8 @@
 #define PAC1932_PID				0x59
 #define PAC1931_PID				0x58
 
-/* Scale constant = (10^8 / 2^28) * 3.2 * 10^9 */
-#define PAC193X_SCALE_CONSTANT			1192092895UL
+/* Scale constant = (10^3 * 3.2 * 10^9 / 2^28) for mili Watt-second */
+#define PAC193X_SCALE_CONSTANT			11921
 
 #define PAC193X_MAX_VPOWER_RSHIFTED_BY_28B	11921
 #define PAC193X_MAX_VSENSE_RSHIFTED_BY_16B	1525
@@ -867,8 +866,8 @@ static int pac193x_read_raw(struct iio_dev *indio_dev,
 			    int *val2, long mask)
 {
 	struct pac193x_chip_info *chip_info = iio_priv(indio_dev);
-	s64 curr_energy, int_part;
-	int rem, ret, channel = chan->channel - 1;
+	s64 curr_energy;
+	int ret, channel = chan->channel - 1;
 
 	ret = pac193x_retrieve_data(chip_info, PAC193X_MIN_UPDATE_WAIT_TIME_US);
 	if (ret < 0)
@@ -919,19 +918,11 @@ static int pac193x_read_raw(struct iio_dev *indio_dev,
 			case PAC193X_VPOWER_ACC_2_ADDR:
 			case PAC193X_VPOWER_ACC_3_ADDR:
 			case PAC193X_VPOWER_ACC_4_ADDR:
-				/*
-				 * expresses the 64 bit energy value as a 32 bit integer part and
-				 * 32 bits (representing 8 digits) fractional value
-				 */
+
 				curr_energy = chip_info->chip_reg_data.energy_sec_acc[channel];
-				int_part = div_s64_rem(curr_energy, 100000000, &rem);
-
-				/* rescale reminder to be printed as "nano" value */
-				rem = rem * 10;
-
-				*val = int_part;
-				*val2 = rem;
-				return IIO_VAL_INT_PLUS_NANO;
+				*val = (u32)curr_energy;
+				*val2 = (u32)(curr_energy >> 32);
+				return IIO_VAL_INT_64;
 			default:
 				return -EINVAL;
 			}
@@ -1011,7 +1002,7 @@ static int pac193x_read_raw(struct iio_dev *indio_dev,
 			return IIO_VAL_FRACTIONAL;
 
 		/*
-		 * Power - mW - it will use the combined scale
+		 * Power - uW - it will use the combined scale
 		 * for current and voltage
 		 * current(mA) * voltage(mV) = power (uW)
 		 */
@@ -1032,7 +1023,7 @@ static int pac193x_read_raw(struct iio_dev *indio_dev,
 
 			/*
 			 * expresses the 32 bit scale value
-			 * here compute the scale for energy (Watt-second or Joule)
+			 * here compute the scale for energy (mili Watt-second or miliJoule)
 			 */
 			*val = PAC193X_SCALE_CONSTANT;
 
@@ -1357,22 +1348,6 @@ static int pac193x_match_of_device(struct i2c_client *client,
 	unsigned int current_channel;
 	int idx, ret;
 
-//	ret = device_property_read_u32(&client->dev, "microchip,samp-rate",
-//				       &chip_info->sample_rate_value);
-//	if (ret) {
-//		dev_err_probe(&client->dev, ret,
-//			      "Cannot read sample rate value\n");
-//		return ret;
-//	}
-
-//	ret = pac193x_match_samp_rate(chip_info, chip_info->sample_rate_value);
-//	if (ret) {
-//		dev_err_probe(&client->dev, ret,
-//			      "The given sample rate value is not supported: %d\n",
-//			      chip_info->sample_rate_value);
-//		return -EINVAL;
-//	}
-
 	chip_info->sample_rate_value = 1024;
 	current_channel = 1;
 
@@ -1524,32 +1499,27 @@ static int pac193x_chip_configure(struct pac193x_chip_info *chip_info)
 	return 0;
 }
 
-char *pac193x_channel[4] = {"channel1", "channel2", "channel3", "channel4"};
-
 static int pac193x_prep_iio_channels(struct pac193x_chip_info *chip_info, struct iio_dev *indio_dev)
 {
 	struct i2c_client *client;
 	struct iio_chan_spec *ch_sp;
-	int channel_size, channel_attribute_count, attribute_count, cnt;
+	int channel_size, attribute_count, cnt;
 	void *dyn_ch_struct, *tmp_data;
 
 	client = chip_info->client;
 
 	/* find out dynamically how many IIO channels we need */
-	channel_attribute_count = 0;
+	attribute_count = 0;
 	channel_size = 0;
 	for (cnt = 0; cnt < chip_info->phys_channels; cnt++) {
 		if (chip_info->active_channels[cnt]) {
 			/* add the size of the properties of one chip physical channel */
 			channel_size += sizeof(pac193x_single_channel);
 			/* count how many enabled channels we have */
-			channel_attribute_count += ARRAY_SIZE(pac193x_single_channel);
+			attribute_count += ARRAY_SIZE(pac193x_single_channel);
 			dev_info(&client->dev, ":%s: Channel %d active\n", __func__, cnt + 1);
 		}
 	}
-
-	/* add one more channel which is the timestamp */
-	attribute_count = channel_attribute_count + 1;
 
 	dyn_ch_struct = kzalloc(channel_size, GFP_KERNEL);
 	if (!dyn_ch_struct)
@@ -1602,9 +1572,6 @@ static int pac193x_prep_iio_channels(struct pac193x_chip_info *chip_info, struct
 			tmp_data += sizeof(pac193x_single_channel);
 		}
 	}
-
-	ch_sp = (struct iio_chan_spec *)tmp_data;
-	ch_sp[0].scan_index = attribute_count - 1;
 
 	/*
 	 * send the updated dynamic channel structure information towards IIO
