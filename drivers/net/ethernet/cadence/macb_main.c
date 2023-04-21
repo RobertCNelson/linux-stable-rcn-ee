@@ -4934,7 +4934,7 @@ static int macb_probe(struct platform_device *pdev)
 	bp->rx_clk = rx_clk;
 	bp->tsu_clk = tsu_clk;
 	if (macb_config) {
-		if (macb_is_gem(bp)) {
+		if (hw_is_gem(bp->regs, bp->native_io)) {
 			if (macb_config->max_tx_length)
 				bp->max_tx_length = macb_config->max_tx_length;
 			else
