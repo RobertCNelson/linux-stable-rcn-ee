@@ -23,6 +23,7 @@
 #include <linux/init.h>
 #include <linux/jiffies.h>
 #include <linux/kernel.h>
+#include <asm/unaligned.h>
 
 /*
  * maximum acummulation time should be (17 * 60 * 1000) around 17 minutes@1024 sps
@@ -1304,11 +1305,13 @@ static const char *pac193x_match_acpi_device(struct i2c_client *client,
 	rez = pac193x_acpi_eval_function(handle, 1, PAC193X_ACPI_GET_BIPOLAR_SETTINGS);
 	if (!rez)
 		return NULL;
+
 	bi_dir_mask = rez->package.elements[0].integer.value;
-	chip_info->bi_dir[0] = (bi_dir_mask & (1 << 0)) << 0;
-	chip_info->bi_dir[0] = (bi_dir_mask & (1 << 1)) << 1;
-	chip_info->bi_dir[0] = (bi_dir_mask & (1 << 2)) << 2;
-	chip_info->bi_dir[0] = (bi_dir_mask & (1 << 3)) << 3;
+	chip_info->bi_dir[0] = ((bi_dir_mask & (1 << 3)) | (bi_dir_mask & (1 << 7))) != 0;
+	chip_info->bi_dir[1] = ((bi_dir_mask & (1 << 2)) | (bi_dir_mask & (1 << 6))) != 0;
+	chip_info->bi_dir[2] = ((bi_dir_mask & (1 << 1)) | (bi_dir_mask & (1 << 5))) != 0;
+	chip_info->bi_dir[3] = ((bi_dir_mask & (1 << 0)) | (bi_dir_mask & (1 << 4))) != 0;
+
 	kfree(rez);
 
 	rez = pac193x_acpi_eval_function(handle, 1, PAC193X_ACPI_GET_SAMP);
