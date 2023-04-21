@@ -5227,7 +5227,8 @@ static int __maybe_unused macb_resume(struct device *dev)
 	if (!device_may_wakeup(&bp->dev->dev))
 		phy_init(bp->sgmii_phy);
 
-	phylink_init_phydev(bp->phylink);
+	if (!of_phy_is_fixed_link(bp->pdev->dev.of_node))
+		phylink_init_phydev(bp->phylink);
 	phylink_start(bp->phylink);
 	rtnl_unlock();
 
