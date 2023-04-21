@@ -1124,7 +1124,7 @@ static void pac193x_work_periodic_rfsh(struct work_struct *work)
 	struct pac193x_chip_info *chip_info = TO_PAC193X_CHIP_INFO((struct delayed_work *)work);
 	struct i2c_client *client = chip_info->client;
 
-	dev_info(&client->dev, "%s - Periodic refresh\n", __func__);
+	dev_dbg(&client->dev, "%s - Periodic refresh\n", __func__);
 
 	/* do a REFRESH, then read */
 	pac193x_reg_snapshot(chip_info, true, PAC193X_REFRESH_REG_ADDR,
