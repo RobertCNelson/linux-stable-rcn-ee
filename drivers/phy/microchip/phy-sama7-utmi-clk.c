@@ -94,10 +94,10 @@ static int sama7_utmi_clk_is_enabled(struct clk_hw *hw)
 	struct sama7_utmi_clk *utmi = to_sama7_utmi_clk(hw);
 
 	ret = reset_control_status(utmi->reset);
-	if (IS_ERR_VALUE(ret))
-		return ret;
-
-	return (ret == 0);
+	if (ret)
+		return false;
+	else
+		return true;
 }
 
 static const struct clk_ops sama7_utmi_ops = {
