@@ -850,7 +850,10 @@ static int atmel_conf_pin_config_group_set(struct pinctrl_dev *pctldev,
 			conf &= (~ATMEL_PIO_PUEN_MASK);
 			break;
 		case PIN_CONFIG_DRIVE_OPEN_DRAIN:
-			conf |= ATMEL_PIO_OPD_MASK;
+			if (arg == 0)
+				conf &= (~ATMEL_PIO_OPD_MASK);
+			else
+				conf |= ATMEL_PIO_OPD_MASK;
 			break;
 		case PIN_CONFIG_DRIVE_PUSH_PULL:
 			conf &= (~ATMEL_PIO_OPD_MASK);
