@@ -2,13 +2,13 @@
 # Copyright (c) 2022 Imagination Technologies Ltd.
 %YAML 1.2
 ---
-$id: "http://devicetree.org/schemas/gpu/img-powervr.yaml#"
-$schema: "http://devicetree.org/meta-schemas/core.yaml#"
+$id: http://devicetree.org/schemas/gpu/img,powervr.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
 
 title: Imagination Technologies PowerVR GPU
 
 maintainers:
-  - Sarah Walker <sarah.walker at imgtec.com>
+  - Sarah Walker <sarah.walker@imgtec.com>
 
 properties:
   compatible:
@@ -23,7 +23,6 @@ properties:
           - const: img,powervr-seriesaxe
 
   reg:
-    minItems: 1
     maxItems: 1
 
   clocks:
@@ -32,9 +31,9 @@ properties:
 
   clock-names:
     items:
-      - const: core_clk
-      - const: mem_clk
-      - const: sys_clk
+      - const: core
+      - const: mem
+      - const: sys
 
   interrupts:
     items:
@@ -48,6 +47,7 @@ properties:
     maxItems: 1
 
   operating-points-v2: true
+  opp-table: true
   power-supply: true
 
   "#cooling-cells":
@@ -60,6 +60,8 @@ required:
   - clock-names
   - interrupts
   - interrupt-names
+
+additionalProperties: false
 
 allOf:
   - if:
@@ -87,7 +89,7 @@ examples:
     #include <dt-bindings/interrupt-controller/irq.h>
     #include <dt-bindings/interrupt-controller/arm-gic.h>
 
-    gpu at 13000000 {
+    gpu@13000000 {
         compatible = "mediatek,mt8173-gpu", "img,powervr-series6xt";
         reg = <0 0x13000000 0 0xffff>, <0 0x13fff000 0 0x1000>;
         power-domains = <&scpsys MT8173_POWER_DOMAIN_MFG>;
@@ -96,10 +98,38 @@ examples:
         clocks = <&gpu_ckgen 0>,
                  <&gpu_ckgen 1>,
                  <&gpu_ckgen 2>;
-        clock-names = "core_clk",
-                      "mem_clk",
-                      "sys_clk";
+        clock-names = "core",
+                      "mem",
+                      "sys";
         interrupts = <GIC_SPI 217 IRQ_TYPE_LEVEL_LOW>;
         interrupt-names = "gpu";
     };
 
+    gpu_opp_table: opp-table {
+      compatible = "operating-points-v2";
+
+      opp-598000000 {
+        opp-hz = /bits/ 64 <598000000>;
+        opp-microvolt = <1130000>;
+      };
+      opp-494000000 {
+        opp-hz = /bits/ 64 <494000000>;
+        opp-microvolt = <1130000>;
+      };
+      opp-455000000 {
+        opp-hz = /bits/ 64 <455000000>;
+        opp-microvolt = <1000000>;
+      };
+      opp-396500000 {
+        opp-hz = /bits/ 64 <396500000>;
+        opp-microvolt = <1000000>;
+      };
+      opp-299000000 {
+        opp-hz = /bits/ 64 <299000000>;
+        opp-microvolt = <1000000>;
+      };
+      opp-253500000 {
+        opp-hz = /bits/ 64 <253500000>;
+        opp-microvolt = <1000000>;
+      };
+    };
