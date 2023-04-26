@@ -216,7 +216,7 @@ X(150, ROGUE_FW_GROUP_MAIN, ROGUE_FW_SF_MAIN_UNKNOWN_COMMAND_DEPRECATED, "Unknow
 X(151, ROGUE_FW_GROUP_MAIN, ROGUE_FW_SF_MAIN_UFO_FORCED_UPDATE, "UFO forced update: FWCtx 0x%08.8x @ %d [0x%08.8x] = 0x%08.8x", 4) \
 X(152, ROGUE_FW_GROUP_MAIN, ROGUE_FW_SF_MAIN_UFO_FORCED_UPDATE_NOP, "UFO forced update NOP: FWCtx 0x%08.8x @ %d [0x%08.8x] = 0x%08.8x, reason %d", 5) \
 X(153, ROGUE_FW_GROUP_MAIN, ROGUE_FW_SF_MAIN_TDM_BRN66075_CHECK, "TDM context switch check: Roff %u points to 0x%08x, Match=%u", 3) \
-X(154, ROGUE_FW_GROUP_MAIN, ROGUE_FW_SF_MAIN_OS_INIT_CCBS, "OSid %d CCB init status: %d (1-ok 0-fail): kCCBCtl at 0x%x kCCB at 0x%x fwCCBCtl at 0x%x fwCCB at 0x%x", 6) \
+X(154, ROGUE_FW_GROUP_MAIN, ROGUE_FW_SF_MAIN_OS_INIT_CCBS, "OSid %d CCB init status: %d (1-ok 0-fail): kCCBCtl@0x%x kCCB@0x%x fwCCBCtl@0x%x fwCCB@0x%x", 6) \
 X(155, ROGUE_FW_GROUP_MAIN, ROGUE_FW_SF_MAIN_FWIRQ, "FW IRQ # %u @ %u", 2) \
 X(156, ROGUE_FW_GROUP_MAIN, ROGUE_FW_SF_MAIN_BREAKPOINT_SET, "Setting breakpoint: Addr 0x%08.8x DM%u usc_breakpoint_ctrl_dm = %u", 3) \
 X(157, ROGUE_FW_GROUP_MAIN, ROGUE_FW_SF_MAIN_INVALID_KERNEL_CCB_DEPRECATED, "Invalid KCCB setup for OSid %u: KCCB 0x%08x, KCCB Ctrl 0x%08x", 3) \
@@ -227,7 +227,7 @@ X(161, ROGUE_FW_GROUP_MAIN, ROGUE_FW_SF_MAIN_FLUSHINVAL_CMD_INVALID_DEPRECATED, 
 X(162, ROGUE_FW_GROUP_MAIN, ROGUE_FW_SF_MAIN_INVALID_NOTIFY_WRITE_OFFSET_UPDATE_DEPRECATED, "Invalid Write Offset update notification from OSid %u to DM %u: FWCtx 0x%08x, MemCtx 0x%08x", 4) \
 X(163, ROGUE_FW_GROUP_MAIN, ROGUE_FW_SF_MAIN_INVALID_KCCB_KICK_CMD_DEPRECATED, "Null FWCtx in KCCB kick cmd for OSid %u: KCCB 0x%08x, ROff %u, WOff %u", 4) \
 X(164, ROGUE_FW_GROUP_MAIN, ROGUE_FW_SF_MAIN_FULL_CHPTCCB, "Checkpoint CCB for OSid %u is full, signalling host for full check state (Roff = %u, Woff = %u)", 3) \
-X(165, ROGUE_FW_GROUP_MAIN, ROGUE_FW_SF_MAIN_OS_INIT_CCBS_DEPRECATED, "OSid %d CCB init status: %d (1-ok 0-fail): kCCBCtl at 0x%x kCCB at 0x%x fwCCBCtl at 0x%x fwCCB at 0x%x chptCCBCtl at 0x%x chptCCB at 0x%x", 8) \
+X(165, ROGUE_FW_GROUP_MAIN, ROGUE_FW_SF_MAIN_OS_INIT_CCBS_DEPRECATED, "OSid %d CCB init status: %d (1-ok 0-fail): kCCBCtl@0x%x kCCB@0x%x fwCCBCtl@0x%x fwCCB@0x%x chptCCBCtl@0x%x chptCCB@0x%x", 8) \
 X(166, ROGUE_FW_GROUP_MAIN, ROGUE_FW_SF_MAIN_OS_STATE_CHANGE, "OSid %d fw state transition request: from %d to %d (0-offline 1-ready 2-active 3-offloading). Status %d (1-ok 0-fail)", 4) \
 X(167, ROGUE_FW_GROUP_MAIN, ROGUE_FW_SF_MAIN_STALE_KCCB_CMDS, "OSid %u has %u stale commands in its KCCB", 2) \
 X(168, ROGUE_FW_GROUP_MAIN, ROGUE_FW_SF_MAIN_TA_VCE_PAUSE, "Applying VCE pause", 0) \
