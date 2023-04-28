@@ -806,7 +806,8 @@ static int macb_mii_probe(struct net_device *dev)
 
 	bp->phylink_config.dev = &dev->dev;
 	bp->phylink_config.type = PHYLINK_NETDEV;
-	bp->phylink_config.mac_managed_pm = true;
+	if (!of_phy_is_fixed_link(bp->pdev->dev.of_node))
+		bp->phylink_config.mac_managed_pm = true;
 
 	if (bp->phy_interface == PHY_INTERFACE_MODE_SGMII) {
 		bp->phylink_config.poll_fixed_state = true;
@@ -4934,7 +4935,7 @@ static int macb_probe(struct platform_device *pdev)
 	bp->rx_clk = rx_clk;
 	bp->tsu_clk = tsu_clk;
 	if (macb_config) {
-		if (macb_is_gem(bp)) {
+		if (hw_is_gem(bp->regs, bp->native_io)) {
 			if (macb_config->max_tx_length)
 				bp->max_tx_length = macb_config->max_tx_length;
 			else
@@ -5245,7 +5246,8 @@ static int __maybe_unused macb_resume(struct device *dev)
 	if (!device_may_wakeup(&bp->dev->dev))
 		phy_init(bp->sgmii_phy);
 
-	phylink_init_phydev(bp->phylink);
+	if (!of_phy_is_fixed_link(bp->pdev->dev.of_node))
+		phylink_init_phydev(bp->phylink);
 	phylink_start(bp->phylink);
 	rtnl_unlock();
 
