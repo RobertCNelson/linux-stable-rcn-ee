@@ -42,6 +42,8 @@
 #include <linux/iio/sysfs.h>
 #include <linux/iio/buffer.h>
 #include <linux/iio/kfifo_buf.h>
+
+#define PAC193X_MAX_REGISTER_LENGTH		6
 #define PAC193X_MAX_RFSH_LIMIT						60000
 /*(17 * 60 * 1000) //around 17 minutes@1024 sps */
 #define PAC193X_MIN_POLLING_TIME					50
@@ -318,7 +320,7 @@ static int pac193x_send_rfsh(struct pac193x_chip_info *chip_info,
 				bool refresh_v, u32 wait_time);
 static int pac193x_reg_snapshot(struct pac193x_chip_info *chip_info,
 				bool do_rfsh, bool refresh_v, u32 wait_time);
-static int pac193x_remove(struct i2c_client *client);
+static void pac193x_remove(struct i2c_client *client);
 static const char *pac193x_get_of_match_entry(struct i2c_client *client);
 
 #define PAC193x_VPOWER_ACC_CHANNEL(_index, _address) {			\
@@ -515,7 +517,7 @@ static int pac193x_i2c_write(struct i2c_client *client, u8 reg_addr,
 				int len, u8 *data)
 {
 	int ret;
-	u8 send[len + 1];
+	u8 send[PAC193X_MAX_REGISTER_LENGTH + 1];
 	struct i2c_msg msg = { .addr = client->addr,
 				.len = len + 1, .flags = 0 };
 
@@ -1627,25 +1629,18 @@ free_chan_attr_mem:
 	return ret;
 }
 
-static int pac193x_remove(struct i2c_client *client)
+static void pac193x_remove(struct i2c_client *client)
 {
-	int ret = 0;
 	struct iio_dev *indio_dev = dev_get_drvdata(&client->dev);
 	struct pac193x_chip_info *chip_info = iio_priv(indio_dev);
 	/* free the channel attributes memory */
 	kfree(indio_dev->channels);
-	ret = try_to_del_timer_sync(&chip_info->tmr_forced_update);
-	if (ret < 0) {
-		dev_err(&client->dev,
-		"%s - cannot delete the forced readout timer\n", __func__);
-		return ret;
-	}
+	try_to_del_timer_sync(&chip_info->tmr_forced_update);
 	if (chip_info->wq_chip != NULL) {
 		cancel_work_sync(&chip_info->work_chip_rfsh);
 		flush_workqueue(chip_info->wq_chip);
 		destroy_workqueue(chip_info->wq_chip);
 	}
-	return ret;
 }
 
 static const struct i2c_device_id pac193x_id[] = {
