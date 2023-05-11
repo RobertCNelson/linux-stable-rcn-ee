@@ -853,6 +853,22 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 			ranges = <0 0x56000000 0x2000000>;
+
+			/*
+			 * Closed source PowerVR driver, no child device
+			 * binding or driver in mainline
+			 */
+			gpu: gpu@0 {
+				compatible = "ti,dra7-sgx544", "img,sgx544";
+				reg = <0x0 0x10000>;
+				interrupts = <GIC_SPI 16 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&l3_iclk_div>,
+					 <&gpu_core_gclk_mux>,
+					 <&gpu_hyd_gclk_mux>;
+				clock-names = "iclk",
+					      "fclk1",
+					      "fclk2";
+			};
 		};
 
 		crossbar_mpu: crossbar@4a002a48 {
@@ -962,6 +978,25 @@
 						dma-names = "audio_tx";
 					};
 				};
+			};
+		};
+
+		target-module@59000000 {
+			compatible = "ti,sysc-omap4", "ti,sysc";
+			reg = <0x59000020 0x4>;
+			reg-names = "rev";
+			clocks = <&dss_clkctrl DRA7_DSS_BB2D_CLKCTRL 0>;
+			clock-names = "fck";
+			#address-cells = <1>;
+			#size-cells = <1>;
+			ranges = <0x0 0x59000000 0x1000>;
+
+			bb2d: gpu@0 {
+				compatible = "vivante,gc";
+				reg = <0x0 0x700>;
+				interrupts = <GIC_SPI 120 IRQ_TYPE_LEVEL_HIGH>;
+				clocks = <&dss_clkctrl DRA7_BB2D_CLKCTRL 0>;
+				clock-names = "core";
 			};
 		};
 
@@ -1320,20 +1355,20 @@
 };
 
 /* Local timers, see ARM architected timer wrap erratum i940 */
-&timer15_target {
+&timer3_target {
 	ti,no-reset-on-init;
 	ti,no-idle;
 	timer@0 {
-		assigned-clocks = <&l4per3_clkctrl DRA7_L4PER3_TIMER15_CLKCTRL 24>;
+		assigned-clocks = <&l4per_clkctrl DRA7_L4PER_TIMER3_CLKCTRL 24>;
 		assigned-clock-parents = <&timer_sys_clk_div>;
 	};
 };
 
-&timer16_target {
+&timer4_target {
 	ti,no-reset-on-init;
 	ti,no-idle;
 	timer@0 {
-		assigned-clocks = <&l4per3_clkctrl DRA7_L4PER3_TIMER16_CLKCTRL 24>;
+		assigned-clocks = <&l4per_clkctrl DRA7_L4PER_TIMER4_CLKCTRL 24>;
 		assigned-clock-parents = <&timer_sys_clk_div>;
 	};
 };
