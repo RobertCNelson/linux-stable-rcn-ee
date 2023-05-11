@@ -432,7 +432,18 @@ __sigqueue_alloc(int sig, struct task_struct *t, gfp_t gfp_flags,
 		return NULL;
 
 	if (override_rlimit || likely(sigpending <= task_rlimit(t, RLIMIT_SIGPENDING))) {
-		q = kmem_cache_alloc(sigqueue_cachep, gfp_flags);
+
+		if (!sigqueue_flags) {
+			struct sighand_struct *sighand = t->sighand;
+
+			lockdep_assert_held(&sighand->siglock);
+			if (sighand->sigqueue_cache) {
+				q = sighand->sigqueue_cache;
+				sighand->sigqueue_cache = NULL;
+			}
+		}
+		if (!q)
+			q = kmem_cache_alloc(sigqueue_cachep, gfp_flags);
 	} else {
 		print_dropped_signal(sig);
 	}
@@ -447,13 +458,42 @@ __sigqueue_alloc(int sig, struct task_struct *t, gfp_t gfp_flags,
 	return q;
 }
 
-static void __sigqueue_free(struct sigqueue *q)
+static bool sigqueue_cleanup_accounting(struct sigqueue *q)
 {
 	if (q->flags & SIGQUEUE_PREALLOC)
-		return;
+		return false;
 	if (q->ucounts) {
 		dec_rlimit_put_ucounts(q->ucounts, UCOUNT_RLIMIT_SIGPENDING);
 		q->ucounts = NULL;
+	}
+	return true;
+}
+
+static void __sigqueue_free(struct sigqueue *q)
+{
+	if (!sigqueue_cleanup_accounting(q))
+		return;
+	kmem_cache_free(sigqueue_cachep, q);
+}
+
+void sigqueue_free_cached_entry(struct sigqueue *q)
+{
+	if (!q)
+		return;
+	kmem_cache_free(sigqueue_cachep, q);
+}
+
+static void sigqueue_cache_or_free(struct sigqueue *q)
+{
+	struct sighand_struct *sighand = current->sighand;
+
+	if (!sigqueue_cleanup_accounting(q))
+		return;
+
+	lockdep_assert_held(&sighand->siglock);
+	if (!sighand->sigqueue_cache) {
+		sighand->sigqueue_cache = q;
+		return;
 	}
 	kmem_cache_free(sigqueue_cachep, q);
 }
@@ -594,7 +634,7 @@ still_pending:
 			(info->si_code == SI_TIMER) &&
 			(info->si_sys_private);
 
-		__sigqueue_free(first);
+		sigqueue_cache_or_free(first);
 	} else {
 		/*
 		 * Ok, it wasn't in the queue.  This must be
@@ -2296,15 +2336,31 @@ static int ptrace_stop(int exit_code, int why, unsigned long message,
 		do_notify_parent_cldstop(current, false, why);
 
 	/*
-	 * Don't want to allow preemption here, because
-	 * sys_ptrace() needs this task to be inactive.
+	 * The previous do_notify_parent_cldstop() invocation woke ptracer.
+	 * One a PREEMPTION kernel this can result in preemption requirement
+	 * which will be fulfilled after read_unlock() and the ptracer will be
+	 * put on the CPU.
+	 * The ptracer is in wait_task_inactive(, __TASK_TRACED) waiting for
+	 * this task wait in schedule(). If this task gets preempted then it
+	 * remains enqueued on the runqueue. The ptracer will observe this and
+	 * then sleep for a delay of one HZ tick. In the meantime this task
+	 * gets scheduled, enters schedule() and will wait for the ptracer.
 	 *
-	 * XXX: implement read_unlock_no_resched().
+	 * This preemption point is not bad from correctness point of view but
+	 * extends the runtime by one HZ tick time due to the ptracer's sleep.
+	 * The preempt-disable section ensures that there will be no preemption
+	 * between unlock and schedule() and so improving the performance since
+	 * the ptracer has no reason to sleep.
+	 *
+	 * This optimisation is not doable on PREEMPT_RT due to the spinlock_t
+	 * within the preempt-disable section.
 	 */
-	preempt_disable();
+	if (!IS_ENABLED(CONFIG_PREEMPT_RT))
+		preempt_disable();
 	read_unlock(&tasklist_lock);
 	cgroup_enter_frozen();
-	preempt_enable_no_resched();
+	if (!IS_ENABLED(CONFIG_PREEMPT_RT))
+		preempt_enable_no_resched();
 	schedule();
 	cgroup_leave_frozen(true);
 
