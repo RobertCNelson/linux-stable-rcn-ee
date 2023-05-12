@@ -83,6 +83,7 @@ __visible void __irq_entry hv_stimer0_vector_handler(struct pt_regs *regs)
 	if (hv_stimer0_handler)
 		hv_stimer0_handler();
 	add_interrupt_randomness(HYPERV_STIMER0_VECTOR);
+
 	ack_APIC_irq();
 
 	exiting_irq();
