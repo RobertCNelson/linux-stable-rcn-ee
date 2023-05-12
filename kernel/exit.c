@@ -207,7 +207,7 @@ static void __exit_signal(struct task_struct *tsk)
 	 * Do this under ->siglock, we can race with another thread
 	 * doing sigqueue_free() if we have SIGQUEUE_PREALLOC signals.
 	 */
-	flush_sigqueue(&tsk->pending);
+	flush_task_sigqueue(tsk);
 	tsk->sighand = NULL;
 	spin_unlock(&sighand->siglock);
 
@@ -338,8 +338,9 @@ retry:
 	return task;
 }
 
-void rcuwait_wake_up(struct rcuwait *w)
+int rcuwait_wake_up(struct rcuwait *w)
 {
+	int ret = 0;
 	struct task_struct *task;
 
 	rcu_read_lock();
@@ -363,8 +364,10 @@ void rcuwait_wake_up(struct rcuwait *w)
 	 */
 	task = rcu_dereference(w->task);
 	if (task)
-		wake_up_process(task);
+		ret = wake_up_process(task);
 	rcu_read_unlock();
+
+	return ret;
 }
 
 /*
