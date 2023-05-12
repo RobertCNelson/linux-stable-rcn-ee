@@ -82,13 +82,8 @@
 
 #define BRCMF_ND_INFO_TIMEOUT		msecs_to_jiffies(2000)
 
-#define BRCMF_PS_MAX_TIMEOUT_MS		2000
-
 #define BRCMF_ASSOC_PARAMS_FIXED_SIZE \
 	(sizeof(struct brcmf_assoc_params_le) - sizeof(u16))
-
-#define BRCMF_MAX_CHANSPEC_LIST \
-	(BRCMF_DCMD_MEDLEN / sizeof(__le32) - 1)
 
 static bool check_vif_up(struct brcmf_cfg80211_vif *vif)
 {
@@ -2615,9 +2610,8 @@ brcmf_cfg80211_get_station(struct wiphy *wiphy, struct net_device *ndev,
 	struct brcmf_sta_info_le sta_info_le;
 	u32 sta_flags;
 	u32 is_tdls_peer;
-	s32 total_rssi_avg = 0;
-	s32 total_rssi = 0;
-	s32 count_rssi = 0;
+	s32 total_rssi;
+	s32 count_rssi;
 	int rssi;
 	u32 i;
 
@@ -2683,27 +2677,25 @@ brcmf_cfg80211_get_station(struct wiphy *wiphy, struct net_device *ndev,
 			sinfo->filled |= BIT_ULL(NL80211_STA_INFO_RX_BYTES);
 			sinfo->rx_bytes = le64_to_cpu(sta_info_le.rx_tot_bytes);
 		}
+		total_rssi = 0;
+		count_rssi = 0;
 		for (i = 0; i < BRCMF_ANT_MAX; i++) {
-			if (sta_info_le.rssi[i] == 0 ||
-			    sta_info_le.rx_lastpkt_rssi[i] == 0)
-				continue;
-			sinfo->chains |= BIT(count_rssi);
-			sinfo->chain_signal[count_rssi] =
-				sta_info_le.rx_lastpkt_rssi[i];
-			sinfo->chain_signal_avg[count_rssi] =
-				sta_info_le.rssi[i];
-			total_rssi += sta_info_le.rx_lastpkt_rssi[i];
-			total_rssi_avg += sta_info_le.rssi[i];
-			count_rssi++;
+			if (sta_info_le.rssi[i]) {
+				sinfo->chain_signal_avg[count_rssi] =
+					sta_info_le.rssi[i];
+				sinfo->chain_signal[count_rssi] =
+					sta_info_le.rssi[i];
+				total_rssi += sta_info_le.rssi[i];
+				count_rssi++;
+			}
 		}
 		if (count_rssi) {
-			sinfo->filled |= BIT_ULL(NL80211_STA_INFO_SIGNAL);
-			sinfo->filled |= BIT_ULL(NL80211_STA_INFO_SIGNAL_AVG);
 			sinfo->filled |= BIT_ULL(NL80211_STA_INFO_CHAIN_SIGNAL);
-			sinfo->filled |=
-				BIT_ULL(NL80211_STA_INFO_CHAIN_SIGNAL_AVG);
-			sinfo->signal = total_rssi / count_rssi;
-			sinfo->signal_avg = total_rssi_avg / count_rssi;
+			sinfo->chains = count_rssi;
+
+			sinfo->filled |= BIT_ULL(NL80211_STA_INFO_SIGNAL);
+			total_rssi /= count_rssi;
+			sinfo->signal = total_rssi;
 		} else if (test_bit(BRCMF_VIF_STATUS_CONNECTED,
 			&ifp->vif->sme_state)) {
 			memset(&scb_val, 0, sizeof(scb_val));
@@ -2797,12 +2789,6 @@ brcmf_cfg80211_set_power_mgmt(struct wiphy *wiphy, struct net_device *ndev,
 		else
 			bphy_err(drvr, "error (%d)\n", err);
 	}
-
-	err = brcmf_fil_iovar_int_set(ifp, "pm2_sleep_ret",
-				min_t(u32, timeout, BRCMF_PS_MAX_TIMEOUT_MS));
-	if (err)
-		bphy_err(drvr, "Unable to set pm timeout, (%d)\n", err);
-
 done:
 	brcmf_dbg(TRACE, "Exit\n");
 	return err;
@@ -5388,8 +5374,7 @@ static bool brcmf_is_linkup(struct brcmf_cfg80211_vif *vif,
 	return false;
 }
 
-static bool brcmf_is_linkdown(struct brcmf_cfg80211_vif *vif,
-			    const struct brcmf_event_msg *e)
+static bool brcmf_is_linkdown(const struct brcmf_event_msg *e)
 {
 	u32 event = e->event_code;
 	u16 flags = e->flags;
@@ -5398,8 +5383,6 @@ static bool brcmf_is_linkdown(struct brcmf_cfg80211_vif *vif,
 	    (event == BRCMF_E_DISASSOC_IND) ||
 	    ((event == BRCMF_E_LINK) && (!(flags & BRCMF_EVENT_MSG_LINK)))) {
 		brcmf_dbg(CONN, "Processing link down\n");
-		clear_bit(BRCMF_VIF_STATUS_EAP_SUCCESS, &vif->sme_state);
-		clear_bit(BRCMF_VIF_STATUS_ASSOC_SUCCESS, &vif->sme_state);
 		return true;
 	}
 	return false;
@@ -5692,7 +5675,7 @@ brcmf_notify_connect_status(struct brcmf_if *ifp,
 		} else
 			brcmf_bss_connect_done(cfg, ndev, e, true);
 		brcmf_net_setcarrier(ifp, true);
-	} else if (brcmf_is_linkdown(ifp->vif, e)) {
+	} else if (brcmf_is_linkdown(e)) {
 		brcmf_dbg(CONN, "Linkdown\n");
 		if (!brcmf_is_ibssmode(ifp->vif)) {
 			brcmf_bss_connect_done(cfg, ndev, e, false);
@@ -6070,13 +6053,6 @@ static int brcmf_construct_chaninfo(struct brcmf_cfg80211_info *cfg,
 			band->channels[i].flags = IEEE80211_CHAN_DISABLED;
 
 	total = le32_to_cpu(list->count);
-	if (total > BRCMF_MAX_CHANSPEC_LIST) {
-		bphy_err(drvr, "Invalid count of channel Spec. (%u)\n",
-			 total);
-		err = -EINVAL;
-		goto fail_pbuf;
-	}
-
 	for (i = 0; i < total; i++) {
 		ch.chspec = (u16)le32_to_cpu(list->element[i]);
 		cfg->d11inf.decchspec(&ch);
@@ -6222,13 +6198,6 @@ static int brcmf_enable_bw40_2g(struct brcmf_cfg80211_info *cfg)
 		band = cfg_to_wiphy(cfg)->bands[NL80211_BAND_2GHZ];
 		list = (struct brcmf_chanspec_list *)pbuf;
 		num_chan = le32_to_cpu(list->count);
-		if (num_chan > BRCMF_MAX_CHANSPEC_LIST) {
-			bphy_err(drvr, "Invalid count of channel Spec. (%u)\n",
-				 num_chan);
-			kfree(pbuf);
-			return -EINVAL;
-		}
-
 		for (i = 0; i < num_chan; i++) {
 			ch.chspec = (u16)le32_to_cpu(list->element[i]);
 			cfg->d11inf.decchspec(&ch);
