@@ -4,7 +4,7 @@
 /dts-v1/;
 
 #include "mpfs.dtsi"
-#include "mpfs-sev-kit-fabric.dtsi"
+#include "mpfs-video-kit-fabric.dtsi"
 
 /* Clock frequency (in Hz) of the rtcclk */
 #define MTIMER_FREQ		1000000
@@ -12,8 +12,8 @@
 / {
 	#address-cells = <2>;
 	#size-cells = <2>;
-	model = "Microchip PolarFire-SoC SEV Kit";
-	compatible = "microchip,mpfs-sev-kit", "microchip,mpfs";
+	model = "Microchip PolarFire-SoC VIDEO Kit";
+	compatible = "microchip,mpfs-video-kit", "microchip,mpfs-sev-kit", "microchip,mpfs";
 
 	soc {
 		dma-ranges = <0x14 0x0 0x0 0x80000000 0x0 0x4000000>,
