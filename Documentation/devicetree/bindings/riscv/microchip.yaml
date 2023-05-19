@@ -30,6 +30,7 @@ properties:
               - aldec,tysom-m-mpfs250t-rev2
               - aries,m100pfsevp
               - microchip,mpfs-sev-kit
+              - microchip,mpfs-video-kit
               - sundance,polarberry
           - const: microchip,mpfs
 
