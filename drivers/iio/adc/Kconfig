@@ -1338,4 +1338,16 @@ config XILINX_AMS
 	  The driver can also be built as a module. If so, the module will be called
 	  xilinx-ams.
 
+config PAC193X
+	tristate "Microchip pac1934x ADC driver"
+	depends on OF
+	depends on HAS_IOMEM
+	select IIO_BUFFER
+	select IIO_TRIGGERED_BUFFER
+	help
+	  Say yes here to support for Microchip PAC193x analog-to-digital converters.
+
+	  This driver can also be built as a module. If so, the module will be
+	  called pac193x_adc.
+
 endmenu

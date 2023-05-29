@@ -193,6 +193,37 @@
 
 &i2c1 {
 	status = "okay";
+
+	pac193x: adc@10 {
+		compatible = "microchip,pac1934";
+		reg = <0x10>;
+		microchip,samp-rate = <64>;
+		status = "okay";
+
+		ch0: channel0 {
+			microchip,uohms-shunt-res = <10000>;
+			rail-name = "VDDREG";
+			microchip,channel-enabled;
+		};
+
+		ch1: channel1 {
+			microchip,uohms-shunt-res = <10000>;
+			rail-name = "VDDA25";
+			microchip,channel-enabled;
+		};
+
+		ch2: channel2 {
+			microchip,uohms-shunt-res = <10000>;
+			rail-name = "VDD25";
+			microchip,channel-enabled;
+		};
+
+		ch3: channel3 {
+			microchip,uohms-shunt-res = <10000>;
+			rail-name = "VDDA_REG";
+			microchip,channel-enabled;
+		};
+	};
 };
 
 &i2c2 {
