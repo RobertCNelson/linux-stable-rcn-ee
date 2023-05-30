@@ -72,15 +72,6 @@ static int __sched __rwbase_read_lock(struct rwbase_rt *rwb,
 	int ret;
 
 	raw_spin_lock_irq(&rtm->wait_lock);
-	/*
-	 * Allow readers, as long as the writer has not completely
-	 * acquired the semaphore for write.
-	 */
-	if (atomic_read(&rwb->readers) != WRITER_BIAS) {
-		atomic_inc(&rwb->readers);
-		raw_spin_unlock_irq(&rtm->wait_lock);
-		return 0;
-	}
 
 	/*
 	 * Call into the slow lock path with the rtmutex->wait_lock
@@ -140,10 +131,23 @@ static int __sched __rwbase_read_lock(struct rwbase_rt *rwb,
 static __always_inline int rwbase_read_lock(struct rwbase_rt *rwb,
 					    unsigned int state)
 {
+	int ret;
+
+	lockdep_assert(!current->pi_blocked_on);
+
 	if (rwbase_read_trylock(rwb))
 		return 0;
 
-	return __rwbase_read_lock(rwb, state);
+	/*
+	 * The task is about to sleep. For rwsems this submits work as that
+	 * might take locks and corrupt tsk::pi_blocked_on. Must be
+	 * explicit here because __rwbase_read_lock() cannot invoke
+	 * rt_mutex_slowlock(). NOP for rwlocks.
+	 */
+	rwbase_sched_submit_work();
+	ret = __rwbase_read_lock(rwb, state);
+	rwbase_sched_resume_work();
+	return ret;
 }
 
 static void __sched __rwbase_read_unlock(struct rwbase_rt *rwb,
@@ -239,7 +243,10 @@ static int __sched rwbase_write_lock(struct rwbase_rt *rwb,
 	struct rt_mutex_base *rtm = &rwb->rtmutex;
 	unsigned long flags;
 
-	/* Take the rtmutex as a first step */
+	/*
+	 * Take the rtmutex as a first step. For rwsem this will also
+	 * invoke sched_submit_work() to flush IO and workers.
+	 */
 	if (rwbase_rtmutex_lock_state(rtm, state))
 		return -EINTR;
 
