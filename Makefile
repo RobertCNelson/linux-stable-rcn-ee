@@ -2,7 +2,7 @@
 VERSION = 6
 PATCHLEVEL = 1
 SUBLEVEL = 22
-EXTRAVERSION =
+EXTRAVERSION = linux4microchip+fpga-2023.06-rc1
 NAME = Hurr durr I'ma ninja sloth
 
 # *DOCUMENTATION*
