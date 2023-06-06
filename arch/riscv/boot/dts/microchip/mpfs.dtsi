@@ -178,6 +178,12 @@
 		mboxes = <&mbox 0>;
 	};
 
+	scbclk: mssclkclk {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <80000000>;
+	};
+
 	soc {
 		#address-cells = <2>;
 		#size-cells = <2>;
@@ -515,7 +521,7 @@
 			reg = <0x0 0x37020100 0x0 0x100>;
 			interrupt-parent = <&plic>;
 			interrupts = <110>;
-			clocks = <&clkcfg CLK_QSPI>; /* this is probably wrong, consult the docs! */
+			clocks = <&scbclk>;
 			status = "disabled";
 		};
 	};
