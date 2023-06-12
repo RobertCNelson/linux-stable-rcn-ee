@@ -52,11 +52,11 @@
  * | Golden Image                 |
  * |------------------------------| 0x1500400
  * | 20 MiB                       |
- * | Auto Upgrade Image           |
+ * | Auto Update Image            |
  * |------------------------------| 0x2900400
  * | 20 MiB                       |
  * | Reserved for multi-image IAP |
- * | Unused for Auto Upgrade      |
+ * | Unused for Auto Update       |
  * |------------------------------| 0x3D00400
  * | ? B                          |
  * | Unused                       |
@@ -332,14 +332,14 @@ static int mpfs_auto_update_write_complete(struct fpga_manager *mgr, struct fpga
 	message->mbox_offset = AUTO_UPDATE_UPGRADE_INDEX;
 	message->resp_offset = AUTO_UPDATE_DEFAULT_RESP_OFFSET;
 
-	dev_info(priv->dev, "Running verification of Upgrade Image\n");
+	dev_info(priv->dev, "Running verification of Update Image\n");
 	ret = mpfs_blocking_transaction(priv->sys_controller, message);
 	if (ret | response->resp_status) {
-		dev_warn(priv->dev, "Verification of Upgrade Image failed!\n");
+		dev_warn(priv->dev, "Verification of Update Image failed!\n");
 		ret = ret ? ret : -EBADMSG;
 	}
 
-	dev_info(priv->dev, "Verification of Upgrade Image passed!\n");
+	dev_info(priv->dev, "Verification of Update Image passed!\n");
 //	/*
 //	 * If the validation has passed, initiate Auto Update.
 //	 * This service has no command data and no response data. It overloads
