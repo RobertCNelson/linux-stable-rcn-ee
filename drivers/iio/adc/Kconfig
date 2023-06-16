@@ -741,6 +741,16 @@ config MCP3911
 	  This driver can also be built as a module. If so, the module will be
 	  called mcp3911.
 
+config MCP356X
+	tristate "Microchip Technology MCP356X driver"
+	depends on SPI
+	help
+	  Say yes here to build support for Microchip Technology's MCP356X
+	  analog to digital converter.
+
+	  This driver can also be built as a module. If so, the module will be
+	  called mcp356x.
+
 config MEDIATEK_MT6360_ADC
 	tristate "Mediatek MT6360 ADC driver"
 	depends on MFD_MT6360
