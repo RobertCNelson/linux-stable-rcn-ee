@@ -1461,14 +1461,21 @@ static int atmel_qspi_remove(struct platform_device *pdev)
 	struct atmel_qspi *aq = spi_controller_get_devdata(ctrl);
 	int ret;
 
-	ret = pm_runtime_resume_and_get(&pdev->dev);
-	if (ret < 0)
-		return ret;
-
 	spi_unregister_controller(ctrl);
 
+	ret = pm_runtime_resume_and_get(&pdev->dev);
+	if (ret < 0) {
+		if (aq->caps->has_qspick)
+			clk_unprepare(aq->qspick);
+		if (aq->caps->has_gclk && __clk_is_enabled(aq->gclk))
+			clk_disable_unprepare(aq->gclk);
+		clk_unprepare(aq->pclk);
+		pm_runtime_disable(&pdev->dev);
+		return ret;
+	}
+
 	if (aq->caps->has_gclk)
-		return atmel_qspi_sama7g5_suspend(aq);
+		ret = atmel_qspi_sama7g5_suspend(aq);
 
 	if (aq->caps->has_dma)
 		atmel_qspi_dma_release(aq);
@@ -1479,6 +1486,8 @@ static int atmel_qspi_remove(struct platform_device *pdev)
 	pm_runtime_put_noidle(&pdev->dev);
 
 	clk_disable_unprepare(aq->qspick);
+	if (aq->caps->has_gclk && ret && __clk_is_enabled(aq->gclk))
+		clk_disable_unprepare(aq->gclk);
 	clk_disable_unprepare(aq->pclk);
 
 	return 0;
@@ -1557,8 +1566,11 @@ static int __maybe_unused atmel_qspi_runtime_resume(struct device *dev)
 	ret = clk_enable(aq->pclk);
 	if (ret)
 		return ret;
-	if (aq->caps->has_qspick)
+	if (aq->caps->has_qspick) {
 		ret = clk_enable(aq->qspick);
+		if (ret)
+			clk_disable(aq->pclk);
+	}
 
 	return ret;
 }
