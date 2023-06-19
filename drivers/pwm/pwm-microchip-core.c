@@ -330,8 +330,8 @@ static int mchp_core_pwm_apply(struct pwm_chip *chip, struct pwm_device *pwm,
 	return ret;
 }
 
-static void mchp_core_pwm_get_state(struct pwm_chip *chip, struct pwm_device *pwm,
-				    struct pwm_state *state)
+static int mchp_core_pwm_get_state(struct pwm_chip *chip, struct pwm_device *pwm,
+				   struct pwm_state *state)
 {
 	struct mchp_core_pwm_chip *mchp_core_pwm = to_mchp_core_pwm(chip);
 	u64 rate;
@@ -371,6 +371,8 @@ static void mchp_core_pwm_get_state(struct pwm_chip *chip, struct pwm_device *pw
 	}
 
 	state->polarity = negedge < posedge ? PWM_POLARITY_INVERSED : PWM_POLARITY_NORMAL;
+
+	return 0;
 }
 
 static const struct pwm_ops mchp_core_pwm_ops = {
