@@ -305,38 +305,27 @@ void __init_or_module riscv_cpufeature_patch_func(struct alt_entry *begin,
 						  struct alt_entry *end,
 						  unsigned int stage)
 {
+	u32 cpu_req_feature = cpufeature_probe(stage);
 	struct alt_entry *alt;
-	void *oldptr, *altptr;
-	u16 id, value;
-
-	if (stage == RISCV_ALTERNATIVES_EARLY_BOOT)
-		return;
+	u32 tmp;
 
 	for (alt = begin; alt < end; alt++) {
 		if (alt->vendor_id != 0)
 			continue;
-
-		id = PATCH_ID_CPUFEATURE_ID(alt->patch_id);
-
-		if (id >= RISCV_ISA_EXT_MAX) {
-			WARN(1, "This extension id:%d is not in ISA extension list", id);
+		if (alt->errata_id >= CPUFEATURE_NUMBER) {
+			WARN(1, "This feature id:%d is not in kernel cpufeature list",
+				alt->errata_id);
 			continue;
 		}
 
-		if (!__riscv_isa_extension_available(NULL, id))
-			continue;
-
-		value = PATCH_ID_CPUFEATURE_VALUE(alt->patch_id);
-		if (!riscv_cpufeature_patch_check(id, value))
-			continue;
-
-		oldptr = ALT_OLD_PTR(alt);
-		altptr = ALT_ALT_PTR(alt);
-
-		mutex_lock(&text_mutex);
-		patch_text_nosync(oldptr, altptr, alt->alt_len);
-		riscv_alternative_fix_offsets(oldptr, alt->alt_len, oldptr - altptr);
-		mutex_unlock(&text_mutex);
+		tmp = (1U << alt->errata_id);
+		if (cpu_req_feature & tmp) {
+			mutex_lock(&text_mutex);
+			patch_text_nosync(alt->old_ptr, alt->alt_ptr, alt->alt_len);
+			riscv_alternative_fix_offsets(alt->old_ptr, alt->alt_len,
+						      alt->old_ptr - alt->alt_ptr);
+			mutex_unlock(&text_mutex);
+		}
 	}
 }
 #endif
