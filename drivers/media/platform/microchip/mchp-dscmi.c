@@ -836,6 +836,9 @@ static int mchp_dscmi_s_fmt_vid_cap(struct file *file, void *priv,
 {
 	struct mchp_dscmi_fpga *mchp_dscmi = video_drvdata(file);
 
+	if (mchp_dscmi->capabilities == H264)
+		return mchp_dscmi_try_fmt_vid_cap(file, priv, fmt);
+
 	if (vb2_is_streaming(&mchp_dscmi->queue))
 		return -EBUSY;
 
@@ -1219,7 +1222,7 @@ static const struct v4l2_ctrl_config mchp_dscmi_gain_ctrls[] = {
 	}, {
 		.ops	= &mchp_dscmi_ctrl_ops,
 		.id	= MCHP_DSCMI_CID_OSD_COLOR,
-		.type	= V4L2_CTRL_TYPE_U16,
+		.type	= V4L2_CTRL_TYPE_INTEGER,
 		.name	= "OSD color",
 		.min	= MCHP_DSCMI_OSD_COLOR_MIN,
 		.max	= MCHP_DSCMI_OSD_COLOR_MAX,
