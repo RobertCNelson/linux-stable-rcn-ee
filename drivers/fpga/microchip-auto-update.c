@@ -337,9 +337,10 @@ static int mpfs_auto_update_write_complete(struct fpga_manager *mgr, struct fpga
 	if (ret | response->resp_status) {
 		dev_warn(priv->dev, "Verification of Update Image failed!\n");
 		ret = ret ? ret : -EBADMSG;
+	} else {
+		dev_info(priv->dev, "Verification of Update Image passed!\n");
 	}
 
-	dev_info(priv->dev, "Verification of Update Image passed!\n");
 //	/*
 //	 * If the validation has passed, initiate Auto Update.
 //	 * This service has no command data and no response data. It overloads
