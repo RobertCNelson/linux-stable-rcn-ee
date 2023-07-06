@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  * Original all-in-one devicetree:
- * Copyright (C) 2021-2022 - Wolfgang Grandegger <wg@aries-embedded.de>
+ * Copyright (C) 2021-2023 - Wolfgang Grandegger <wg@aries-embedded.de>
  * Rewritten to use includes:
  * Copyright (C) 2022 - Conor Dooley <conor.dooley@microchip.com>
  */
@@ -72,13 +72,6 @@
 		gpios = <13 0>;
 		input;
 	};
-
-	/* Set to low for eMMC, high for SD-card */
-	mmc-sel-hog {
-		gpio-hog;
-		gpios = <12 0>;
-		output-high;
-	};
 };
 
 &gpio2 {
@@ -104,20 +97,6 @@
 };
 
 &mbox {
-	status = "okay";
-};
-
-&mmc {
-	max-frequency = <50000000>;
-	bus-width = <4>;
-	cap-mmc-highspeed;
-	cap-sd-highspeed;
-	no-1-8-v;
-	sd-uhs-sdr12;
-	sd-uhs-sdr25;
-	sd-uhs-sdr50;
-	sd-uhs-sdr104;
-	disable-wp;
 	status = "okay";
 };
 
@@ -155,6 +134,12 @@
 
 &spi0 {
 	status = "okay";
+	spidev@0 {
+		compatible = "linux,spidev";
+		reg = <0>; /* CS 0 */
+		spi-max-frequency = <10000000>;
+		status = "okay";
+	};
 };
 
 &spi1 {
