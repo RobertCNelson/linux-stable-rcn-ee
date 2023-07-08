@@ -312,6 +312,7 @@
 #define IS_MANAGMEMENT_CALLBACK	0x080
 #define IS_MGMT_STATUS_SUCCES	0x040
 #define IS_MGMT_AUTH_PKT       0x010
+#define IS_MON_PKT		0x020
 
 #define WILC_WID_TYPE		GENMASK(15, 12)
 #define WILC_VMM_ENTRY_FULL_RETRY	1
@@ -418,6 +419,7 @@ int wilc_wlan_txq_add_net_pkt(struct net_device *dev,
 			      u32 buffer_size,
 			      void (*tx_complete_fn)(void *, int));
 int wilc_wlan_handle_txq(struct wilc *wl, u32 *txq_count);
+void wilc_wfi_handle_monitor_rx(struct wilc *wilc, u8 *buff, u32 size);
 void wilc_handle_isr(struct wilc *wilc);
 void wilc_wlan_cleanup(struct net_device *dev);
 int wilc_wlan_cfg_set(struct wilc_vif *vif, int start, u16 wid, u8 *buffer,

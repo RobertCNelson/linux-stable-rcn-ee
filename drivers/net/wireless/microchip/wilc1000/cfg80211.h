@@ -23,4 +23,5 @@ void wilc_update_mgmt_frame_registrations(struct wiphy *wiphy,
 					  struct mgmt_frame_regs *upd);
 struct wilc_vif *wilc_get_wl_to_vif(struct wilc *wl);
 void wlan_deinit_locks(struct wilc *wilc);
+struct wilc_vif *wilc_get_vif_from_type(struct wilc *wl, int type);
 #endif
