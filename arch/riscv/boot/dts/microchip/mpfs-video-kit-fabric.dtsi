@@ -43,7 +43,7 @@
 	};
 
 	mchp_dscmi_cam0: video-pipeline@40000000 {
-		compatible = "microchip,fpga-dscmi";
+		compatible = "microchip,fpga-dscmi-rtl-v2306";
 		reg = <0x0 0x40000000 0x0 0x2000>;
 		interrupt-parent = <&plic>;
 		interrupts = <118>;
