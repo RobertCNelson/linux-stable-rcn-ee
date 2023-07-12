@@ -25,13 +25,11 @@ int wilc_of_parse_power_pins(struct wilc *wilc)
 	const struct wilc_power_gpios *gpios = &default_gpios[0];
 	int ret;
 
-	power->gpios.reset = of_get_named_gpio_flags(of, "reset-gpios", 0,
-						     NULL);
+	power->gpios.reset = of_get_named_gpio(of, "reset-gpios", 0);
 	if (!gpio_is_valid(power->gpios.reset))
 		power->gpios.reset = gpios->reset;
 
-	power->gpios.chip_en = of_get_named_gpio_flags(of, "chip_en-gpios", 0,
-						       NULL);
+	power->gpios.chip_en = of_get_named_gpio(of, "chip_en-gpios", 0);
 	if (!gpio_is_valid(power->gpios.chip_en))
 		power->gpios.chip_en = gpios->chip_en;
 
