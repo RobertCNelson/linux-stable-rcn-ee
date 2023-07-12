@@ -47,7 +47,6 @@
  *
  ********************************************/
 #define WILC_PERIPH_REG_BASE		0x1000
-#define WILC_CHANGING_VIR_IF		0x108c
 #define WILC_CHIPID			WILC_PERIPH_REG_BASE
 #define WILC_GLB_RESET_0		(WILC_PERIPH_REG_BASE + 0x400)
 #define WILC_PIN_MUX_0			(WILC_PERIPH_REG_BASE + 0x408)
@@ -185,7 +184,6 @@
 #define WILC_VMM_TBL_RX_SHADOW_BASE	WILC_AHB_SHARE_MEM_BASE
 #define WILC_VMM_TBL_RX_SHADOW_SIZE	256
 
-#define WILC_FW_HOST_COMM		0x13c0
 #define WILC_GP_REG_0			0x149c
 #define WILC_GP_REG_1			0x14a0
 
@@ -196,18 +194,8 @@
 #define WILC_PWR_SEQ_ENABLE_WIFI_SLEEP	BIT(28)
 
 #define WILC_HAVE_SDIO_IRQ_GPIO		BIT(0)
-#define WILC_HAVE_USE_PMU		BIT(1)
 #define WILC_HAVE_SLEEP_CLK_SRC_RTC	BIT(2)
 #define WILC_HAVE_SLEEP_CLK_SRC_XO	BIT(3)
-#define WILC_HAVE_EXT_PA_INV_TX_RX	BIT(4)
-#define WILC_HAVE_LEGACY_RF_SETTINGS	BIT(5)
-#define WILC_HAVE_XTAL_24		BIT(6)
-#define WILC_HAVE_DISABLE_WILC_UART	BIT(7)
-#define WILC_HAVE_USE_IRQ_AS_HOST_WAKE	BIT(8)
-
-#define WILC_CORTUS_INTERRUPT_BASE	0x10A8
-#define WILC_CORTUS_INTERRUPT_1		(WILC_CORTUS_INTERRUPT_BASE + 0x4)
-#define WILC_CORTUS_INTERRUPT_2		(WILC_CORTUS_INTERRUPT_BASE + 0x8)
 
 /* tx control register 1 to 4 for RX */
 #define WILC_REG_4_TO_1_RX		0x1e1c
@@ -314,7 +302,6 @@ static inline bool is_wilc3000(u32 id)
 #define INT_2			BIT(IRG_FLAGS_OFFSET + 2)
 #define INT_3			BIT(IRG_FLAGS_OFFSET + 3)
 #define INT_4			BIT(IRG_FLAGS_OFFSET + 4)
-#define INT_5			BIT(IRG_FLAGS_OFFSET + 5)
 #define MAX_NUM_INT		5
 #define IRG_FLAGS_MASK		GENMASK(IRG_FLAGS_OFFSET + MAX_NUM_INT, \
 					IRG_FLAGS_OFFSET)
@@ -480,7 +467,6 @@ int wilc_wlan_cfg_get(struct wilc_vif *vif, int start, u16 wid, int commit,
 int wilc_wlan_txq_add_mgmt_pkt(struct net_device *dev, void *priv, u8 *buffer,
 			       u32 buffer_size, void (*func)(void *, int));
 void wilc_enable_tcp_ack_filter(struct wilc_vif *vif, bool value);
-int wilc_wlan_get_num_conn_ifcs(struct wilc *wilc);
 netdev_tx_t wilc_mac_xmit(struct sk_buff *skb, struct net_device *dev);
 
 bool wilc_wfi_p2p_rx(struct wilc_vif *vif, u8 *buff, u32 size);

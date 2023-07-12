@@ -23,7 +23,7 @@ void wilc_update_mgmt_frame_registrations(struct wiphy *wiphy,
 					  struct mgmt_frame_regs *upd);
 void wilc_sysfs_init(struct wilc *wilc);
 void wilc_sysfs_exit(void);
-struct wilc_vif *wilc_get_interface(struct wilc *wl);
+struct wilc_vif *wilc_get_vif_from_type(struct wilc *wl, int type);
 struct wilc_vif *wilc_get_wl_to_vif(struct wilc *wl);
 void wlan_deinit_locks(struct wilc *wilc);
 struct wilc_vif *wilc_get_vif_from_type(struct wilc *wl, int type);
