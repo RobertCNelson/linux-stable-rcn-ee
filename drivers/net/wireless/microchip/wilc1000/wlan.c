@@ -12,10 +12,6 @@
 
 #define WAKE_UP_TRIAL_RETRY		10000
 
-static inline bool is_wilc1000(u32 id)
-{
-	return (id & (~WILC_CHIP_REV_FIELD)) == WILC_1000_BASE_ID;
-}
 
 static inline void acquire_bus(struct wilc *wilc, enum bus_acquire acquire)
 {
@@ -1222,6 +1218,9 @@ int wilc_wlan_start(struct wilc *wilc)
 	if (wilc->io_type == WILC_HIF_SDIO_GPIO_IRQ)
 		reg |= WILC_HAVE_SDIO_IRQ_GPIO;
 
+	if (wilc->chip == WILC_3000)
+		reg |= WILC_HAVE_SLEEP_CLK_SRC_RTC;
+
 	ret = wilc->hif_func->hif_write_reg(wilc, WILC_GP_REG_1, reg);
 	if (ret)
 		goto release;
@@ -1496,6 +1495,16 @@ static int init_chip(struct net_device *dev)
 		goto end;
 	}
 
+	if (wilc->chip == WILC_3000) {
+		ret = wilc->hif_func->hif_read_reg(wilc, 0x207ac, &reg);
+		ret = wilc->hif_func->hif_write_reg(wilc, 0x4f0000,
+						    0x71);
+		if (ret) {
+			pr_err("fail write reg 0x4f0000 ...\n");
+			goto end;
+		}
+	}
+
 end:
 	release_bus(wilc, WILC_BUS_RELEASE_ALLOW_SLEEP);
 
@@ -1504,27 +1513,32 @@ end:
 
 u32 wilc_get_chipid(struct wilc *wilc, bool update)
 {
+	int ret;
 	u32 chipid = 0;
 	u32 rfrevid = 0;
 
 	if (wilc->chipid == 0 || update) {
-		wilc->hif_func->hif_read_reg(wilc, WILC_CHIPID, &chipid);
-		wilc->hif_func->hif_read_reg(wilc, WILC_RF_REVISION_ID,
-					     &rfrevid);
-		if (!is_wilc1000(chipid)) {
-			wilc->chipid = 0;
-			return wilc->chipid;
-		}
-		if (chipid == WILC_1000_BASE_ID_2A) { /* 0x1002A0 */
-			if (rfrevid != 0x1)
-				chipid = WILC_1000_BASE_ID_2A_REV1;
-		} else if (chipid == WILC_1000_BASE_ID_2B) { /* 0x1002B0 */
-			if (rfrevid == 0x4)
-				chipid = WILC_1000_BASE_ID_2B_REV1;
-			else if (rfrevid != 0x3)
-				chipid = WILC_1000_BASE_ID_2B_REV2;
-		}
+		ret = wilc->hif_func->hif_read_reg(wilc, WILC3000_CHIP_ID,
+						   &chipid);
+		if (!is_wilc3000(chipid)) {
+			wilc->hif_func->hif_read_reg(wilc, WILC_CHIPID, &chipid);
+			wilc->hif_func->hif_read_reg(wilc, WILC_RF_REVISION_ID,
+						     &rfrevid);
 
+			if (!is_wilc1000(chipid)) {
+				wilc->chipid = 0;
+				return wilc->chipid;
+			}
+			if (chipid == WILC_1000_BASE_ID_2A) { /* 0x1002A0 */
+				if (rfrevid != 0x1)
+					chipid = WILC_1000_BASE_ID_2A_REV1;
+			} else if (chipid == WILC_1000_BASE_ID_2B) { /* 0x1002B0 */
+				if (rfrevid == 0x4)
+					chipid = WILC_1000_BASE_ID_2B_REV1;
+				else if (rfrevid != 0x3)
+					chipid = WILC_1000_BASE_ID_2B_REV2;
+			}
+		}
 		wilc->chipid = chipid;
 	}
 	return wilc->chipid;
