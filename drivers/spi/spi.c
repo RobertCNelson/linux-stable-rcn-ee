@@ -42,6 +42,9 @@ EXPORT_TRACEPOINT_SYMBOL(spi_transfer_stop);
 
 #include "internals.h"
 
+//<CJ>:
+#undef CONFIG_HAS_DMA
+
 static DEFINE_IDR(spi_master_idr);
 
 static void spidev_release(struct device *dev)

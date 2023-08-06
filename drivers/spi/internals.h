@@ -12,6 +12,9 @@
 #ifndef __LINUX_SPI_INTERNALS_H
 #define __LINUX_SPI_INTERNALS_H
 
+//<CJ>:
+#undef CONFIG_HAS_DMA
+
 #include <linux/device.h>
 #include <linux/dma-direction.h>
 #include <linux/scatterlist.h>

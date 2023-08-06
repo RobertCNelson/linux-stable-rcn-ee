@@ -29,6 +29,9 @@
 
 #include <asm/unaligned.h>
 
+//<CJ>:
+#undef CONFIG_HAS_DMA
+//#define DEBUG 1
 
 /* NOTES:
  *
@@ -1375,7 +1378,8 @@ static int mmc_spi_probe(struct spi_device *spi)
 	 * that's the only reason not to use a few MHz for f_min (until
 	 * the upper layer reads the target frequency from the CSD).
 	 */
-	mmc->f_min = 400000;
+//<CJ>	mmc->f_min = 400000;
+	mmc->f_min = 5000000;
 	mmc->f_max = spi->max_speed_hz;
 
 	host = mmc_priv(mmc);
