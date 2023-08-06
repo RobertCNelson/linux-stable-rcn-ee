@@ -1,3 +1,4 @@
+
 // SPDX-License-Identifier: (GPL-2.0)
 /*
  * Microchip coreQSPI QSPI controller driver
@@ -117,10 +118,10 @@ struct mchp_coreqspi {
 	struct completion data_completion;
 	struct mutex op_lock; /* lock access to the device */
 	u8 *txbuf;
-	u8 *rxbuf;
+	volatile u8 *rxbuf;
 	int irq;
-	int tx_len;
-	int rx_len;
+	volatile int tx_len;
+	volatile int rx_len;
 };
 
 static int mchp_coreqspi_set_mode(struct mchp_coreqspi *qspi, const struct spi_mem_op *op)
@@ -221,6 +222,68 @@ static inline void mchp_coreqspi_write_op(struct mchp_coreqspi *qspi, bool word)
 		writel_relaxed(data, qspi->regs + REG_TX_DATA);
 	}
 }
+
+static inline void mchp_coreqspi_write_read_op(struct mchp_coreqspi *qspi, bool last)
+{
+	u32 frames, control, data;
+	qspi->rx_len = qspi->tx_len;
+
+	control = readl_relaxed(qspi->regs + REG_CONTROL);
+	control |= CONTROL_FLAGSX4;
+	writel_relaxed(control, qspi->regs + REG_CONTROL);
+
+	while (qspi->tx_len >= 4) {
+		while (readl_relaxed(qspi->regs + REG_STATUS) & STATUS_TXFIFOFULL)
+			;
+
+		data = *(u32 *)qspi->txbuf;
+		qspi->txbuf += 4;
+		qspi->tx_len -= 4;
+		writel_relaxed(data, qspi->regs + REG_X4_TX_DATA);
+
+		if (qspi->rx_len >= 8) {
+			if (readl_relaxed(qspi->regs + REG_STATUS) & STATUS_RXAVAILABLE) {
+				data = readl_relaxed(qspi->regs + REG_X4_RX_DATA);
+				*(u32 *)qspi->rxbuf = data;
+				qspi->rxbuf += 4;
+				qspi->rx_len -= 4;
+			}
+		}
+	}
+
+	if (!last ) {
+		while (qspi->rx_len >= 4) {
+			while (readl_relaxed(qspi->regs + REG_STATUS) & STATUS_RXFIFOEMPTY)
+				;
+			data = readl_relaxed(qspi->regs + REG_X4_RX_DATA);
+			*(u32 *)qspi->rxbuf = data;
+			qspi->rxbuf += 4;
+			qspi->rx_len -= 4;
+		}
+	}
+
+	if (qspi->tx_len) {
+		control &= ~CONTROL_FLAGSX4;
+		writel_relaxed(control, qspi->regs + REG_CONTROL);
+
+
+		while (qspi->tx_len--) {
+			while (readl_relaxed(qspi->regs + REG_STATUS) & STATUS_TXFIFOFULL)
+				;
+			data =  *qspi->txbuf++;
+			writel_relaxed(data, qspi->regs + REG_TX_DATA);
+		}
+		if (!last) {
+			while (qspi->rx_len--) {
+				while (readl_relaxed(qspi->regs + REG_STATUS) & STATUS_RXFIFOEMPTY)
+					;
+				data = readl_relaxed(qspi->regs + REG_RX_DATA);
+				*qspi->rxbuf++ = (data & 0xFF);
+			}
+		}
+	}
+}
+
 
 static void mchp_coreqspi_enable_ints(struct mchp_coreqspi *qspi)
 {
@@ -497,6 +560,160 @@ static const struct spi_controller_mem_ops mchp_coreqspi_mem_ops = {
 	.exec_op = mchp_coreqspi_exec_op,
 };
 
+static int mchp_coreqspi_transfer_one_message(struct spi_controller *ctlr,
+					struct spi_message *m)
+{
+	struct mchp_coreqspi *qspi = spi_controller_get_devdata(ctlr);
+	struct spi_transfer *t = NULL;
+	u32 control, frames, status;
+	u32 total_bytes, cmd_bytes = 0, idle_cycles = 0;
+	int ret;
+	bool quad = false, dual = false;
+	bool keep_cs = false;
+
+	mutex_lock(&qspi->op_lock);
+	ret = readl_poll_timeout(qspi->regs + REG_STATUS, status,
+				 (status & STATUS_READY), 0,
+				 TIMEOUT_MS);
+	if (ret) {
+		dev_err(&ctlr->dev,
+			"Timeout waiting on QSPI ready.\n");
+		return -ETIMEDOUT;
+	}
+
+	ret = mchp_coreqspi_setup_clock(qspi, m->spi);
+	if (ret)
+		goto error;
+
+	if (m->spi->cs_gpiod) {
+		if (m->spi->mode & SPI_CS_HIGH) {
+			gpiod_set_value(m->spi->cs_gpiod, 0);
+		} else {
+			gpiod_set_value(m->spi->cs_gpiod, 1);
+		}
+	}
+
+	control = readl_relaxed(qspi->regs + REG_CONTROL);
+	control &= ~(CONTROL_MODE12_MASK |
+		     CONTROL_MODE0);
+	writel_relaxed(control, qspi->regs + REG_CONTROL);
+
+	reinit_completion(&qspi->data_completion);
+
+	/* Check the total bytes and command bytes */
+	list_for_each_entry(t, &m->transfers, transfer_list) {
+		total_bytes += t->len;
+		if ((!cmd_bytes) && !(t->tx_buf && t->rx_buf))
+			cmd_bytes = t->len;
+		if (!t->rx_buf)
+			cmd_bytes = total_bytes;
+		if (t->tx_nbits == SPI_NBITS_QUAD || t->rx_nbits == SPI_NBITS_QUAD)
+			quad = true;
+		else if (t->tx_nbits == SPI_NBITS_DUAL || t->rx_nbits == SPI_NBITS_DUAL)
+			dual = true;
+	}
+
+	control = readl_relaxed(qspi->regs + REG_CONTROL);
+	if (quad) {
+		control |= (CONTROL_MODE0 | CONTROL_MODE12_EX_RW);
+	} else if (dual) {
+		control &= ~CONTROL_MODE0;
+		control |= CONTROL_MODE12_FULL;
+	} else {
+		control &= ~(CONTROL_MODE12_MASK |
+			     CONTROL_MODE0);
+	}
+
+	writel_relaxed(control, qspi->regs + REG_CONTROL);
+	frames = total_bytes & BYTESUPPER_MASK;
+	writel_relaxed(frames, qspi->regs + REG_FRAMESUP);
+	frames = total_bytes & BYTESLOWER_MASK;
+	frames |= cmd_bytes << FRAMES_CMDBYTES_SHIFT;
+	frames |= idle_cycles << FRAMES_IDLE_SHIFT;
+	control = readl_relaxed(qspi->regs + REG_CONTROL);
+	if (control & CONTROL_MODE12_MASK)
+		frames |= (1 << FRAMES_SHIFT);
+
+	frames |= FRAMES_FLAGWORD;
+	writel_relaxed(frames, qspi->regs + REG_FRAMES);
+
+	list_for_each_entry(t, &m->transfers, transfer_list) {
+
+		if ((t->tx_buf) && (t->rx_buf)){
+			bool last = false;
+			qspi->txbuf = (u8 *)t->tx_buf;
+			qspi->rxbuf = (u8 *)t->rx_buf;
+			qspi->tx_len = t->len;
+			if (list_is_last(&t->transfer_list, &m->transfers))
+				last = true;
+			mchp_coreqspi_write_read_op(qspi, last);
+		} else if (t->tx_buf) {
+			qspi->txbuf = (u8 *)t->tx_buf;
+			qspi->tx_len = t->len;
+			mchp_coreqspi_write_op(qspi, true);
+		} else {
+			qspi->rxbuf = (u8 *)t->rx_buf;
+			qspi->rx_len = t->len;
+		}
+
+		if (t->cs_change) {
+			if (list_is_last(&t->transfer_list,
+					 &m->transfers)) {
+				keep_cs = true;
+			} else {
+				if (!t->cs_off) {
+//					gpiod_set_value(m->spi->cs_gpiod, 0);
+					if (m->spi->mode & SPI_CS_HIGH) {
+						gpiod_set_value(m->spi->cs_gpiod, 0);
+					} else {
+						gpiod_set_value(m->spi->cs_gpiod, 1);
+					}
+				}
+//				_spi_transfer_cs_change_delay(m, t);
+				if (!list_next_entry(t, transfer_list)->cs_off) {
+//					spi_set_cs(m->spi, true, false);
+					if (m->spi->mode & SPI_CS_HIGH) {
+//						gpiod_set_value(m->spi->cs_gpiod, 0);
+						gpiod_set_value(m->spi->cs_gpiod, 1);
+					} else {
+//						gpiod_set_value(m->spi->cs_gpiod, 1);
+						gpiod_set_value(m->spi->cs_gpiod, 0);
+					}
+//					gpiod_set_value(m->spi->cs_gpiod, 1);
+				}
+			}
+		} else if (!list_is_last(&t->transfer_list, &m->transfers) &&
+			   t->cs_off != list_next_entry(t, transfer_list)->cs_off) {
+//			spi_set_cs(m->spi, t->cs_off, false);
+					if (m->spi->mode & SPI_CS_HIGH) {
+						gpiod_set_value(m->spi->cs_gpiod, !t->cs_off);
+					} else {
+						gpiod_set_value(m->spi->cs_gpiod, !t->cs_off);
+					}
+		}
+
+
+
+	}
+
+	mchp_coreqspi_enable_ints(qspi);
+
+	if (!wait_for_completion_timeout(&qspi->data_completion, msecs_to_jiffies(1000)))
+		ret = -ETIMEDOUT;
+
+	m->actual_length = total_bytes;
+
+error:
+	if (ret != 0 || !keep_cs)
+		gpiod_set_value(m->spi->cs_gpiod, 0);
+
+	m->status = ret;
+	spi_finalize_current_message(ctlr);
+	mutex_unlock(&qspi->op_lock);
+	mchp_coreqspi_disable_ints(qspi);
+	return ret;
+}
+
 static int mchp_coreqspi_probe(struct platform_device *pdev)
 {
 	struct spi_controller *ctlr;
@@ -550,6 +767,9 @@ static int mchp_coreqspi_probe(struct platform_device *pdev)
 	ctlr->mode_bits = SPI_CPOL | SPI_CPHA | SPI_RX_DUAL | SPI_RX_QUAD |
 			  SPI_TX_DUAL | SPI_TX_QUAD;
 	ctlr->dev.of_node = np;
+	ctlr->transfer_one_message = mchp_coreqspi_transfer_one_message;
+	ctlr->num_chipselect = 2;
+	ctlr->use_gpio_descriptors = true;
 
 	ret = devm_spi_register_controller(&pdev->dev, ctlr);
 	if (ret) {
