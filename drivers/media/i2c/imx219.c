@@ -1181,6 +1181,9 @@ static int imx219_identify_module(struct imx219 *imx219)
 	int ret;
 	u32 val;
 
+	printk(KERN_INFO "imx219_identify_module()\n");
+
+
 	ret = imx219_read_reg(imx219, IMX219_REG_CHIP_ID,
 			      IMX219_REG_VALUE_16BIT, &val);
 	if (ret) {
@@ -1194,6 +1197,9 @@ static int imx219_identify_module(struct imx219 *imx219)
 			IMX219_CHIP_ID, val);
 		return -EIO;
 	}
+
+	printk(KERN_INFO "imx219_identify_module() - Success\n");
+
 
 	return 0;
 }
@@ -1401,6 +1407,8 @@ static int imx219_probe(struct i2c_client *client)
 	struct device *dev = &client->dev;
 	struct imx219 *imx219;
 	int ret;
+
+	printk(KERN_INFO "imx219_probe()\n");
 
 	imx219 = devm_kzalloc(&client->dev, sizeof(*imx219), GFP_KERNEL);
 	if (!imx219)
