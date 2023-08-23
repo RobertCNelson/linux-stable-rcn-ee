@@ -870,6 +870,10 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&wifi_debug_uart_pins_default>;
 	status = "okay";
+
+	beagleplaygreybus {
+		compatible = "beagle,beagleplaygreybus";
+	};
 };
 
 &dss {
