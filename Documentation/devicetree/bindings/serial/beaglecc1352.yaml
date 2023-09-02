@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: GPL-2.0-only OR BSD-2-Clause
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/serial/beaglecc1352.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: BeaglePlay CC1352 serial UART
+
+maintainers:
+  - Ayush Singh <ayushdevel1325@gmail.com>
+
+properties:
+  compatible:
+    const: beagle,cc1352
+
+required:
+  - compatible
+
+additionalProperties: false
+
+examples:
+  - |
+    beaglecc1352 {
+      compatible = "beagle,cc1352";
+    };
