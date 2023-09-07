@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <linux/slab.h>
+#include <linux/sched/rt.h>
 #include <linux/sched/task.h>
 
 #include "futex.h"
@@ -1002,6 +1003,12 @@ retry_private:
 		goto no_block;
 	}
 
+	/*
+	 * Must be done before we enqueue the waiter, here is unfortunately
+	 * under the hb lock, but that *should* work because it does nothing.
+	 */
+	rt_mutex_pre_schedule();
+
 	rt_mutex_init_waiter(&rt_waiter);
 
 	/*
@@ -1039,7 +1046,10 @@ retry_private:
 	ret = rt_mutex_wait_proxy_lock(&q.pi_state->pi_mutex, to, &rt_waiter);
 
 cleanup:
-	spin_lock(q.lock_ptr);
+	rt_mutex_post_schedule();
+
+	futex_trylock_hblock(q.lock_ptr);
+
 	/*
 	 * If we failed to acquire the lock (deadlock/signal/timeout), we must
 	 * first acquire the hb->lock before removing the lock from the
@@ -1051,7 +1061,6 @@ cleanup:
 	 */
 	if (ret && !rt_mutex_cleanup_proxy_lock(&q.pi_state->pi_mutex, &rt_waiter))
 		ret = 0;
-
 no_block:
 	/*
 	 * Fixup the pi_state owner and possibly acquire the lock if we
