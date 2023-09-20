@@ -64,7 +64,7 @@ enum pll_type {
 
 static const struct clk_master_characteristics mck_characteristics = {
 	.output = { .min = 32000000, .max = 266666667 },
-	.divisors = { 1, 2, 4, 3 },
+	.divisors = { 1, 2, 4, 3, 5},
 	.have_div3_pres = 1,
 };
 
