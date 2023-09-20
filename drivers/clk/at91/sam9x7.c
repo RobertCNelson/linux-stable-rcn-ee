@@ -220,6 +220,10 @@ static const struct {
 			.p = "mainck",
 			.l = &plla_frac_layout,
 			.t = PLL_TYPE_FRAC,
+			/*
+			 * This feeds plla_divpmcck which feeds CPU. It should
+			 * not be disabled.
+			 */
 			.f = CLK_IS_CRITICAL | CLK_SET_RATE_GATE,
 			.c = &plla_characteristics,
 		},
@@ -229,6 +233,7 @@ static const struct {
 			.p = "plla_fracck",
 			.l = &pll_divpmc_layout,
 			.t = PLL_TYPE_DIV,
+			/* This feeds CPU. It should not be disabled */
 			.f = CLK_IS_CRITICAL | CLK_SET_RATE_GATE,
 			.eid = PMC_PLLACK,
 			.c = &plla_characteristics,
@@ -314,6 +319,10 @@ static const struct {
 			.n = "plla_div2pmcck",
 			.p = "plla_fracck",
 			.l = &plladiv2_divpmc_layout,
+			/*
+			 * This may feed critical parts of the system like timers.
+			 * It should not be disabled.
+			 */
 			.f = CLK_IS_CRITICAL | CLK_SET_RATE_GATE,
 			.c = &plladiv2_characteristics,
 			.t = PLL_TYPE_DIV,
