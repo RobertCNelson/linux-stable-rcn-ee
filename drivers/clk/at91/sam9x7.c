@@ -944,6 +944,7 @@ static void __init sam9x7_pmc_setup(struct device_node *np)
 	}
 
 	of_clk_add_hw_provider(np, of_clk_hw_pmc_get, sam9x7_pmc);
+	kfree(alloc_mem);
 
 	return;
 
