@@ -43,6 +43,7 @@ struct mpfs_gpio_chip {
 	struct clk *clk;
 	raw_spinlock_t	lock;
 	struct gpio_chip gc;
+	u8 irq_data[MAX_NUM_GPIO];
 };
 
 static void mpfs_gpio_assign_bit(void __iomem *addr, unsigned int bit_offset, bool value)
@@ -129,7 +130,7 @@ static int mpfs_gpio_irq_set_type(struct irq_data *data, unsigned int type)
 {
 	struct gpio_chip *gc = irq_data_get_irq_chip_data(data);
 	struct mpfs_gpio_chip *mpfs_gpio = gpiochip_get_data(gc);
-	int gpio_index = irqd_to_hwirq(data);
+	int gpio_index = irqd_to_hwirq(data) % 32;
 	u32 interrupt_type;
 	u32 gpio_cfg;
 	unsigned long flags;
@@ -168,11 +169,10 @@ static void mpfs_gpio_irq_unmask(struct irq_data *data)
 {
 	struct gpio_chip *gc = irq_data_get_irq_chip_data(data);
 	struct mpfs_gpio_chip *mpfs_gpio = gpiochip_get_data(gc);
-	int gpio_index = irqd_to_hwirq(data);
+	int gpio_index = irqd_to_hwirq(data) % 32;
 
 	gpiochip_enable_irq(gc, gpio_index);
 	mpfs_gpio_direction_input(gc, gpio_index);
-	mpfs_gpio_assign_bit(mpfs_gpio->base + MPFS_IRQ_REG, gpio_index, 1);
 	mpfs_gpio_assign_bit(mpfs_gpio->base + MPFS_GPIO_CTRL(gpio_index),
 			     MPFS_GPIO_EN_INT, 1);
 }
@@ -181,19 +181,18 @@ static void mpfs_gpio_irq_mask(struct irq_data *data)
 {
 	struct gpio_chip *gc = irq_data_get_irq_chip_data(data);
 	struct mpfs_gpio_chip *mpfs_gpio = gpiochip_get_data(gc);
-	int gpio_index = irqd_to_hwirq(data);
+	int gpio_index = irqd_to_hwirq(data) % 32;
 
-	mpfs_gpio_assign_bit(mpfs_gpio->base + MPFS_IRQ_REG, gpio_index, 1);
 	mpfs_gpio_assign_bit(mpfs_gpio->base + MPFS_GPIO_CTRL(gpio_index),
 			     MPFS_GPIO_EN_INT, 0);
 	gpiochip_disable_irq(gc, gpio_index);
 }
 
-static const struct irq_chip mpfs_gpio_irqchip = {
-	.name = "mpfs",
+const struct irq_chip mpfs_gpio_irqchip = {
+	.name = "MPFS GPIO",
 	.irq_set_type = mpfs_gpio_irq_set_type,
-	.irq_mask	= mpfs_gpio_irq_mask,
-	.irq_unmask	= mpfs_gpio_irq_unmask,
+	.irq_mask = mpfs_gpio_irq_mask,
+	.irq_unmask = mpfs_gpio_irq_unmask,
 	.flags = IRQCHIP_IMMUTABLE | IRQCHIP_MASK_ON_SUSPEND,
 	GPIOCHIP_IRQ_RESOURCE_HELPERS,
 };
@@ -201,18 +200,24 @@ static const struct irq_chip mpfs_gpio_irqchip = {
 static void mpfs_gpio_irq_handler(struct irq_desc *desc)
 {
 	struct irq_chip *irqchip = irq_desc_get_chip(desc);
-	struct mpfs_gpio_chip *mpfs_gpio =
-		gpiochip_get_data(irq_desc_get_handler_data(desc));
+	void *handler_data = irq_desc_get_handler_data(desc);
+	struct gpio_chip *gc = irq_data_get_irq_chip_data(&desc->irq_data);
+	struct mpfs_gpio_chip *mpfs_gpio = gpiochip_get_data(gc);
+	u8 gpio_index = *((u8 *)handler_data);
 	unsigned long status;
-	int offset;
+
+	/*
+	 * Since the parent may be a muxed/"non-direct" interrupt, this
+	 * interrupt may not be for us.
+	 */
+	status = readl(mpfs_gpio->base + MPFS_IRQ_REG);
+	if (!(status & BIT(gpio_index)))
+		return;
 
 	chained_irq_enter(irqchip, desc);
 
-	status = readl(mpfs_gpio->base + MPFS_IRQ_REG);
-	for_each_set_bit(offset, &status, mpfs_gpio->gc.ngpio) {
-		mpfs_gpio_assign_bit(mpfs_gpio->base + MPFS_IRQ_REG, offset, 1);
-		generic_handle_irq(irq_find_mapping(mpfs_gpio->gc.irq.domain, offset));
-	}
+	generic_handle_irq(irq_find_mapping(mpfs_gpio->gc.irq.domain, gpio_index));
+	mpfs_gpio_assign_bit(mpfs_gpio->base + MPFS_IRQ_REG, gpio_index, 1);
 
 	chained_irq_exit(irqchip, desc);
 }
@@ -222,6 +227,7 @@ static int mpfs_gpio_probe(struct platform_device *pdev)
 	struct clk *clk;
 	struct device *dev = &pdev->dev;
 	struct device_node *node = pdev->dev.of_node;
+	void **irq_data = NULL;
 	struct mpfs_gpio_chip *mpfs_gpio;
 	struct gpio_irq_chip *girq;
 	int i, ret, ngpios, nirqs;
@@ -232,7 +238,8 @@ static int mpfs_gpio_probe(struct platform_device *pdev)
 
 	mpfs_gpio->base = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(mpfs_gpio->base))
-		return dev_err_probe(dev, PTR_ERR(mpfs_gpio->base), "failed to ioremap memory resource\n");
+		return dev_err_probe(dev, PTR_ERR(mpfs_gpio->base),
+				     "failed to ioremap memory resource\n");
 
 	clk = devm_clk_get(dev, NULL);
 	if (IS_ERR(clk))
@@ -266,20 +273,42 @@ static int mpfs_gpio_probe(struct platform_device *pdev)
 		ret = -ENXIO;
 		goto cleanup_clock;
 	}
+
 	girq = &mpfs_gpio->gc.irq;
-	gpio_irq_chip_set_chip(girq, &mpfs_gpio_irqchip);
-	girq->handler = handle_simple_irq;
-	girq->parent_handler = mpfs_gpio_irq_handler;
-	girq->default_type = IRQ_TYPE_NONE;
 	girq->num_parents = nirqs;
-	girq->parents = devm_kcalloc(&pdev->dev, nirqs,
-				     sizeof(*girq->parents), GFP_KERNEL);
-	if (!girq->parents) {
-		ret = -ENOMEM;
-		goto cleanup_clock;
+
+	if (girq->num_parents) {
+		gpio_irq_chip_set_chip(girq, &mpfs_gpio_irqchip);
+		girq->parent_handler = mpfs_gpio_irq_handler;
+
+		girq->parents = devm_kcalloc(&pdev->dev, girq->num_parents,
+					     sizeof(*girq->parents), GFP_KERNEL);
+		irq_data = devm_kmalloc_array(&pdev->dev, girq->num_parents,
+					      sizeof(*irq_data), GFP_KERNEL);
+
+		if (!girq->parents || !irq_data) {
+			ret = -ENOMEM;
+			goto cleanup_clock;
+		}
+
+		for (i = 0; i < girq->num_parents; i++) {
+			ret = platform_get_irq(pdev, i);
+			if (ret < 0)
+				goto cleanup_clock;
+
+			girq->parents[i] = ret;
+			mpfs_gpio->irq_data[i] = i;
+			irq_data[i] = &mpfs_gpio->irq_data[i];
+
+			irq_set_chip_data(ret, &mpfs_gpio->gc);
+			irq_set_handler(ret, handle_simple_irq);
+		}
+
+		girq->parent_handler_data_array = irq_data;
+		girq->per_parent_data = true;
+		girq->handler = handle_simple_irq;
+		girq->default_type = IRQ_TYPE_NONE;
 	}
-	for (i = 0; i < nirqs; i++)
-		girq->parents[i] = platform_get_irq(pdev, i);
 
 	ret = gpiochip_add_data(&mpfs_gpio->gc, mpfs_gpio);
 	if (ret)
