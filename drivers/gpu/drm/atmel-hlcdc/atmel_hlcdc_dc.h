@@ -424,6 +424,9 @@ struct atmel_hlcdc_dc {
 	} suspend;
 };
 
+extern const struct atmel_lcdc_dc_ops atmel_hlcdc_ops;
+extern const struct atmel_lcdc_dc_ops atmel_xlcdc_ops;
+
 extern struct atmel_hlcdc_formats atmel_hlcdc_plane_rgb_formats;
 extern struct atmel_hlcdc_formats atmel_hlcdc_plane_rgb_and_yuv_formats;
 
