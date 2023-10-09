@@ -304,7 +304,7 @@ static int mpfs_gpio_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static const struct of_device_id mpfs_of_ids[] = {
+static const struct of_device_id mpfs_gpio_of_ids[] = {
 	{ .compatible = "microchip,mpfs-gpio", },
 	{ /* end of list */ }
 };
@@ -313,7 +313,7 @@ static struct platform_driver mpfs_gpio_driver = {
 	.probe = mpfs_gpio_probe,
 	.driver = {
 		.name = "microchip,mpfs-gpio",
-		.of_match_table = mpfs_of_ids,
+		.of_match_table = mpfs_gpio_of_ids,
 	},
 	.remove = mpfs_gpio_remove,
 };
