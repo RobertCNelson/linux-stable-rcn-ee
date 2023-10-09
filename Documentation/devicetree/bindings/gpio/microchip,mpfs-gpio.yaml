@@ -21,7 +21,7 @@ properties:
   interrupts:
     description:
       Interrupt mapping, one per GPIO. Maximum 32 GPIOs.
-    minItems: 1
+    minItems: 14
     maxItems: 32
 
   interrupt-controller: true
@@ -38,9 +38,7 @@ properties:
   ngpios:
     description:
       The number of GPIOs available.
-    minimum: 1
-    maximum: 32
-    default: 32
+    enum: [14, 24, 32]
 
   gpio-controller: true
 
@@ -70,6 +68,7 @@ required:
   - interrupt-controller
   - "#gpio-cells"
   - gpio-controller
+  - ngpios
   - clocks
 
 additionalProperties: false
@@ -80,18 +79,19 @@ examples:
         compatible = "microchip,mpfs-gpio";
         reg = <0x20122000 0x1000>;
         clocks = <&clkcfg 25>;
-        interrupt-parent = <&plic>;
+        interrupt-parent = <&irqmux>;
         gpio-controller;
         #gpio-cells = <2>;
+        ngpios = <32>;
         interrupt-controller;
-        #interrupt-cells = <1>;
-        interrupts = <53>, <53>, <53>, <53>,
-                     <53>, <53>, <53>, <53>,
-                     <53>, <53>, <53>, <53>,
-                     <53>, <53>, <53>, <53>,
-                     <53>, <53>, <53>, <53>,
-                     <53>, <53>, <53>, <53>,
-                     <53>, <53>, <53>, <53>,
-                     <53>, <53>, <53>, <53>;
+        #interrupt-cells = <2>;
+        interrupts = <64>, <65>, <66>, <67>,
+                     <68>, <69>, <70>, <71>,
+                     <72>, <73>, <74>, <75>,
+                     <76>, <77>, <78>, <79>,
+                     <80>, <81>, <82>, <83>,
+                     <84>, <85>, <86>, <87>,
+                     <88>, <89>, <90>, <91>,
+                     <92>, <93>, <94>, <95>;
     };
 ...
