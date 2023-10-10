@@ -702,4 +702,31 @@ void drm_gpuva_remap(struct drm_gpuva *prev,
 
 void drm_gpuva_unmap(struct drm_gpuva_op_unmap *op);
 
+/**
+ * drm_gpuva_op_remap_get_unmap_range() - Helper to get the start and range of
+ * the unmap stage of a remap op.
+ * @op: Remap op.
+ * @start_addr: Output pointer for the start of the required unmap.
+ * @range: Output pointer for the length of the required unmap.
+ *
+ * These parameters can then be used by the caller to unmap memory pages that
+ * are no longer required.
+ */
+static inline void
+drm_gpuva_op_remap_get_unmap_range(const struct drm_gpuva_op_remap *op,
+				   u64 *start_addr, u64 *range)
+{
+	const u64 va_start = op->prev ?
+			     op->prev->va.addr + op->prev->va.range :
+			     op->unmap->va->va.addr;
+	const u64 va_end = op->next ?
+			   op->next->va.addr :
+			   op->unmap->va->va.addr + op->unmap->va->va.range;
+
+	if (start_addr)
+		*start_addr = va_start;
+	if (range)
+		*range = va_end - va_start;
+}
+
 #endif /* __DRM_GPUVM_H__ */
