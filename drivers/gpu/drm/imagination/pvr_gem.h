@@ -59,6 +59,13 @@ struct pvr_file;
  *    :CACHED: By default, all GEM objects are mapped write-combined on the
  *       CPU. Set this flag to override this behaviour and map the object
  *       cached.
+ *
+ * Firmware options
+ *    These use the prefix PVR_BO_FW_.
+ *
+ *    :NO_CLEAR_ON_RESET: By default, all FW objects are cleared and
+ *       reinitialised on hard reset. Set this flag to override this behaviour
+ *       and preserve buffer contents on reset.
  */
 #define PVR_BO_CPU_CACHED BIT_ULL(63)
 
