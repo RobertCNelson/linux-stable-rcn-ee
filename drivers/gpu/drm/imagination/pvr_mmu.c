@@ -61,8 +61,10 @@
  * pvr_mmu_flush() - Request flush of all MMU caches.
  * @pvr_dev: Target PowerVR device.
  *
- * This function must be called following any possible change to the MMU page
- * tables.
+ * This function must be called following any possible change to the MMU page tables.
+ *
+ * As a failure to flush the MMU caches could risk memory corruption, if the flush fails (implying
+ * the firmware is not responding) then the GPU device is marked as lost.
  *
  * Returns:
  *  * 0 on success, or
