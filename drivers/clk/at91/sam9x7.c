@@ -728,8 +728,8 @@ static void __init sam9x7_pmc_setup(struct device_node *np)
 	const char *td_slck_name, *md_slck_name, *mainxtal_name;
 	struct pmc_data *sam9x7_pmc;
 	const char *parent_names[9];
-	void **alloc_mem = NULL;
-	int alloc_mem_size = 0;
+	void **clk_mux_buffer = NULL;
+	int clk_mux_buffer_size = 0;
 	struct clk_hw *main_osc_hw;
 	struct regmap *regmap;
 	struct clk_hw *hw;
@@ -763,10 +763,10 @@ static void __init sam9x7_pmc_setup(struct device_node *np)
 	if (!sam9x7_pmc)
 		return;
 
-	alloc_mem = kmalloc(sizeof(void *) *
-				(ARRAY_SIZE(sam9x7_gck)),
-				GFP_KERNEL);
-	if (!alloc_mem)
+	clk_mux_buffer = kmalloc(sizeof(void *) *
+				 (ARRAY_SIZE(sam9x7_gck)),
+				 GFP_KERNEL);
+	if (!clk_mux_buffer)
 		goto err_free;
 
 	hw = at91_clk_register_main_rc_osc(regmap, "main_rc_osc", 12000000,
@@ -940,19 +940,19 @@ static void __init sam9x7_pmc_setup(struct device_node *np)
 			goto err_free;
 
 		sam9x7_pmc->ghws[sam9x7_gck[i].id] = hw;
-		alloc_mem[alloc_mem_size++] = mux_table;
+		clk_mux_buffer[clk_mux_buffer_size++] = mux_table;
 	}
 
 	of_clk_add_hw_provider(np, of_clk_hw_pmc_get, sam9x7_pmc);
-	kfree(alloc_mem);
+	kfree(clk_mux_buffer);
 
 	return;
 
 err_free:
-	if (alloc_mem) {
-		for (i = 0; i < alloc_mem_size; i++)
-			kfree(alloc_mem[i]);
-		kfree(alloc_mem);
+	if (clk_mux_buffer) {
+		for (i = 0; i < clk_mux_buffer_size; i++)
+			kfree(clk_mux_buffer[i]);
+		kfree(clk_mux_buffer);
 	}
 	kfree(sam9x7_pmc);
 }
