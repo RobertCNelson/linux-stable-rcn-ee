@@ -15,6 +15,10 @@ Required properties:
  - clocks: should contain the 3 clocks requested by the HLCDC device.
  - interrupts: should contain the description of the HLCDC interrupt line
 
+Optional properties:
+ - clocks: should contain the LVDS PLL clock requested by the HLCDC device.
+ - clock-names: must be "lvds_pll_clk" requested by the HLCDC device.
+
 The HLCDC IP exposes two subdevices:
  - a PWM chip: see ../pwm/atmel-hlcdc-pwm.txt
  - a Display Controller: see ../display/atmel/hlcdc-dc.txt
