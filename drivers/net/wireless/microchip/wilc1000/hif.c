@@ -348,7 +348,7 @@ static void handle_connect_timeout(struct work_struct *work)
 	if (hif_drv->conn_info.conn_result) {
 		hif_drv->conn_info.conn_result(CONN_DISCONN_EVENT_CONN_RESP,
 					       WILC_MAC_STATUS_DISCONNECTED,
-					       hif_drv->conn_info.arg);
+					       hif_drv->conn_info.priv);
 
 	} else {
 		netdev_err(vif->ndev, "%s: conn_result is NULL\n", __func__);
@@ -371,8 +371,9 @@ out:
 	kfree(msg);
 }
 
-void *wilc_parse_join_bss_param(struct cfg80211_bss *bss,
-				struct cfg80211_crypto_settings *crypto)
+struct wilc_join_bss_param *
+wilc_parse_join_bss_param(struct cfg80211_bss *bss,
+			  struct cfg80211_crypto_settings *crypto)
 {
 	const u8 *ies_data, *tim_elm, *ssid_elm, *rates_ie, *supp_rates_ie;
 	const u8 *ht_ie, *wpa_ie, *wmm_ie, *rsn_ie;
@@ -639,7 +640,7 @@ static inline void host_int_parse_assoc_resp_info(struct wilc_vif *vif,
 
 	del_timer(&hif_drv->connect_timer);
 	conn_info->conn_result(CONN_DISCONN_EVENT_CONN_RESP, mac_status,
-			       hif_drv->conn_info.arg);
+			       hif_drv->conn_info.priv);
 
 	if (mac_status == WILC_MAC_STATUS_CONNECTED &&
 	    conn_info->status == WLAN_STATUS_SUCCESS) {
@@ -669,7 +670,7 @@ void wilc_handle_disconnect(struct wilc_vif *vif)
 
 	if (hif_drv->conn_info.conn_result)
 		hif_drv->conn_info.conn_result(CONN_DISCONN_EVENT_DISCONN_NOTIF,
-					       0, hif_drv->conn_info.arg);
+					       0, hif_drv->conn_info.priv);
 
 	eth_zero_addr(hif_drv->assoc_bssid);
 
@@ -751,7 +752,7 @@ int wilc_disconnect(struct wilc_vif *vif)
 			del_timer(&hif_drv->connect_timer);
 
 		conn_info->conn_result(CONN_DISCONN_EVENT_DISCONN_NOTIF, 0,
-				       conn_info->arg);
+				       conn_info->priv);
 	} else {
 		netdev_err(vif->ndev, "%s: conn_result is NULL\n", __func__);
 	}
