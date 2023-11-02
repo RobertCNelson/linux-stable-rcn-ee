@@ -11,13 +11,9 @@ Required properties:
    "microchip,sam9x75-xlcdc"
  - reg: base address and size of the HLCDC device registers.
  - clock-names: the name of the 3 clocks requested by the HLCDC device.
-   Should contain "periph_clk", "sys_clk" and "slow_clk".
+   Should contain "periph_clk", "sys_clk" or "lvds_pll_clk" and "slow_clk".
  - clocks: should contain the 3 clocks requested by the HLCDC device.
  - interrupts: should contain the description of the HLCDC interrupt line
-
-Optional properties:
- - clocks: should contain the LVDS PLL clock requested by the HLCDC device.
- - clock-names: must be "lvds_pll_clk" requested by the HLCDC device.
 
 The HLCDC IP exposes two subdevices:
  - a PWM chip: see ../pwm/atmel-hlcdc-pwm.txt
