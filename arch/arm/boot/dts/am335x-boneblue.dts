@@ -14,6 +14,8 @@
 
 	chosen {
 		stdout-path = &uart0;
+		base_dtb = "am335x-boneblue.dts";
+		base_dtb_timestamp = __TIMESTAMP__;
 	};
 
 	leds {
@@ -106,7 +108,7 @@
 		regulator-name = "wlan-en-regulator";
 		regulator-min-microvolt = <1800000>;
 		regulator-max-microvolt = <1800000>;
-		startup-delay-us= <70000>;
+		startup-delay-us = <70000>;
 
 		/* WL_EN */
 		gpio = <&gpio3 9 0>;
@@ -341,7 +343,7 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 			ax8975@c {
-				compatible = "ak,ak8975";
+				compatible = "asahi-kasei,ak8975";
 				reg = <0x0c>;
 			};
 		};
