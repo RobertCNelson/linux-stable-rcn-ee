@@ -260,7 +260,6 @@ static const struct atmel_qspi_pcal pcal[ATMEL_QSPI_PCAL_ARRAY_SIZE] = {
 
 struct atmel_qspi_caps {
 	u32 max_speed_hz;
-	u32 gclk_freq_hz;
 	bool has_qspick;
 	bool has_gclk;
 	bool has_ricr;
@@ -1030,12 +1029,13 @@ static int atmel_qspi_set_pad_calibration(struct atmel_qspi *aq)
 	 * This synchronization check is not applicable for sam9x7 SOC
 	 * because there is no pad calibration support.
 	 */
-	if (!aq->caps->is_9x7) {
+	if (aq->caps->is_9x7)
+		ret=0;
+	else
 		ret =  readl_poll_timeout(aq->regs + QSPI_SR2, val,
 				(val & QSPI_SR2_DLOCK) &&
 				!(val & QSPI_SR2_CALBSY), 40,
 				ATMEL_QSPI_TIMEOUT);
-	}
 
 	/* Refresh analogic blocks every 1 ms.*/
 	atmel_qspi_write(FIELD_PREP(QSPI_REFRESH_DELAY_COUNTER,
@@ -1067,7 +1067,10 @@ static int atmel_qspi_set_gclk(struct atmel_qspi *aq)
 	else
 		atmel_qspi_write(0, aq, QSPI_DLLCFG);
 
-	ret = clk_set_rate(aq->gclk, aq->caps->gclk_freq_hz);
+	if (aq->caps->is_9x7)
+		ret = clk_set_rate(aq->gclk, 2 * aq->slave_max_speed_hz);
+	else
+		ret = clk_set_rate(aq->gclk, aq->slave_max_speed_hz);
 
 	if (ret) {
 		dev_err(&aq->pdev->dev, "Failed to set generic clock rate.\n");
@@ -1633,7 +1636,6 @@ static const struct atmel_qspi_caps atmel_sam9x60_qspi_caps = {
 
 static const struct atmel_qspi_caps atmel_sama7g5_ospi_caps = {
 	.max_speed_hz = SAMA7G5_QSPI0_MAX_SPEED_HZ,
-	.gclk_freq_hz = SAMA7G5_QSPI0_MAX_SPEED_HZ,
 	.has_gclk = true,
 	.octal = true,
 	.has_dma = true,
@@ -1641,14 +1643,12 @@ static const struct atmel_qspi_caps atmel_sama7g5_ospi_caps = {
 
 static const struct atmel_qspi_caps atmel_sama7g5_qspi_caps = {
 	.max_speed_hz = SAMA7G5_QSPI1_SDR_MAX_SPEED_HZ,
-	.gclk_freq_hz = SAMA7G5_QSPI1_SDR_MAX_SPEED_HZ,
 	.has_gclk = true,
 	.has_dma = true,
 };
 
 static const struct atmel_qspi_caps atmel_sam9x7_ospi_caps = {
 	.max_speed_hz = SAM9X7_QSPI_MAX_SPEED_HZ,
-	.gclk_freq_hz = 2 * SAM9X7_QSPI_MAX_SPEED_HZ,
 	.has_gclk = true,
 	.octal = true,
 	.has_dma = true,
