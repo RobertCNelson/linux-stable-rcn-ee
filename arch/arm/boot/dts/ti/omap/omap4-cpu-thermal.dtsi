@@ -12,10 +12,7 @@ cpu_thermal: cpu_thermal {
 	polling-delay-passive = <250>; /* milliseconds */
 	polling-delay = <1000>; /* milliseconds */
 
-	/*
-	 * See 44xx files for single sensor addressing, omap5 and dra7 need
-	 * also sensor ID for addressing.
-	 */
+			/* sensor       ID */
 	thermal-sensors = <&bandgap     0>;
 
 	cpu_trips: trips {
