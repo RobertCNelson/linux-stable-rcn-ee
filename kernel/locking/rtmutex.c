@@ -218,6 +218,11 @@ static __always_inline bool rt_mutex_cmpxchg_acquire(struct rt_mutex_base *lock,
 	return try_cmpxchg_acquire(&lock->owner, &old, new);
 }
 
+static __always_inline bool rt_mutex_try_acquire(struct rt_mutex_base *lock)
+{
+	return rt_mutex_cmpxchg_acquire(lock, NULL, current);
+}
+
 static __always_inline bool rt_mutex_cmpxchg_release(struct rt_mutex_base *lock,
 						     struct task_struct *old,
 						     struct task_struct *new)
@@ -295,6 +300,20 @@ static __always_inline bool rt_mutex_cmpxchg_acquire(struct rt_mutex_base *lock,
 {
 	return false;
 
+}
+
+static int __sched rt_mutex_slowtrylock(struct rt_mutex_base *lock);
+
+static __always_inline bool rt_mutex_try_acquire(struct rt_mutex_base *lock)
+{
+	/*
+	 * With debug enabled rt_mutex_cmpxchg trylock() will always fail.
+	 *
+	 * Avoid unconditionally taking the slow path by using
+	 * rt_mutex_slow_trylock() which is covered by the debug code and can
+	 * acquire a non-contended rtmutex.
+	 */
+	return rt_mutex_slowtrylock(lock);
 }
 
 static __always_inline bool rt_mutex_cmpxchg_release(struct rt_mutex_base *lock,
@@ -1147,10 +1166,13 @@ try_to_take_rt_mutex(struct rt_mutex_base *lock, struct task_struct *task,
 	 * Clear @task->pi_blocked_on. Requires protection by
 	 * @task->pi_lock. Redundant operation for the @waiter == NULL
 	 * case, but conditionals are more expensive than a redundant
-	 * store.
+	 * store. But then there is FUTEX and if rt_mutex_wait_proxy_lock()
+	 * did not acquire the lock it try-locks another lock before it clears
+	 * @task->pi_blocked_on so we mustn't clear it here premature.
 	 */
 	raw_spin_lock(&task->pi_lock);
-	task->pi_blocked_on = NULL;
+	if (waiter)
+		task->pi_blocked_on = NULL;
 	/*
 	 * Finish the lock acquisition. @task is the new owner. If
 	 * other waiters exist we have to insert the highest priority
@@ -1613,7 +1635,7 @@ static int __sched rt_mutex_slowlock_block(struct rt_mutex_base *lock,
 		raw_spin_unlock_irq(&lock->wait_lock);
 
 		if (!owner || !rtmutex_spin_on_owner(lock, waiter, owner))
-			schedule();
+			rt_mutex_schedule();
 
 		raw_spin_lock_irq(&lock->wait_lock);
 		set_current_state(state);
@@ -1642,7 +1664,7 @@ static void __sched rt_mutex_handle_deadlock(int res, int detect_deadlock,
 	WARN(1, "rtmutex deadlock detected\n");
 	while (1) {
 		set_current_state(TASK_INTERRUPTIBLE);
-		schedule();
+		rt_mutex_schedule();
 	}
 }
 
@@ -1738,6 +1760,15 @@ static int __sched rt_mutex_slowlock(struct rt_mutex_base *lock,
 	int ret;
 
 	/*
+	 * Do all pre-schedule work here, before we queue a waiter and invoke
+	 * PI -- any such work that trips on rtlock (PREEMPT_RT spinlock) would
+	 * otherwise recurse back into task_blocks_on_rt_mutex() through
+	 * rtlock_slowlock() and will then enqueue a second waiter for this
+	 * same task and things get really confusing real fast.
+	 */
+	rt_mutex_pre_schedule();
+
+	/*
 	 * Technically we could use raw_spin_[un]lock_irq() here, but this can
 	 * be called in early boot if the cmpxchg() fast path is disabled
 	 * (debug, no architecture support). In this case we will acquire the
@@ -1748,6 +1779,7 @@ static int __sched rt_mutex_slowlock(struct rt_mutex_base *lock,
 	raw_spin_lock_irqsave(&lock->wait_lock, flags);
 	ret = __rt_mutex_slowlock_locked(lock, ww_ctx, state);
 	raw_spin_unlock_irqrestore(&lock->wait_lock, flags);
+	rt_mutex_post_schedule();
 
 	return ret;
 }
@@ -1755,7 +1787,9 @@ static int __sched rt_mutex_slowlock(struct rt_mutex_base *lock,
 static __always_inline int __rt_mutex_lock(struct rt_mutex_base *lock,
 					   unsigned int state)
 {
-	if (likely(rt_mutex_cmpxchg_acquire(lock, NULL, current)))
+	lockdep_assert(!current->pi_blocked_on);
+
+	if (likely(rt_mutex_try_acquire(lock)))
 		return 0;
 
 	return rt_mutex_slowlock(lock, NULL, state);
