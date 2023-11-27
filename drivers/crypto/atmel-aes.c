@@ -2245,7 +2245,6 @@ static int atmel_aes_authenc_crypt(struct aead_request *req,
 	 */
 	if ((req->assoclen != 16) && limitation) {
 		struct aead_request *subreq = aead_request_ctx(req);
-		int ret;
 
 		aead_request_set_tfm(subreq, actx->fallback);
 		aead_request_set_callback(subreq, req->base.flags,
