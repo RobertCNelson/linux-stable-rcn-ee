@@ -16,6 +16,7 @@
 #include <linux/irq.h>
 #include <linux/irqchip/chained_irq.h>
 #include <linux/of.h>
+#include <linux/of_device.h>
 #include <linux/of_irq.h>
 #include <linux/mod_devicetable.h>
 #include <linux/platform_device.h>
@@ -35,11 +36,20 @@
 #define MPFS_GPIO_TYPE_INT_LEVEL_HIGH	0x00
 #define MPFS_GPIO_TYPE_INT_MASK		GENMASK(7, 5)
 #define MPFS_IRQ_REG			0x80
+
 #define MPFS_INP_REG			0x84
+#define COREGPIO_INP_REG		0x90
 #define MPFS_OUTP_REG			0x88
+#define COREGPIO_OUTP_REG		0xA0
+
+struct mpfs_gpio_reg_offsets {
+	u8 inp;
+	u8 outp;
+};
 
 struct mpfs_gpio_chip {
 	void __iomem *base;
+	const struct mpfs_gpio_reg_offsets *regs;
 	struct clk *clk;
 	raw_spinlock_t	lock;
 	struct gpio_chip gc;
@@ -85,7 +95,7 @@ static int mpfs_gpio_direction_output(struct gpio_chip *gc, unsigned int gpio_in
 	gpio_cfg &= ~MPFS_GPIO_EN_IN;
 	writel(gpio_cfg, mpfs_gpio->base + MPFS_GPIO_CTRL(gpio_index));
 
-	mpfs_gpio_assign_bit(mpfs_gpio->base + MPFS_OUTP_REG, gpio_index, value);
+	mpfs_gpio_assign_bit(mpfs_gpio->base + mpfs_gpio->regs->outp, gpio_index, value);
 
 	raw_spin_unlock_irqrestore(&mpfs_gpio->lock, flags);
 
@@ -110,7 +120,7 @@ static int mpfs_gpio_get(struct gpio_chip *gc,
 {
 	struct mpfs_gpio_chip *mpfs_gpio = gpiochip_get_data(gc);
 
-	return !!(readl(mpfs_gpio->base + MPFS_INP_REG) & BIT(gpio_index));
+	return !!(readl(mpfs_gpio->base + mpfs_gpio->regs->inp) & BIT(gpio_index));
 }
 
 static void mpfs_gpio_set(struct gpio_chip *gc, unsigned int gpio_index, int value)
@@ -120,7 +130,7 @@ static void mpfs_gpio_set(struct gpio_chip *gc, unsigned int gpio_index, int val
 
 	raw_spin_lock_irqsave(&mpfs_gpio->lock, flags);
 
-	mpfs_gpio_assign_bit(mpfs_gpio->base + MPFS_OUTP_REG,
+	mpfs_gpio_assign_bit(mpfs_gpio->base + mpfs_gpio->regs->outp,
 			     gpio_index, value);
 
 	raw_spin_unlock_irqrestore(&mpfs_gpio->lock, flags);
@@ -249,6 +259,8 @@ static int mpfs_gpio_probe(struct platform_device *pdev)
 	if (ret)
 		return dev_err_probe(dev, ret, "failed to enable clock\n");
 
+	mpfs_gpio->regs = of_device_get_match_data(&pdev->dev);
+
 	mpfs_gpio->clk = clk;
 
 	ngpios = MAX_NUM_GPIO;
@@ -333,8 +345,23 @@ static int mpfs_gpio_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static const struct mpfs_gpio_reg_offsets mpfs_reg_offsets = {
+	.inp = MPFS_INP_REG,
+	.outp = MPFS_OUTP_REG,
+};
+
+static const struct mpfs_gpio_reg_offsets coregpio_reg_offsets = {
+	.inp = COREGPIO_INP_REG,
+	.outp = COREGPIO_OUTP_REG,
+};
 static const struct of_device_id mpfs_gpio_of_ids[] = {
-	{ .compatible = "microchip,mpfs-gpio", },
+	{
+		.compatible = "microchip,mpfs-gpio",
+		.data = &mpfs_reg_offsets,
+	}, {
+		.compatible = "microchip,coregpio-rtl-v3",
+		.data = &coregpio_reg_offsets,
+	},
 	{ /* end of list */ }
 };
 
