@@ -43,6 +43,8 @@
 
 	chosen {
 		stdout-path = "serial2:115200n8";
+		base_dtb = "k3-am625-beagleplay.dts";
+		base_dtb_timestamp = __TIMESTAMP__;
 	};
 
 	memory@80000000 {
@@ -112,7 +114,8 @@
 		regulator-min-microvolt = <1800000>;
 		regulator-max-microvolt = <1800000>;
 		enable-active-high;
-		regulator-always-on;
+		/* regulator-always-on; */
+		regulator-off-in-suspend;
 		vin-supply = <&vdd_3v3>;
 		gpio = <&main_gpio0 38 GPIO_ACTIVE_HIGH>;
 		pinctrl-names = "default";
@@ -156,6 +159,7 @@
 
 		led-0 {
 			bootph-all;
+			label = "beaglebone:green:usr0";
 			gpios = <&main_gpio0 3 GPIO_ACTIVE_HIGH>;
 			linux,default-trigger = "heartbeat";
 			function = LED_FUNCTION_HEARTBEAT;
@@ -164,27 +168,34 @@
 
 		led-1 {
 			bootph-all;
+			label = "beaglebone:green:usr1";
 			gpios = <&main_gpio0 4 GPIO_ACTIVE_HIGH>;
-			linux,default-trigger = "disk-activity";
+			linux,default-trigger = "mmc0";
 			function = LED_FUNCTION_DISK_ACTIVITY;
 			default-state = "keep";
 		};
 
 		led-2 {
 			bootph-all;
+			label = "beaglebone:green:usr2";
 			gpios = <&main_gpio0 5 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "cpu";
 			function = LED_FUNCTION_CPU;
 		};
 
 		led-3 {
 			bootph-all;
+			label = "beaglebone:green:usr3";
 			gpios = <&main_gpio0 6 GPIO_ACTIVE_HIGH>;
-			function = LED_FUNCTION_LAN;
+			linux,default-trigger = "mmc1";
+			function = LED_FUNCTION_DISK_ACTIVITY;
 		};
 
 		led-4 {
 			bootph-all;
+			label = "beaglebone:green:usr4";
 			gpios = <&main_gpio0 9 GPIO_ACTIVE_HIGH>;
+			linux,default-trigger = "phy0tx";
 			function = LED_FUNCTION_WLAN;
 		};
 	};
@@ -443,7 +454,7 @@
 		>;
 	};
 
-	console_pins_default: console-default-pins {
+	main_uart0_pins_default: main-uart0-default-pins {
 		bootph-all;
 		pinctrl-single,pins = <
 			AM62X_IOPAD(0x01c8, PIN_INPUT, 0) /* (D14) UART0_RXD */
@@ -563,6 +574,7 @@
 	pinctrl-0 = <&i2c_csi_pins_default>;
 	clock-frequency = <400000>;
 	/* Enable with overlay for camera sensor */
+	symlink = "play/csi/i2c";
 };
 
 &mcu_i2c0 {
@@ -570,6 +582,7 @@
 	pinctrl-0 = <&i2c_qwiic_pins_default>;
 	clock-frequency = <100000>;
 	status = "okay";
+	symlink = "play/qwiic/i2c";
 };
 
 &usbss0 {
@@ -765,6 +778,7 @@
 	pinctrl-0 = <&grove_pins_default>;
 	clock-frequency = <100000>;
 	status = "okay";
+	symlink = "play/grove/i2c";
 };
 
 &main_i2c2 {
@@ -815,12 +829,14 @@
 	pinctrl-0 = <&mikrobus_i2c_pins_default>;
 	clock-frequency = <400000>;
 	status = "okay";
+	symlink = "play/mikrobus/i2c";
 };
 
 &main_spi2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&mikrobus_spi_pins_default>;
 	status = "okay";
+	symlink = "play/mikrobus/spi";
 };
 
 &sdhci0 {
@@ -877,7 +893,7 @@
 &main_uart0 {
 	bootph-all;
 	pinctrl-names = "default";
-	pinctrl-0 = <&console_pins_default>;
+	pinctrl-0 = <&main_uart0_pins_default>;
 	status = "okay";
 };
 
@@ -890,12 +906,14 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&mikrobus_uart_pins_default>;
 	status = "okay";
+	symlink = "play/mikrobus/uart";
 };
 
 &main_uart6 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&wifi_debug_uart_pins_default>;
 	status = "okay";
+	symlink = "play/cc1352/uart";
 
 	mcu {
 		compatible = "ti,cc1352p7";
