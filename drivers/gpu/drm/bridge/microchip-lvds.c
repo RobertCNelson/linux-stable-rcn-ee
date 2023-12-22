@@ -227,10 +227,8 @@ static int mchp_lvds_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id mchp_lvds_dt_ids[] = {
-	{
-		.compatible = "microchip,sam9x7-lvds",
-	},
-	{},
+	{ .compatible = "microchip,sam9x7-lvds" },
+	{ /* sentinel */ },
 };
 
 struct platform_driver mchp_lvds_driver = {
