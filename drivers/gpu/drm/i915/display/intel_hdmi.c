@@ -523,10 +523,12 @@ void hsw_write_infoframe(struct intel_encoder *encoder,
 			       0);
 
 	/* Wa_14013475917 */
-	if (IS_DISPLAY_VER(dev_priv, 13, 14) && crtc_state->has_psr && type == DP_SDP_VSC)
-		return;
+	if (!(IS_DISPLAY_VER(dev_priv, 13, 14) && crtc_state->has_psr && type == DP_SDP_VSC))
+		val |= hsw_infoframe_enable(type);
 
-	val |= hsw_infoframe_enable(type);
+	if (type == DP_SDP_VSC)
+		val |= VSC_DIP_HW_DATA_SW_HEA;
+
 	intel_de_write(dev_priv, ctl_reg, val);
 	intel_de_posting_read(dev_priv, ctl_reg);
 }
@@ -3032,16 +3034,6 @@ void intel_hdmi_init_connector(struct intel_digital_port *dig_port,
 		if (ret)
 			drm_dbg_kms(&dev_priv->drm,
 				    "HDCP init failed, skipping.\n");
-	}
-
-	/* For G4X desktop chip, PEG_BAND_GAP_DATA 3:0 must first be written
-	 * 0xd.  Failure to do so will result in spurious interrupts being
-	 * generated on the port when a cable is not attached.
-	 */
-	if (IS_G45(dev_priv)) {
-		u32 temp = intel_de_read(dev_priv, PEG_BAND_GAP_DATA);
-		intel_de_write(dev_priv, PEG_BAND_GAP_DATA,
-		               (temp & ~0xf) | 0xd);
 	}
 
 	cec_fill_conn_info_from_drm(&conn_info, connector);

@@ -501,6 +501,18 @@ int recource_find_free_pipe_not_used_in_cur_res_ctx(
 		const struct resource_pool *pool);
 
 /*
+ * Look for a free pipe in new resource context that is used in current resource
+ * context as an OTG master pipe.
+ *
+ * return - FREE_PIPE_INDEX_NOT_FOUND if free pipe is not found, otherwise
+ * pipe idx of the free pipe
+ */
+int recource_find_free_pipe_used_as_otg_master_in_cur_res_ctx(
+		const struct resource_context *cur_res_ctx,
+		struct resource_context *new_res_ctx,
+		const struct resource_pool *pool);
+
+/*
  * Look for a free pipe in new resource context that is used as a secondary DPP
  * pipe in any MPCC combine in current resource context.
  * return - FREE_PIPE_INDEX_NOT_FOUND if free pipe is not found, otherwise
@@ -610,5 +622,4 @@ enum dc_status update_dp_encoder_resources_for_test_harness(const struct dc *dc,
 		struct pipe_ctx *pipe_ctx);
 
 bool check_subvp_sw_cursor_fallback_req(const struct dc *dc, struct dc_stream_state *stream);
-
 #endif /* DRIVERS_GPU_DRM_AMD_DC_DEV_DC_INC_RESOURCE_H_ */

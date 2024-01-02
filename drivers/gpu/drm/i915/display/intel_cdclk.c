@@ -1180,7 +1180,7 @@ sanitize:
 	/* force cdclk programming */
 	dev_priv->display.cdclk.hw.cdclk = 0;
 	/* force full PLL disable + enable */
-	dev_priv->display.cdclk.hw.vco = -1;
+	dev_priv->display.cdclk.hw.vco = ~0;
 }
 
 static void skl_cdclk_init_hw(struct drm_i915_private *dev_priv)
@@ -1227,183 +1227,182 @@ struct intel_cdclk_vals {
 	u32 cdclk;
 	u16 refclk;
 	u16 waveform;
-	u8 divider;	/* CD2X divider * 2 */
 	u8 ratio;
 };
 
 static const struct intel_cdclk_vals bxt_cdclk_table[] = {
-	{ .refclk = 19200, .cdclk = 144000, .divider = 8, .ratio = 60 },
-	{ .refclk = 19200, .cdclk = 288000, .divider = 4, .ratio = 60 },
-	{ .refclk = 19200, .cdclk = 384000, .divider = 3, .ratio = 60 },
-	{ .refclk = 19200, .cdclk = 576000, .divider = 2, .ratio = 60 },
-	{ .refclk = 19200, .cdclk = 624000, .divider = 2, .ratio = 65 },
+	{ .refclk = 19200, .cdclk = 144000, .ratio = 60 },
+	{ .refclk = 19200, .cdclk = 288000, .ratio = 60 },
+	{ .refclk = 19200, .cdclk = 384000, .ratio = 60 },
+	{ .refclk = 19200, .cdclk = 576000, .ratio = 60 },
+	{ .refclk = 19200, .cdclk = 624000, .ratio = 65 },
 	{}
 };
 
 static const struct intel_cdclk_vals glk_cdclk_table[] = {
-	{ .refclk = 19200, .cdclk =  79200, .divider = 8, .ratio = 33 },
-	{ .refclk = 19200, .cdclk = 158400, .divider = 4, .ratio = 33 },
-	{ .refclk = 19200, .cdclk = 316800, .divider = 2, .ratio = 33 },
+	{ .refclk = 19200, .cdclk =  79200, .ratio = 33 },
+	{ .refclk = 19200, .cdclk = 158400, .ratio = 33 },
+	{ .refclk = 19200, .cdclk = 316800, .ratio = 33 },
 	{}
 };
 
 static const struct intel_cdclk_vals icl_cdclk_table[] = {
-	{ .refclk = 19200, .cdclk = 172800, .divider = 2, .ratio = 18 },
-	{ .refclk = 19200, .cdclk = 192000, .divider = 2, .ratio = 20 },
-	{ .refclk = 19200, .cdclk = 307200, .divider = 2, .ratio = 32 },
-	{ .refclk = 19200, .cdclk = 326400, .divider = 4, .ratio = 68 },
-	{ .refclk = 19200, .cdclk = 556800, .divider = 2, .ratio = 58 },
-	{ .refclk = 19200, .cdclk = 652800, .divider = 2, .ratio = 68 },
+	{ .refclk = 19200, .cdclk = 172800, .ratio = 18 },
+	{ .refclk = 19200, .cdclk = 192000, .ratio = 20 },
+	{ .refclk = 19200, .cdclk = 307200, .ratio = 32 },
+	{ .refclk = 19200, .cdclk = 326400, .ratio = 68 },
+	{ .refclk = 19200, .cdclk = 556800, .ratio = 58 },
+	{ .refclk = 19200, .cdclk = 652800, .ratio = 68 },
 
-	{ .refclk = 24000, .cdclk = 180000, .divider = 2, .ratio = 15 },
-	{ .refclk = 24000, .cdclk = 192000, .divider = 2, .ratio = 16 },
-	{ .refclk = 24000, .cdclk = 312000, .divider = 2, .ratio = 26 },
-	{ .refclk = 24000, .cdclk = 324000, .divider = 4, .ratio = 54 },
-	{ .refclk = 24000, .cdclk = 552000, .divider = 2, .ratio = 46 },
-	{ .refclk = 24000, .cdclk = 648000, .divider = 2, .ratio = 54 },
+	{ .refclk = 24000, .cdclk = 180000, .ratio = 15 },
+	{ .refclk = 24000, .cdclk = 192000, .ratio = 16 },
+	{ .refclk = 24000, .cdclk = 312000, .ratio = 26 },
+	{ .refclk = 24000, .cdclk = 324000, .ratio = 54 },
+	{ .refclk = 24000, .cdclk = 552000, .ratio = 46 },
+	{ .refclk = 24000, .cdclk = 648000, .ratio = 54 },
 
-	{ .refclk = 38400, .cdclk = 172800, .divider = 2, .ratio =  9 },
-	{ .refclk = 38400, .cdclk = 192000, .divider = 2, .ratio = 10 },
-	{ .refclk = 38400, .cdclk = 307200, .divider = 2, .ratio = 16 },
-	{ .refclk = 38400, .cdclk = 326400, .divider = 4, .ratio = 34 },
-	{ .refclk = 38400, .cdclk = 556800, .divider = 2, .ratio = 29 },
-	{ .refclk = 38400, .cdclk = 652800, .divider = 2, .ratio = 34 },
+	{ .refclk = 38400, .cdclk = 172800, .ratio =  9 },
+	{ .refclk = 38400, .cdclk = 192000, .ratio = 10 },
+	{ .refclk = 38400, .cdclk = 307200, .ratio = 16 },
+	{ .refclk = 38400, .cdclk = 326400, .ratio = 34 },
+	{ .refclk = 38400, .cdclk = 556800, .ratio = 29 },
+	{ .refclk = 38400, .cdclk = 652800, .ratio = 34 },
 	{}
 };
 
 static const struct intel_cdclk_vals rkl_cdclk_table[] = {
-	{ .refclk = 19200, .cdclk = 172800, .divider = 4, .ratio =  36 },
-	{ .refclk = 19200, .cdclk = 192000, .divider = 4, .ratio =  40 },
-	{ .refclk = 19200, .cdclk = 307200, .divider = 4, .ratio =  64 },
-	{ .refclk = 19200, .cdclk = 326400, .divider = 8, .ratio = 136 },
-	{ .refclk = 19200, .cdclk = 556800, .divider = 4, .ratio = 116 },
-	{ .refclk = 19200, .cdclk = 652800, .divider = 4, .ratio = 136 },
+	{ .refclk = 19200, .cdclk = 172800, .ratio =  36 },
+	{ .refclk = 19200, .cdclk = 192000, .ratio =  40 },
+	{ .refclk = 19200, .cdclk = 307200, .ratio =  64 },
+	{ .refclk = 19200, .cdclk = 326400, .ratio = 136 },
+	{ .refclk = 19200, .cdclk = 556800, .ratio = 116 },
+	{ .refclk = 19200, .cdclk = 652800, .ratio = 136 },
 
-	{ .refclk = 24000, .cdclk = 180000, .divider = 4, .ratio =  30 },
-	{ .refclk = 24000, .cdclk = 192000, .divider = 4, .ratio =  32 },
-	{ .refclk = 24000, .cdclk = 312000, .divider = 4, .ratio =  52 },
-	{ .refclk = 24000, .cdclk = 324000, .divider = 8, .ratio = 108 },
-	{ .refclk = 24000, .cdclk = 552000, .divider = 4, .ratio =  92 },
-	{ .refclk = 24000, .cdclk = 648000, .divider = 4, .ratio = 108 },
+	{ .refclk = 24000, .cdclk = 180000, .ratio =  30 },
+	{ .refclk = 24000, .cdclk = 192000, .ratio =  32 },
+	{ .refclk = 24000, .cdclk = 312000, .ratio =  52 },
+	{ .refclk = 24000, .cdclk = 324000, .ratio = 108 },
+	{ .refclk = 24000, .cdclk = 552000, .ratio =  92 },
+	{ .refclk = 24000, .cdclk = 648000, .ratio = 108 },
 
-	{ .refclk = 38400, .cdclk = 172800, .divider = 4, .ratio = 18 },
-	{ .refclk = 38400, .cdclk = 192000, .divider = 4, .ratio = 20 },
-	{ .refclk = 38400, .cdclk = 307200, .divider = 4, .ratio = 32 },
-	{ .refclk = 38400, .cdclk = 326400, .divider = 8, .ratio = 68 },
-	{ .refclk = 38400, .cdclk = 556800, .divider = 4, .ratio = 58 },
-	{ .refclk = 38400, .cdclk = 652800, .divider = 4, .ratio = 68 },
+	{ .refclk = 38400, .cdclk = 172800, .ratio = 18 },
+	{ .refclk = 38400, .cdclk = 192000, .ratio = 20 },
+	{ .refclk = 38400, .cdclk = 307200, .ratio = 32 },
+	{ .refclk = 38400, .cdclk = 326400, .ratio = 68 },
+	{ .refclk = 38400, .cdclk = 556800, .ratio = 58 },
+	{ .refclk = 38400, .cdclk = 652800, .ratio = 68 },
 	{}
 };
 
 static const struct intel_cdclk_vals adlp_a_step_cdclk_table[] = {
-	{ .refclk = 19200, .cdclk = 307200, .divider = 2, .ratio = 32 },
-	{ .refclk = 19200, .cdclk = 556800, .divider = 2, .ratio = 58 },
-	{ .refclk = 19200, .cdclk = 652800, .divider = 2, .ratio = 68 },
+	{ .refclk = 19200, .cdclk = 307200, .ratio = 32 },
+	{ .refclk = 19200, .cdclk = 556800, .ratio = 58 },
+	{ .refclk = 19200, .cdclk = 652800, .ratio = 68 },
 
-	{ .refclk = 24000, .cdclk = 312000, .divider = 2, .ratio = 26 },
-	{ .refclk = 24000, .cdclk = 552000, .divider = 2, .ratio = 46 },
-	{ .refclk = 24400, .cdclk = 648000, .divider = 2, .ratio = 54 },
+	{ .refclk = 24000, .cdclk = 312000, .ratio = 26 },
+	{ .refclk = 24000, .cdclk = 552000, .ratio = 46 },
+	{ .refclk = 24400, .cdclk = 648000, .ratio = 54 },
 
-	{ .refclk = 38400, .cdclk = 307200, .divider = 2, .ratio = 16 },
-	{ .refclk = 38400, .cdclk = 556800, .divider = 2, .ratio = 29 },
-	{ .refclk = 38400, .cdclk = 652800, .divider = 2, .ratio = 34 },
+	{ .refclk = 38400, .cdclk = 307200, .ratio = 16 },
+	{ .refclk = 38400, .cdclk = 556800, .ratio = 29 },
+	{ .refclk = 38400, .cdclk = 652800, .ratio = 34 },
 	{}
 };
 
 static const struct intel_cdclk_vals adlp_cdclk_table[] = {
-	{ .refclk = 19200, .cdclk = 172800, .divider = 3, .ratio = 27 },
-	{ .refclk = 19200, .cdclk = 192000, .divider = 2, .ratio = 20 },
-	{ .refclk = 19200, .cdclk = 307200, .divider = 2, .ratio = 32 },
-	{ .refclk = 19200, .cdclk = 556800, .divider = 2, .ratio = 58 },
-	{ .refclk = 19200, .cdclk = 652800, .divider = 2, .ratio = 68 },
+	{ .refclk = 19200, .cdclk = 172800, .ratio = 27 },
+	{ .refclk = 19200, .cdclk = 192000, .ratio = 20 },
+	{ .refclk = 19200, .cdclk = 307200, .ratio = 32 },
+	{ .refclk = 19200, .cdclk = 556800, .ratio = 58 },
+	{ .refclk = 19200, .cdclk = 652800, .ratio = 68 },
 
-	{ .refclk = 24000, .cdclk = 176000, .divider = 3, .ratio = 22 },
-	{ .refclk = 24000, .cdclk = 192000, .divider = 2, .ratio = 16 },
-	{ .refclk = 24000, .cdclk = 312000, .divider = 2, .ratio = 26 },
-	{ .refclk = 24000, .cdclk = 552000, .divider = 2, .ratio = 46 },
-	{ .refclk = 24000, .cdclk = 648000, .divider = 2, .ratio = 54 },
+	{ .refclk = 24000, .cdclk = 176000, .ratio = 22 },
+	{ .refclk = 24000, .cdclk = 192000, .ratio = 16 },
+	{ .refclk = 24000, .cdclk = 312000, .ratio = 26 },
+	{ .refclk = 24000, .cdclk = 552000, .ratio = 46 },
+	{ .refclk = 24000, .cdclk = 648000, .ratio = 54 },
 
-	{ .refclk = 38400, .cdclk = 179200, .divider = 3, .ratio = 14 },
-	{ .refclk = 38400, .cdclk = 192000, .divider = 2, .ratio = 10 },
-	{ .refclk = 38400, .cdclk = 307200, .divider = 2, .ratio = 16 },
-	{ .refclk = 38400, .cdclk = 556800, .divider = 2, .ratio = 29 },
-	{ .refclk = 38400, .cdclk = 652800, .divider = 2, .ratio = 34 },
+	{ .refclk = 38400, .cdclk = 179200, .ratio = 14 },
+	{ .refclk = 38400, .cdclk = 192000, .ratio = 10 },
+	{ .refclk = 38400, .cdclk = 307200, .ratio = 16 },
+	{ .refclk = 38400, .cdclk = 556800, .ratio = 29 },
+	{ .refclk = 38400, .cdclk = 652800, .ratio = 34 },
 	{}
 };
 
 static const struct intel_cdclk_vals rplu_cdclk_table[] = {
-	{ .refclk = 19200, .cdclk = 172800, .divider = 3, .ratio = 27 },
-	{ .refclk = 19200, .cdclk = 192000, .divider = 2, .ratio = 20 },
-	{ .refclk = 19200, .cdclk = 307200, .divider = 2, .ratio = 32 },
-	{ .refclk = 19200, .cdclk = 480000, .divider = 2, .ratio = 50 },
-	{ .refclk = 19200, .cdclk = 556800, .divider = 2, .ratio = 58 },
-	{ .refclk = 19200, .cdclk = 652800, .divider = 2, .ratio = 68 },
+	{ .refclk = 19200, .cdclk = 172800, .ratio = 27 },
+	{ .refclk = 19200, .cdclk = 192000, .ratio = 20 },
+	{ .refclk = 19200, .cdclk = 307200, .ratio = 32 },
+	{ .refclk = 19200, .cdclk = 480000, .ratio = 50 },
+	{ .refclk = 19200, .cdclk = 556800, .ratio = 58 },
+	{ .refclk = 19200, .cdclk = 652800, .ratio = 68 },
 
-	{ .refclk = 24000, .cdclk = 176000, .divider = 3, .ratio = 22 },
-	{ .refclk = 24000, .cdclk = 192000, .divider = 2, .ratio = 16 },
-	{ .refclk = 24000, .cdclk = 312000, .divider = 2, .ratio = 26 },
-	{ .refclk = 24000, .cdclk = 480000, .divider = 2, .ratio = 40 },
-	{ .refclk = 24000, .cdclk = 552000, .divider = 2, .ratio = 46 },
-	{ .refclk = 24000, .cdclk = 648000, .divider = 2, .ratio = 54 },
+	{ .refclk = 24000, .cdclk = 176000, .ratio = 22 },
+	{ .refclk = 24000, .cdclk = 192000, .ratio = 16 },
+	{ .refclk = 24000, .cdclk = 312000, .ratio = 26 },
+	{ .refclk = 24000, .cdclk = 480000, .ratio = 40 },
+	{ .refclk = 24000, .cdclk = 552000, .ratio = 46 },
+	{ .refclk = 24000, .cdclk = 648000, .ratio = 54 },
 
-	{ .refclk = 38400, .cdclk = 179200, .divider = 3, .ratio = 14 },
-	{ .refclk = 38400, .cdclk = 192000, .divider = 2, .ratio = 10 },
-	{ .refclk = 38400, .cdclk = 307200, .divider = 2, .ratio = 16 },
-	{ .refclk = 38400, .cdclk = 480000, .divider = 2, .ratio = 25 },
-	{ .refclk = 38400, .cdclk = 556800, .divider = 2, .ratio = 29 },
-	{ .refclk = 38400, .cdclk = 652800, .divider = 2, .ratio = 34 },
+	{ .refclk = 38400, .cdclk = 179200, .ratio = 14 },
+	{ .refclk = 38400, .cdclk = 192000, .ratio = 10 },
+	{ .refclk = 38400, .cdclk = 307200, .ratio = 16 },
+	{ .refclk = 38400, .cdclk = 480000, .ratio = 25 },
+	{ .refclk = 38400, .cdclk = 556800, .ratio = 29 },
+	{ .refclk = 38400, .cdclk = 652800, .ratio = 34 },
 	{}
 };
 
 static const struct intel_cdclk_vals dg2_cdclk_table[] = {
-	{ .refclk = 38400, .cdclk = 163200, .divider = 2, .ratio = 34, .waveform = 0x8888 },
-	{ .refclk = 38400, .cdclk = 204000, .divider = 2, .ratio = 34, .waveform = 0x9248 },
-	{ .refclk = 38400, .cdclk = 244800, .divider = 2, .ratio = 34, .waveform = 0xa4a4 },
-	{ .refclk = 38400, .cdclk = 285600, .divider = 2, .ratio = 34, .waveform = 0xa54a },
-	{ .refclk = 38400, .cdclk = 326400, .divider = 2, .ratio = 34, .waveform = 0xaaaa },
-	{ .refclk = 38400, .cdclk = 367200, .divider = 2, .ratio = 34, .waveform = 0xad5a },
-	{ .refclk = 38400, .cdclk = 408000, .divider = 2, .ratio = 34, .waveform = 0xb6b6 },
-	{ .refclk = 38400, .cdclk = 448800, .divider = 2, .ratio = 34, .waveform = 0xdbb6 },
-	{ .refclk = 38400, .cdclk = 489600, .divider = 2, .ratio = 34, .waveform = 0xeeee },
-	{ .refclk = 38400, .cdclk = 530400, .divider = 2, .ratio = 34, .waveform = 0xf7de },
-	{ .refclk = 38400, .cdclk = 571200, .divider = 2, .ratio = 34, .waveform = 0xfefe },
-	{ .refclk = 38400, .cdclk = 612000, .divider = 2, .ratio = 34, .waveform = 0xfffe },
-	{ .refclk = 38400, .cdclk = 652800, .divider = 2, .ratio = 34, .waveform = 0xffff },
+	{ .refclk = 38400, .cdclk = 163200, .ratio = 34, .waveform = 0x8888 },
+	{ .refclk = 38400, .cdclk = 204000, .ratio = 34, .waveform = 0x9248 },
+	{ .refclk = 38400, .cdclk = 244800, .ratio = 34, .waveform = 0xa4a4 },
+	{ .refclk = 38400, .cdclk = 285600, .ratio = 34, .waveform = 0xa54a },
+	{ .refclk = 38400, .cdclk = 326400, .ratio = 34, .waveform = 0xaaaa },
+	{ .refclk = 38400, .cdclk = 367200, .ratio = 34, .waveform = 0xad5a },
+	{ .refclk = 38400, .cdclk = 408000, .ratio = 34, .waveform = 0xb6b6 },
+	{ .refclk = 38400, .cdclk = 448800, .ratio = 34, .waveform = 0xdbb6 },
+	{ .refclk = 38400, .cdclk = 489600, .ratio = 34, .waveform = 0xeeee },
+	{ .refclk = 38400, .cdclk = 530400, .ratio = 34, .waveform = 0xf7de },
+	{ .refclk = 38400, .cdclk = 571200, .ratio = 34, .waveform = 0xfefe },
+	{ .refclk = 38400, .cdclk = 612000, .ratio = 34, .waveform = 0xfffe },
+	{ .refclk = 38400, .cdclk = 652800, .ratio = 34, .waveform = 0xffff },
 	{}
 };
 
 static const struct intel_cdclk_vals mtl_cdclk_table[] = {
-	{ .refclk = 38400, .cdclk = 172800, .divider = 2, .ratio = 16, .waveform = 0xad5a },
-	{ .refclk = 38400, .cdclk = 192000, .divider = 2, .ratio = 16, .waveform = 0xb6b6 },
-	{ .refclk = 38400, .cdclk = 307200, .divider = 2, .ratio = 16, .waveform = 0x0000 },
-	{ .refclk = 38400, .cdclk = 480000, .divider = 2, .ratio = 25, .waveform = 0x0000 },
-	{ .refclk = 38400, .cdclk = 556800, .divider = 2, .ratio = 29, .waveform = 0x0000 },
-	{ .refclk = 38400, .cdclk = 652800, .divider = 2, .ratio = 34, .waveform = 0x0000 },
+	{ .refclk = 38400, .cdclk = 172800, .ratio = 16, .waveform = 0xad5a },
+	{ .refclk = 38400, .cdclk = 192000, .ratio = 16, .waveform = 0xb6b6 },
+	{ .refclk = 38400, .cdclk = 307200, .ratio = 16, .waveform = 0x0000 },
+	{ .refclk = 38400, .cdclk = 480000, .ratio = 25, .waveform = 0x0000 },
+	{ .refclk = 38400, .cdclk = 556800, .ratio = 29, .waveform = 0x0000 },
+	{ .refclk = 38400, .cdclk = 652800, .ratio = 34, .waveform = 0x0000 },
 	{}
 };
 
 static const struct intel_cdclk_vals lnl_cdclk_table[] = {
-	{ .refclk = 38400, .cdclk = 153600, .divider = 2, .ratio = 16, .waveform = 0xaaaa },
-	{ .refclk = 38400, .cdclk = 172800, .divider = 2, .ratio = 16, .waveform = 0xad5a },
-	{ .refclk = 38400, .cdclk = 192000, .divider = 2, .ratio = 16, .waveform = 0xb6b6 },
-	{ .refclk = 38400, .cdclk = 211200, .divider = 2, .ratio = 16, .waveform = 0xdbb6 },
-	{ .refclk = 38400, .cdclk = 230400, .divider = 2, .ratio = 16, .waveform = 0xeeee },
-	{ .refclk = 38400, .cdclk = 249600, .divider = 2, .ratio = 16, .waveform = 0xf7de },
-	{ .refclk = 38400, .cdclk = 268800, .divider = 2, .ratio = 16, .waveform = 0xfefe },
-	{ .refclk = 38400, .cdclk = 288000, .divider = 2, .ratio = 16, .waveform = 0xfffe },
-	{ .refclk = 38400, .cdclk = 307200, .divider = 2, .ratio = 16, .waveform = 0xffff },
-	{ .refclk = 38400, .cdclk = 330000, .divider = 2, .ratio = 25, .waveform = 0xdbb6 },
-	{ .refclk = 38400, .cdclk = 360000, .divider = 2, .ratio = 25, .waveform = 0xeeee },
-	{ .refclk = 38400, .cdclk = 390000, .divider = 2, .ratio = 25, .waveform = 0xf7de },
-	{ .refclk = 38400, .cdclk = 420000, .divider = 2, .ratio = 25, .waveform = 0xfefe },
-	{ .refclk = 38400, .cdclk = 450000, .divider = 2, .ratio = 25, .waveform = 0xfffe },
-	{ .refclk = 38400, .cdclk = 480000, .divider = 2, .ratio = 25, .waveform = 0xffff },
-	{ .refclk = 38400, .cdclk = 487200, .divider = 2, .ratio = 29, .waveform = 0xfefe },
-	{ .refclk = 38400, .cdclk = 522000, .divider = 2, .ratio = 29, .waveform = 0xfffe },
-	{ .refclk = 38400, .cdclk = 556800, .divider = 2, .ratio = 29, .waveform = 0xffff },
-	{ .refclk = 38400, .cdclk = 571200, .divider = 2, .ratio = 34, .waveform = 0xfefe },
-	{ .refclk = 38400, .cdclk = 612000, .divider = 2, .ratio = 34, .waveform = 0xfffe },
-	{ .refclk = 38400, .cdclk = 652800, .divider = 2, .ratio = 34, .waveform = 0xffff },
+	{ .refclk = 38400, .cdclk = 153600, .ratio = 16, .waveform = 0xaaaa },
+	{ .refclk = 38400, .cdclk = 172800, .ratio = 16, .waveform = 0xad5a },
+	{ .refclk = 38400, .cdclk = 192000, .ratio = 16, .waveform = 0xb6b6 },
+	{ .refclk = 38400, .cdclk = 211200, .ratio = 16, .waveform = 0xdbb6 },
+	{ .refclk = 38400, .cdclk = 230400, .ratio = 16, .waveform = 0xeeee },
+	{ .refclk = 38400, .cdclk = 249600, .ratio = 16, .waveform = 0xf7de },
+	{ .refclk = 38400, .cdclk = 268800, .ratio = 16, .waveform = 0xfefe },
+	{ .refclk = 38400, .cdclk = 288000, .ratio = 16, .waveform = 0xfffe },
+	{ .refclk = 38400, .cdclk = 307200, .ratio = 16, .waveform = 0xffff },
+	{ .refclk = 38400, .cdclk = 330000, .ratio = 25, .waveform = 0xdbb6 },
+	{ .refclk = 38400, .cdclk = 360000, .ratio = 25, .waveform = 0xeeee },
+	{ .refclk = 38400, .cdclk = 390000, .ratio = 25, .waveform = 0xf7de },
+	{ .refclk = 38400, .cdclk = 420000, .ratio = 25, .waveform = 0xfefe },
+	{ .refclk = 38400, .cdclk = 450000, .ratio = 25, .waveform = 0xfffe },
+	{ .refclk = 38400, .cdclk = 480000, .ratio = 25, .waveform = 0xffff },
+	{ .refclk = 38400, .cdclk = 487200, .ratio = 29, .waveform = 0xfefe },
+	{ .refclk = 38400, .cdclk = 522000, .ratio = 29, .waveform = 0xfffe },
+	{ .refclk = 38400, .cdclk = 556800, .ratio = 29, .waveform = 0xffff },
+	{ .refclk = 38400, .cdclk = 571200, .ratio = 34, .waveform = 0xfefe },
+	{ .refclk = 38400, .cdclk = 612000, .ratio = 34, .waveform = 0xfffe },
+	{ .refclk = 38400, .cdclk = 652800, .ratio = 34, .waveform = 0xffff },
 	{}
 };
 
@@ -1446,50 +1445,77 @@ static u8 bxt_calc_voltage_level(int cdclk)
 	return DIV_ROUND_UP(cdclk, 25000);
 }
 
+static u8 calc_voltage_level(int cdclk, int num_voltage_levels,
+			     const int voltage_level_max_cdclk[])
+{
+	int voltage_level;
+
+	for (voltage_level = 0; voltage_level < num_voltage_levels; voltage_level++) {
+		if (cdclk <= voltage_level_max_cdclk[voltage_level])
+			return voltage_level;
+	}
+
+	MISSING_CASE(cdclk);
+	return num_voltage_levels - 1;
+}
+
 static u8 icl_calc_voltage_level(int cdclk)
 {
-	if (cdclk > 556800)
-		return 2;
-	else if (cdclk > 312000)
-		return 1;
-	else
-		return 0;
+	static const int icl_voltage_level_max_cdclk[] = {
+		[0] = 312000,
+		[1] = 556800,
+		[2] = 652800,
+	};
+
+	return calc_voltage_level(cdclk,
+				  ARRAY_SIZE(icl_voltage_level_max_cdclk),
+				  icl_voltage_level_max_cdclk);
 }
 
 static u8 ehl_calc_voltage_level(int cdclk)
 {
-	if (cdclk > 326400)
-		return 3;
-	else if (cdclk > 312000)
-		return 2;
-	else if (cdclk > 180000)
-		return 1;
-	else
-		return 0;
+	static const int ehl_voltage_level_max_cdclk[] = {
+		[0] = 180000,
+		[1] = 312000,
+		[2] = 326400,
+		/*
+		 * Bspec lists the limit as 556.8 MHz, but some JSL
+		 * development boards (at least) boot with 652.8 MHz
+		 */
+		[3] = 652800,
+	};
+
+	return calc_voltage_level(cdclk,
+				  ARRAY_SIZE(ehl_voltage_level_max_cdclk),
+				  ehl_voltage_level_max_cdclk);
 }
 
 static u8 tgl_calc_voltage_level(int cdclk)
 {
-	if (cdclk > 556800)
-		return 3;
-	else if (cdclk > 326400)
-		return 2;
-	else if (cdclk > 312000)
-		return 1;
-	else
-		return 0;
+	static const int tgl_voltage_level_max_cdclk[] = {
+		[0] = 312000,
+		[1] = 326400,
+		[2] = 556800,
+		[3] = 652800,
+	};
+
+	return calc_voltage_level(cdclk,
+				  ARRAY_SIZE(tgl_voltage_level_max_cdclk),
+				  tgl_voltage_level_max_cdclk);
 }
 
 static u8 rplu_calc_voltage_level(int cdclk)
 {
-	if (cdclk > 556800)
-		return 3;
-	else if (cdclk > 480000)
-		return 2;
-	else if (cdclk > 312000)
-		return 1;
-	else
-		return 0;
+	static const int rplu_voltage_level_max_cdclk[] = {
+		[0] = 312000,
+		[1] = 480000,
+		[2] = 556800,
+		[3] = 652800,
+	};
+
+	return calc_voltage_level(cdclk,
+				  ARRAY_SIZE(rplu_voltage_level_max_cdclk),
+				  rplu_voltage_level_max_cdclk);
 }
 
 static void icl_readout_refclk(struct drm_i915_private *dev_priv,
@@ -1800,6 +1826,8 @@ static bool cdclk_pll_is_unknown(unsigned int vco)
 	return vco == ~0;
 }
 
+static const int cdclk_squash_len = 16;
+
 static int cdclk_squash_divider(u16 waveform)
 {
 	return hweight16(waveform ?: 0xffff);
@@ -1811,7 +1839,6 @@ static bool cdclk_compute_crawl_and_squash_midpoint(struct drm_i915_private *i91
 						    struct intel_cdclk_config *mid_cdclk_config)
 {
 	u16 old_waveform, new_waveform, mid_waveform;
-	int size = 16;
 	int div = 2;
 
 	/* Return if PLL is in an unknown state, force a complete disable and re-enable. */
@@ -1850,7 +1877,8 @@ static bool cdclk_compute_crawl_and_squash_midpoint(struct drm_i915_private *i91
 	}
 
 	mid_cdclk_config->cdclk = DIV_ROUND_CLOSEST(cdclk_squash_divider(mid_waveform) *
-						    mid_cdclk_config->vco, size * div);
+						    mid_cdclk_config->vco,
+						    cdclk_squash_len * div);
 
 	/* make sure the mid clock came out sane */
 
@@ -1878,9 +1906,9 @@ static void _bxt_set_cdclk(struct drm_i915_private *dev_priv,
 {
 	int cdclk = cdclk_config->cdclk;
 	int vco = cdclk_config->vco;
-	u32 val;
+	int unsquashed_cdclk;
 	u16 waveform;
-	int clock;
+	u32 val;
 
 	if (HAS_CDCLK_CRAWL(dev_priv) && dev_priv->display.cdclk.hw.vco > 0 && vco > 0 &&
 	    !cdclk_pll_is_unknown(dev_priv->display.cdclk.hw.vco)) {
@@ -1897,15 +1925,13 @@ static void _bxt_set_cdclk(struct drm_i915_private *dev_priv,
 
 	waveform = cdclk_squash_waveform(dev_priv, cdclk);
 
-	if (waveform)
-		clock = vco / 2;
-	else
-		clock = cdclk;
+	unsquashed_cdclk = DIV_ROUND_CLOSEST(cdclk * cdclk_squash_len,
+					     cdclk_squash_divider(waveform));
 
 	if (HAS_CDCLK_SQUASH(dev_priv))
 		dg2_cdclk_squash_program(dev_priv, waveform);
 
-	val = bxt_cdclk_cd2x_div_sel(dev_priv, clock, vco) |
+	val = bxt_cdclk_cd2x_div_sel(dev_priv, unsquashed_cdclk, vco) |
 		bxt_cdclk_cd2x_pipe(dev_priv, pipe);
 
 	/*
@@ -2075,7 +2101,7 @@ sanitize:
 	dev_priv->display.cdclk.hw.cdclk = 0;
 
 	/* force full PLL disable + enable */
-	dev_priv->display.cdclk.hw.vco = -1;
+	dev_priv->display.cdclk.hw.vco = ~0;
 }
 
 static void bxt_cdclk_init_hw(struct drm_i915_private *dev_priv)
@@ -2597,9 +2623,10 @@ static int intel_vdsc_min_cdclk(const struct intel_crtc_state *crtc_state)
 		 * Since PPC = 2 with bigjoiner
 		 * => CDCLK >= compressed_bpp * Pixel clock  / 2 * Bigjoiner Interface bits
 		 */
-		int bigjoiner_interface_bits = DISPLAY_VER(i915) > 13 ? 36 : 24;
-		int min_cdclk_bj = (crtc_state->dsc.compressed_bpp * pixel_clock) /
-				   (2 * bigjoiner_interface_bits);
+		int bigjoiner_interface_bits = DISPLAY_VER(i915) >= 14 ? 36 : 24;
+		int min_cdclk_bj =
+			(to_bpp_int_roundup(crtc_state->dsc.compressed_bpp_x16) *
+			 pixel_clock) / (2 * bigjoiner_interface_bits);
 
 		min_cdclk = max(min_cdclk, min_cdclk_bj);
 	}
@@ -3488,7 +3515,7 @@ static const struct intel_cdclk_funcs mtl_cdclk_funcs = {
 	.get_cdclk = bxt_get_cdclk,
 	.set_cdclk = bxt_set_cdclk,
 	.modeset_calc_cdclk = bxt_modeset_calc_cdclk,
-	.calc_voltage_level = tgl_calc_voltage_level,
+	.calc_voltage_level = rplu_calc_voltage_level,
 };
 
 static const struct intel_cdclk_funcs rplu_cdclk_funcs = {

@@ -195,8 +195,6 @@
 #define  DPIO_SFR_BYPASS		(1 << 1)
 #define  DPIO_CMNRST			(1 << 0)
 
-#define DPIO_PHY(pipe)			((pipe) >> 1)
-
 /*
  * Per pipe/PLL DPIO regs
  */
@@ -5654,6 +5652,10 @@ enum skl_power_gate {
 #define  DP_TP_CTL_MODE_SST			(0 << 27)
 #define  DP_TP_CTL_MODE_MST			(1 << 27)
 #define  DP_TP_CTL_FORCE_ACT			(1 << 25)
+#define  DP_TP_CTL_TRAIN_PAT4_SEL_MASK		(3 << 19)
+#define  DP_TP_CTL_TRAIN_PAT4_SEL_TP4A		(0 << 19)
+#define  DP_TP_CTL_TRAIN_PAT4_SEL_TP4B		(1 << 19)
+#define  DP_TP_CTL_TRAIN_PAT4_SEL_TP4C		(2 << 19)
 #define  DP_TP_CTL_ENHANCED_FRAME_ENABLE	(1 << 18)
 #define  DP_TP_CTL_FDI_AUTOTRAIN		(1 << 15)
 #define  DP_TP_CTL_LINK_TRAIN_MASK		(7 << 8)
