@@ -10,6 +10,9 @@
 
 #include "server.h"
 #include "smb_common.h"
+#ifdef CONFIG_SMB_INSECURE_SERVER
+#include "smb1pdu.h"
+#endif
 #include "mgmt/ksmbd_ida.h"
 #include "connection.h"
 #include "transport_tcp.h"
@@ -61,7 +64,11 @@ struct ksmbd_conn *ksmbd_conn_alloc(void)
 	if (!conn->local_nls)
 		conn->local_nls = load_nls_default();
 	if (IS_ENABLED(CONFIG_UNICODE))
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 17, 0)
 		conn->um = utf8_load(UNICODE_AGE(12, 1, 0));
+#else
+		conn->um = utf8_load("12.1.0");
+#endif
 	else
 		conn->um = ERR_PTR(-EOPNOTSUPP);
 	if (IS_ERR(conn->um))
@@ -83,6 +90,8 @@ struct ksmbd_conn *ksmbd_conn_alloc(void)
 
 	spin_lock_init(&conn->llist_lock);
 	INIT_LIST_HEAD(&conn->lock_list);
+
+	init_rwsem(&conn->session_lock);
 
 	down_write(&conn_list_lock);
 	list_add(&conn->conns_list, &conn_list);
@@ -111,11 +120,20 @@ void ksmbd_conn_enqueue_request(struct ksmbd_work *work)
 {
 	struct ksmbd_conn *conn = work->conn;
 	struct list_head *requests_queue = NULL;
+#ifdef CONFIG_SMB_INSECURE_SERVER
+	struct smb2_hdr *hdr = work->request_buf;
 
-	if (conn->ops->get_cmd_val(work) != SMB2_CANCEL_HE) {
-		requests_queue = &conn->requests;
-		work->syncronous = true;
+	if (hdr->ProtocolId == SMB2_PROTO_NUMBER) {
+		if (conn->ops->get_cmd_val(work) != SMB2_CANCEL_HE)
+			requests_queue = &conn->requests;
+	} else {
+		if (conn->ops->get_cmd_val(work) != SMB_COM_NT_CANCEL)
+			requests_queue = &conn->requests;
 	}
+#else
+	if (conn->ops->get_cmd_val(work) != SMB2_CANCEL_HE)
+		requests_queue = &conn->requests;
+#endif
 
 	if (requests_queue) {
 		atomic_inc(&conn->req_running);
@@ -125,28 +143,22 @@ void ksmbd_conn_enqueue_request(struct ksmbd_work *work)
 	}
 }
 
-int ksmbd_conn_try_dequeue_request(struct ksmbd_work *work)
+void ksmbd_conn_try_dequeue_request(struct ksmbd_work *work)
 {
 	struct ksmbd_conn *conn = work->conn;
-	int ret = 1;
 
 	if (list_empty(&work->request_entry) &&
 	    list_empty(&work->async_request_entry))
-		return 0;
+		return;
 
-	if (!work->multiRsp)
-		atomic_dec(&conn->req_running);
+	atomic_dec(&conn->req_running);
 	spin_lock(&conn->request_lock);
-	if (!work->multiRsp) {
-		list_del_init(&work->request_entry);
-		if (work->syncronous == false)
-			list_del_init(&work->async_request_entry);
-		ret = 0;
-	}
+	list_del_init(&work->request_entry);
 	spin_unlock(&conn->request_lock);
+	if (work->asynchronous)
+		release_async_work(work);
 
 	wake_up_all(&conn->req_running_q);
-	return ret;
 }
 
 void ksmbd_conn_lock(struct ksmbd_conn *conn)
@@ -173,64 +185,66 @@ void ksmbd_all_conn_set_status(u64 sess_id, u32 status)
 
 void ksmbd_conn_wait_idle(struct ksmbd_conn *conn, u64 sess_id)
 {
-	struct ksmbd_conn *bind_conn;
-
 	wait_event(conn->req_running_q, atomic_read(&conn->req_running) < 2);
-
-	down_read(&conn_list_lock);
-	list_for_each_entry(bind_conn, &conn_list, conns_list) {
-		if (bind_conn == conn)
-			continue;
-
-		if ((bind_conn->binding || xa_load(&bind_conn->sessions, sess_id)) &&
-		    !ksmbd_conn_releasing(bind_conn) &&
-		    atomic_read(&bind_conn->req_running)) {
-			wait_event(bind_conn->req_running_q,
-				atomic_read(&bind_conn->req_running) == 0);
-		}
-	}
-	up_read(&conn_list_lock);
 }
 
 int ksmbd_conn_write(struct ksmbd_work *work)
 {
 	struct ksmbd_conn *conn = work->conn;
-	size_t len = 0;
 	int sent;
-	struct kvec iov[3];
-	int iov_idx = 0;
 
 	if (!work->response_buf) {
 		pr_err("NULL response header\n");
 		return -EINVAL;
 	}
 
-	if (work->tr_buf) {
-		iov[iov_idx] = (struct kvec) { work->tr_buf,
-				sizeof(struct smb2_transform_hdr) + 4 };
-		len += iov[iov_idx++].iov_len;
-	}
+	if (work->send_no_response)
+		return 0;
 
-	if (work->aux_payload_sz) {
-		iov[iov_idx] = (struct kvec) { work->response_buf, work->resp_hdr_sz };
-		len += iov[iov_idx++].iov_len;
-		iov[iov_idx] = (struct kvec) { work->aux_payload_buf, work->aux_payload_sz };
-		len += iov[iov_idx++].iov_len;
-	} else {
-		if (work->tr_buf)
-			iov[iov_idx].iov_len = work->resp_hdr_sz;
-		else
+#ifdef CONFIG_SMB_INSECURE_SERVER
+	if (!work->iov_idx) {
+		struct kvec iov[2];
+		int iov_idx = 0;
+		size_t len = 0;
+
+		if (work->aux_payload_sz) {
+			iov[iov_idx] = (struct kvec) { work->response_buf, work->resp_hdr_sz };
+			len += iov[iov_idx++].iov_len;
+			iov[iov_idx] = (struct kvec) { work->aux_payload_buf, work->aux_payload_sz };
+			len += iov[iov_idx++].iov_len;
+		} else {
 			iov[iov_idx].iov_len = get_rfc1002_len(work->response_buf) + 4;
-		iov[iov_idx].iov_base = work->response_buf;
-		len += iov[iov_idx++].iov_len;
+			iov[iov_idx].iov_base = work->response_buf;
+			len += iov[iov_idx++].iov_len;
+		}
+
+		ksmbd_conn_lock(conn);
+		sent = conn->transport->ops->writev(conn->transport, &iov[0],
+				iov_idx, len, work->need_invalidate_rkey,
+				work->remote_key);
+		ksmbd_conn_unlock(conn);
+
+	} else {
+		ksmbd_conn_lock(conn);
+		sent = conn->transport->ops->writev(conn->transport, work->iov,
+				work->iov_cnt,
+				get_rfc1002_len(work->iov[0].iov_base) + 4,
+				work->need_invalidate_rkey,
+				work->remote_key);
+		ksmbd_conn_unlock(conn);
 	}
+#else
+	if (!work->iov_idx)
+		return -EINVAL;
 
 	ksmbd_conn_lock(conn);
-	sent = conn->transport->ops->writev(conn->transport, &iov[0],
-					iov_idx, len,
-					work->need_invalidate_rkey,
-					work->remote_key);
+	sent = conn->transport->ops->writev(conn->transport, work->iov,
+			work->iov_cnt,
+			get_rfc1002_len(work->iov[0].iov_base) + 4,
+			work->need_invalidate_rkey,
+			work->remote_key);
 	ksmbd_conn_unlock(conn);
+#endif
 
 	if (sent < 0) {
 		pr_err("Failed to send message: %d\n", sent);
@@ -296,6 +310,9 @@ bool ksmbd_conn_alive(struct ksmbd_conn *conn)
 	return true;
 }
 
+#define SMB1_MIN_SUPPORTED_HEADER_SIZE (sizeof(struct smb_hdr))
+#define SMB2_MIN_SUPPORTED_HEADER_SIZE (sizeof(struct smb2_hdr) + 4)
+
 /**
  * ksmbd_conn_handler_loop() - session thread to listen on new smb requests
  * @p:		connection instance
@@ -352,15 +369,17 @@ int ksmbd_conn_handler_loop(void *p)
 		if (pdu_size > MAX_STREAM_PROT_LEN)
 			break;
 
+		if (pdu_size < SMB1_MIN_SUPPORTED_HEADER_SIZE)
+			break;
+
 		/* 4 for rfc1002 length field */
-		size = pdu_size + 4;
+		/* 1 for implied bcc[0] */
+		size = pdu_size + 4 + 1;
 		conn->request_buf = kvmalloc(size, GFP_KERNEL);
 		if (!conn->request_buf)
 			break;
 
 		memcpy(conn->request_buf, hdr_buf, sizeof(hdr_buf));
-		if (!ksmbd_smb_request(conn))
-			break;
 
 		/*
 		 * We already read 4 bytes to find out PDU size, now
@@ -376,6 +395,15 @@ int ksmbd_conn_handler_loop(void *p)
 			pr_err("PDU error. Read: %d, Expected: %d\n",
 			       size, pdu_size);
 			continue;
+		}
+
+		if (!ksmbd_smb_request(conn))
+			break;
+
+		if (((struct smb2_hdr *)smb2_get_msg(conn->request_buf))->ProtocolId ==
+		    SMB2_PROTO_NUMBER) {
+			if (pdu_size < SMB2_MIN_SUPPORTED_HEADER_SIZE)
+				break;
 		}
 
 		if (!default_conn_ops.process_fn) {

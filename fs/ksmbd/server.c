@@ -115,8 +115,10 @@ static int __process_request(struct ksmbd_work *work, struct ksmbd_conn *conn,
 	if (check_conn_state(work))
 		return SERVER_HANDLER_CONTINUE;
 
-	if (ksmbd_verify_smb_message(work))
+	if (ksmbd_verify_smb_message(work)) {
+		conn->ops->set_rsp_status(work, STATUS_INVALID_PARAMETER);
 		return SERVER_HANDLER_ABORT;
+	}
 
 	command = conn->ops->get_cmd_val(work);
 	*cmd = command;
@@ -163,6 +165,7 @@ static void __handle_ksmbd_work(struct ksmbd_work *work,
 {
 	u16 command = 0;
 	int rc;
+	bool is_chained = false;
 
 	if (conn->ops->allocate_rsp_buf(work))
 		return;
@@ -185,24 +188,31 @@ static void __handle_ksmbd_work(struct ksmbd_work *work,
 		goto send;
 	}
 
-	if (conn->ops->check_user_session) {
-		rc = conn->ops->check_user_session(work);
-		if (rc < 0) {
-			command = conn->ops->get_cmd_val(work);
-			conn->ops->set_rsp_status(work,
-					STATUS_USER_SESSION_DELETED);
-			goto send;
-		} else if (rc > 0) {
-			rc = conn->ops->get_ksmbd_tcon(work);
+	do {
+		if (conn->ops->check_user_session) {
+			rc = conn->ops->check_user_session(work);
 			if (rc < 0) {
-				conn->ops->set_rsp_status(work,
-					STATUS_NETWORK_NAME_DELETED);
+				if (rc == -EINVAL)
+					conn->ops->set_rsp_status(work,
+						STATUS_INVALID_PARAMETER);
+				else
+					conn->ops->set_rsp_status(work,
+						STATUS_USER_SESSION_DELETED);
 				goto send;
+			} else if (rc > 0) {
+				rc = conn->ops->get_ksmbd_tcon(work);
+				if (rc < 0) {
+					if (rc == -EINVAL)
+						conn->ops->set_rsp_status(work,
+							STATUS_INVALID_PARAMETER);
+					else
+						conn->ops->set_rsp_status(work,
+							STATUS_NETWORK_NAME_DELETED);
+					goto send;
+				}
 			}
 		}
-	}
 
-	do {
 		rc = __process_request(work, conn, &command);
 		if (rc == SERVER_HANDLER_ABORT)
 			break;
@@ -222,16 +232,17 @@ static void __handle_ksmbd_work(struct ksmbd_work *work,
 			}
 		}
 
+		is_chained = is_chained_smb2_message(work);
+
 		if (work->sess &&
 		    (work->sess->sign || smb3_11_final_sess_setup_resp(work) ||
 		     conn->ops->is_sign_req(work, command)))
 			conn->ops->set_sign_rsp(work);
-	} while (is_chained_smb2_message(work));
-
-	if (work->send_no_response)
-		return;
+	} while (is_chained == true);
 
 send:
+	if (work->tcon)
+		ksmbd_tree_connect_put(work->tcon);
 	smb3_preauth_hash_rsp(work);
 	if (work->sess && work->sess->enc && work->encrypted &&
 	    conn->ops->encrypt_resp) {
@@ -279,6 +290,7 @@ static void handle_ksmbd_work(struct work_struct *wk)
 static int queue_ksmbd_work(struct ksmbd_conn *conn)
 {
 	struct ksmbd_work *work;
+	int err;
 
 	work = ksmbd_alloc_work_struct();
 	if (!work) {
@@ -290,7 +302,11 @@ static int queue_ksmbd_work(struct ksmbd_conn *conn)
 	work->request_buf = conn->request_buf;
 	conn->request_buf = NULL;
 
-	ksmbd_init_smb_server(work);
+	err = ksmbd_init_smb_server(work);
+	if (err) {
+		ksmbd_free_work_struct(work);
+		return 0;
+	}
 
 	ksmbd_conn_enqueue_request(work);
 	atomic_inc(&conn->r_count);
@@ -416,7 +432,11 @@ int server_queue_ctrl_reset_work(void)
 	return __queue_ctrl_work(SERVER_CTRL_TYPE_RESET);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
+static ssize_t stats_show(const struct class *class, const struct class_attribute *attr,
+#else
 static ssize_t stats_show(struct class *class, struct class_attribute *attr,
+#endif
 			  char *buf)
 {
 	/*
@@ -435,8 +455,13 @@ static ssize_t stats_show(struct class *class, struct class_attribute *attr,
 			  server_conf.ipc_last_active / HZ);
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
+static ssize_t kill_server_store(const struct class *class,
+				 const struct class_attribute *attr, const char *buf,
+#else
 static ssize_t kill_server_store(struct class *class,
 				 struct class_attribute *attr, const char *buf,
+#endif
 				 size_t len)
 {
 	if (!sysfs_streq(buf, "hard"))
@@ -456,7 +481,11 @@ static const char * const debug_type_strings[] = {"smb", "auth", "vfs",
 						  "oplock", "ipc", "conn",
 						  "rdma"};
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
+static ssize_t debug_show(const struct class *class, const struct class_attribute *attr,
+#else
 static ssize_t debug_show(struct class *class, struct class_attribute *attr,
+#endif
 			  char *buf)
 {
 	ssize_t sz = 0;
@@ -474,7 +503,11 @@ static ssize_t debug_show(struct class *class, struct class_attribute *attr,
 	return sz;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
+static ssize_t debug_store(const struct class *class, const struct class_attribute *attr,
+#else
 static ssize_t debug_store(struct class *class, struct class_attribute *attr,
+#endif
 			   const char *buf, size_t len)
 {
 	int i;
@@ -514,7 +547,9 @@ ATTRIBUTE_GROUPS(ksmbd_control_class);
 
 static struct class ksmbd_control_class = {
 	.name		= "ksmbd-control",
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 4, 0)
 	.owner		= THIS_MODULE,
+#endif
 	.class_groups	= ksmbd_control_class_groups,
 };
 
@@ -578,9 +613,6 @@ static int __init ksmbd_server_init(void)
 	ret = ksmbd_workqueue_init();
 	if (ret)
 		goto err_crypto_destroy;
-
-	pr_warn_once("The ksmbd server is experimental\n");
-
 	return 0;
 
 err_crypto_destroy:
@@ -617,6 +649,7 @@ MODULE_DESCRIPTION("Linux kernel CIFS/SMB SERVER");
 MODULE_LICENSE("GPL");
 MODULE_SOFTDEP("pre: ecb");
 MODULE_SOFTDEP("pre: hmac");
+MODULE_SOFTDEP("pre: md4");
 MODULE_SOFTDEP("pre: md5");
 MODULE_SOFTDEP("pre: nls");
 MODULE_SOFTDEP("pre: aes");
