@@ -102,6 +102,7 @@
 		syscon = <&scm_wkup>;
 
 		opp_nom-1000000000 {
+			/* OPP NOM */
 			opp-hz = /bits/ 64 <1000000000>;
 			opp-microvolt = <1060000 850000 1150000>,
 					<1060000 850000 1150000>;
@@ -110,6 +111,7 @@
 		};
 
 		opp_od-1176000000 {
+			/* OPP OD */
 			opp-hz = /bits/ 64 <1176000000>;
 			opp-microvolt = <1160000 885000 1160000>,
 					<1160000 885000 1160000>;
@@ -118,6 +120,7 @@
 		};
 
 		opp_high@1500000000 {
+			/* OPP High */
 			opp-hz = /bits/ 64 <1500000000>;
 			opp-microvolt = <1210000 950000 1250000>,
 					<1210000 950000 1250000>;
@@ -853,6 +856,12 @@
 			#address-cells = <1>;
 			#size-cells = <1>;
 			ranges = <0 0x56000000 0x2000000>;
+
+			gpu: gpu@0 {
+				compatible = "ti,dra7-sgx544", "img,sgx544";
+				reg = <0x0 0x10000>;
+				interrupts = <GIC_SPI 16 IRQ_TYPE_LEVEL_HIGH>;
+			};
 		};
 
 		crossbar_mpu: crossbar@4a002a48 {
