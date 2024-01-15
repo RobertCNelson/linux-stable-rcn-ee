@@ -1,10 +1,12 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
  * This header provides constants for SERDES MUX for TI SoCs
+ *
+ * Copyright (C) 2023 Texas Instruments Incorporated - https://www.ti.com/
  */
 
-#ifndef _DT_BINDINGS_MUX_TI_SERDES
-#define _DT_BINDINGS_MUX_TI_SERDES
+#ifndef DTS_ARM64_TI_K3_SERDES_H
+#define DTS_ARM64_TI_K3_SERDES_H
 
 /* J721E */
 
@@ -109,7 +111,7 @@
 
 #define J721S2_SERDES0_LANE2_EDP_LANE2		0x0
 #define J721S2_SERDES0_LANE2_PCIE1_LANE2	0x1
-#define J721S2_SERDES0_LANE2_IP3_UNUSED		0x2
+#define J721S2_SERDES0_LANE2_USB_SWAP		0x2
 #define J721S2_SERDES0_LANE2_IP4_UNUSED		0x3
 
 #define J721S2_SERDES0_LANE3_EDP_LANE3		0x0
@@ -199,4 +201,4 @@
 #define J784S4_SERDES4_LANE3_USB		0x2
 #define J784S4_SERDES4_LANE3_IP4_UNUSED		0x3
 
-#endif /* _DT_BINDINGS_MUX_TI_SERDES */
+#endif /* DTS_ARM64_TI_K3_SERDES_H */
