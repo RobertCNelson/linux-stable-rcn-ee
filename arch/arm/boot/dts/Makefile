@@ -1,11 +1,15 @@
 # SPDX-License-Identifier: GPL-2.0
+
+ifeq ($(CONFIG_OF_OVERLAY),y)
+DTC_FLAGS += -@
+endif
+
 dtb-$(CONFIG_ARCH_ALPINE) += \
 	alpine-db.dtb
 dtb-$(CONFIG_MACH_ARTPEC6) += \
 	artpec6-devboard.dtb
 dtb-$(CONFIG_MACH_ASM9260) += \
 	alphascale-asm9260-devkit.dtb
-# Keep at91 dtb files sorted alphabetically for each SoC
 dtb-$(CONFIG_SOC_AT91RM9200) += \
 	at91rm9200ek.dtb \
 	mpa1600.dtb
@@ -933,6 +937,17 @@ dtb-$(CONFIG_SOC_AM33XX) += \
 	am335x-base0033.dtb \
 	am335x-bone.dtb \
 	am335x-boneblack.dtb \
+	am335x-boneblack-uboot.dtb \
+	BONE-ADC.dtbo \
+	BBORG_FAN-A000.dtbo \
+	BBORG_COMMS-00A2.dtbo \
+	BB-BONE-eMMC1-01-00A0.dtbo \
+	BB-BBGW-WL1835-00A0.dtbo \
+	BB-BBGG-WL1835-00A0.dtbo \
+	BB-BBBW-WL1835-00A0.dtbo \
+	BB-ADC-00A0.dtbo \
+	AM57XX-PRU-UIO-00A0.dtbo \
+	AM335X-PRU-UIO-00A0.dtbo \
 	am335x-boneblack-wireless.dtb \
 	am335x-boneblue.dtb \
 	am335x-bonegreen.dtb \
