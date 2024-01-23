@@ -168,6 +168,12 @@ config CAN_KVASER_PCIEFD
 	    Kvaser Mini PCI Express 1xCAN v3
 	    Kvaser Mini PCI Express 2xCAN v3
 
+config CAN_POLARFIRE_SOC
+	tristate "Microchip Polarfire SoC CAN"
+	depends on SOC_MICROCHIP_POLARFIRE || COMPILE_TEST
+	help
+	  Microchip Polarfire SoC CAN driver.
+
 config CAN_SLCAN
 	tristate "Serial / USB serial CAN Adaptors (slcan)"
 	depends on TTY
