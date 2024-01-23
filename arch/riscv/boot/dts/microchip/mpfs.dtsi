@@ -408,6 +408,7 @@
 			clocks = <&clkcfg CLK_CAN0>, <&clkcfg CLK_MSSPLL3>;
 			interrupt-parent = <&plic>;
 			interrupts = <56>;
+			resets = <&clkcfg CLK_CAN0>;
 			status = "disabled";
 		};
 
@@ -417,6 +418,7 @@
 			clocks = <&clkcfg CLK_CAN1>, <&clkcfg CLK_MSSPLL3>;
 			interrupt-parent = <&plic>;
 			interrupts = <57>;
+			resets = <&clkcfg CLK_CAN1>;
 			status = "disabled";
 		};
 
