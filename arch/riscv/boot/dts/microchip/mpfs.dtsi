@@ -568,7 +568,7 @@
 		};
 	};
 
-	fabric-bus4@22000000 {
+	fabric-bus@22000000 {
 		compatible = "simple-bus";
 		#address-cells = <2>;
 		#size-cells = <2>;
