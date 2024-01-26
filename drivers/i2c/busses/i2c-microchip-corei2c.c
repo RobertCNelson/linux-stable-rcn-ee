@@ -444,6 +444,7 @@ static int mchp_corei2c_smbus_xfer(struct i2c_adapter *adap, u16 addr,
 
 	switch (size) {
 	case I2C_SMBUS_QUICK:
+		ret = 0;
 		break;
 	case I2C_SMBUS_BYTE:
 		ret = mchp_corei2c_smbus_xfer_msg(idev, addr, read_write, size, data);
