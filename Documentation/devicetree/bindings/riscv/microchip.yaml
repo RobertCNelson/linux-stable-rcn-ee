@@ -24,13 +24,16 @@ properties:
               - microchip,mpfs-icicle-reference-rtlv2210
           - const: microchip,mpfs-icicle-kit
           - const: microchip,mpfs
+      - items:
+          - const: microchip,mpfs-video-kit
+          - const: microchip,mpfs-sev-kit
+          - const: microchip,mpfs
 
       - items:
           - enum:
               - aldec,tysom-m-mpfs250t-rev2
               - aries,m100pfsevp
               - microchip,mpfs-sev-kit
-              - microchip,mpfs-video-kit
               - sundance,polarberry
           - const: microchip,mpfs
 
