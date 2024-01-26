@@ -570,8 +570,10 @@
 
 	fabric-bus@22000000 {
 		compatible = "simple-bus";
+		reg = <0x0 0x22000000 0x0 0x10000>;
 		#address-cells = <2>;
 		#size-cells = <2>;
+		ranges;
 
 		crypto: crypto@22000000 {
 			compatible = "microchip,mpfs-crypto";
