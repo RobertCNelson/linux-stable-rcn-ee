@@ -39,9 +39,10 @@ properties:
   ngpios:
     description:
       The number of GPIOs available.
-    enum: [14, 24, 32]
+    enum: [14, 16, 20, 24, 32]
 
   gpio-controller: true
+  gpio-line-names: true
 
 patternProperties:
   "^.+-hog(-[0-9]+)?$":
@@ -61,12 +62,21 @@ patternProperties:
       - gpio-hog
       - gpios
 
+allOf:
+  - if:
+      properties:
+        compatible:
+          contains:
+            const: microchip,mpfs-gpio
+    then:
+      required:
+        - interrupts
+        - "#interrupt-cells"
+        - interrupt-controller
+
 required:
   - compatible
   - reg
-  - interrupts
-  - "#interrupt-cells"
-  - interrupt-controller
   - "#gpio-cells"
   - gpio-controller
   - ngpios
