@@ -39,7 +39,7 @@ examples:
     crypto@22000000 {
         compatible = "microchip,mpfs-crypto";
         reg = <0x0 0x22000000 0x0 0x10000>;
-        clocks = <&clkcfg CLK_ATHENA>, <&clkcfg CLK_MSSPLL1>;
+        clocks = <&clkcfg 0>, <&clkcfg 1>;
         interrupt-parent = <&plic>;
         interrupts = <112>;
     };
