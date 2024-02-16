@@ -175,7 +175,19 @@
 	};
 };
 
+/*
+ * The label can0 represents CAN_0 in the MSS configurator which is CAN2
+ * in the icicle kit schematic and on the icicle kit the can0 pins are
+ * routed to J27 header.
+ * The label can1 represents CAN_1 in the MSS configurator which is CAN1
+ * in the icicle kit schematic and on the icicle kit the can1 pins are
+ * routed to J25 header.
+ */
 &can0 {
+	status = "okay";
+};
+
+&can1 {
 	status = "okay";
 };
 
