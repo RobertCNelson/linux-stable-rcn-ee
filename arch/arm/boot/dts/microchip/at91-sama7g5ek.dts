@@ -229,6 +229,7 @@
 	status = "okay";
 
 	i2c1: i2c@600 {
+		dmas = <0>, <0>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_i2c1_default>;
 		i2c-analog-filter;
@@ -397,12 +398,41 @@
 	status = "okay";
 
 	i2c8: i2c@600 {
+		dmas = <0>, <0>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_i2c8_default>;
 		i2c-analog-filter;
 		i2c-digital-filter;
 		i2c-digital-filter-width-ns = <35>;
 		status = "okay";
+
+		eeprom0: eeprom0@52 {
+			compatible = "atmel,24mac02e4";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x52>;
+			pagesize = <16>;
+			size = <256>;
+			status = "okay";
+
+			eeprom0_eui48: eui48@fa {
+				reg = <0xfa 0x6>;
+			};
+		};
+
+		eeprom1: eeprom1@53 {
+			compatible = "atmel,24mac02e4";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x53>;
+			pagesize = <16>;
+			size = <256>;
+			status = "okay";
+
+			eeprom1_eui48: eui48@fa {
+				reg = <0xfa 0x6>;
+			};
+		};
 	};
 };
 
@@ -411,6 +441,7 @@
 	status = "okay";
 
 	i2c9: i2c@600 {
+		dmas = <0>, <0>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_i2c9_default>;
 		i2c-analog-filter;
@@ -442,6 +473,9 @@
 	phy-mode = "rgmii-id";
 	status = "okay";
 
+	nvmem-cells = <&eeprom0_eui48>;
+	nvmem-cell-names = "mac-address";
+
 	ethernet-phy@7 {
 		reg = <0x7>;
 		interrupt-parent = <&pioA>;
@@ -458,6 +492,9 @@
 		     &pinctrl_gmac1_phy_irq>;
 	phy-mode = "rmii";
 	status = "okay"; /* Conflict with pdmc0. */
+
+	nvmem-cells = <&eeprom1_eui48>;
+	nvmem-cell-names = "mac-address";
 
 	ethernet-phy@0 {
 		reg = <0x0>;
