@@ -90,6 +90,8 @@ enum spi_mem_data_dir {
  * @data.buswidth: number of IO lanes used to send/receive the data
  * @data.dtr: whether the data should be sent in DTR mode or not
  * @data.ecc: whether error correction is required or not
+ * @data.dtr_bswap16: whether the byte order of 16-bit words is swapped when
+ *		      read or written in DTR mode compared to STR mode.
  * @data.dir: direction of the transfer
  * @data.nbytes: number of data bytes to send/receive. Can be zero if the
  *		 operation does not involve transferring data
@@ -125,6 +127,7 @@ struct spi_mem_op {
 		u8 dtr : 1;
 		u8 ecc : 1;
 		u8 __pad : 6;
+		u8 dtr_bswap16 : 1;
 		enum spi_mem_data_dir dir;
 		unsigned int nbytes;
 		union {
