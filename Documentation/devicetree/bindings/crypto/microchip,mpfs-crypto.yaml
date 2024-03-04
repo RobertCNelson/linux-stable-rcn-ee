@@ -20,7 +20,6 @@ properties:
     maxItems: 1
 
   clocks:
-    maxItems: 2
     items:
       - description: AHB peripheral clock
       - description: Crypto clock
