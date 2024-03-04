@@ -4,7 +4,7 @@
 $id: "http://devicetree.org/schemas/remoteproc/microchip,miv-remoteproc.yaml#"
 $schema: "http://devicetree.org/meta-schemas/core.yaml#"
 
-title: Microchip Mi-V Remoteproc Bindings
+title: Microchip Mi-V Remoteproc
 
 description:
   Microchip's SoCs using the Mi-V ecosystem typically have one or more
