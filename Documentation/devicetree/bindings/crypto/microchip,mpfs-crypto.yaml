@@ -37,7 +37,7 @@ examples:
     #include "dt-bindings/clock/microchip,mpfs-clock.h"
     crypto@22000000 {
         compatible = "microchip,mpfs-crypto";
-        reg = <0x0 0x22000000 0x0 0x10000>;
+        reg = <0x22000000 0x10000>;
         clocks = <&clkcfg 0>, <&clkcfg 1>;
         interrupt-parent = <&plic>;
         interrupts = <112>;
