@@ -6,6 +6,7 @@ config ARCH_MICROCHIP_POLARFIRE
 config SOC_MICROCHIP_POLARFIRE
 	bool "Microchip PolarFire SoCs"
 	select DMA_GLOBAL_POOL
+	select RISCV_NONSTANDARD_CACHE_OPS
 	help
 	  This enables support for Microchip PolarFire SoC platforms.
 
