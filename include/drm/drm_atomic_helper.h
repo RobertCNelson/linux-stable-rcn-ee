@@ -76,6 +76,9 @@ void drm_atomic_helper_async_commit(struct drm_device *dev,
 int drm_atomic_helper_wait_for_fences(struct drm_device *dev,
 					struct drm_atomic_state *state,
 					bool pre_swap);
+bool drm_atomic_helper_framebuffer_changed(struct drm_device *dev,
+					   struct drm_atomic_state *old_state,
+					   struct drm_crtc *crtc);
 
 void drm_atomic_helper_wait_for_vblanks(struct drm_device *dev,
 					struct drm_atomic_state *old_state);
