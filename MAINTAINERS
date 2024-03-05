@@ -3285,6 +3285,13 @@ T:	git git://github.com/ndyer/linux.git
 F:	Documentation/devicetree/bindings/input/atmel,maxtouch.yaml
 F:	drivers/input/touchscreen/atmel_mxt_ts.c
 
+ATMEL PTC SUBSYSTEM DRIVER
+M:	Ludovic Desroches <ludovic.desroches@microchip.com>
+L:	linux-input@vger.kernel.org
+S:	Supported
+F:	Documentation/devicetree/bindings/input/atmel,ptc.txt
+F:	drivers/input/misc/atmel_ptc.c
+
 ATMEL WIRELESS DRIVER
 L:	linux-wireless@vger.kernel.org
 S:	Orphan
