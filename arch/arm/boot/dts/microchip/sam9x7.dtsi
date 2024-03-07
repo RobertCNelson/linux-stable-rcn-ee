@@ -12,6 +12,7 @@
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/interrupt-controller/arm-gic.h>
 #include <dt-bindings/interrupt-controller/irq.h>
+#include <dt-bindings/mfd/at91-usart.h>
 #include <dt-bindings/mfd/atmel-flexcom.h>
 #include <dt-bindings/pinctrl/at91.h>
 
@@ -1197,6 +1198,7 @@
 		dbgu: serial@fffff200 {
 			compatible = "microchip,sam9x60-dbgu", "microchip,sam9x60-usart", "atmel,at91sam9260-dbgu", "atmel,at91sam9260-usart";
 			reg = <0xfffff200 0x200>;
+			atmel,usart-mode = <AT91_USART_MODE_SERIAL>;
 			interrupts = <47 IRQ_TYPE_LEVEL_HIGH 7>;
 			dmas = <&dma0
 				(AT91_XDMAC_DT_MEM_IF(0) | AT91_XDMAC_DT_PER_IF(1) |
@@ -1328,7 +1330,6 @@
 			compatible = "microchip,sam9x60-wdt";
 			reg = <0xffffff80 0x24>;
 			interrupts = <1 IRQ_TYPE_LEVEL_HIGH 7>;
-			clocks = <&clk32k 0>;
 			status = "disabled";
 		};
 	};
