@@ -456,6 +456,10 @@
 	status = "okay";
 };
 
+&rtt {
+	atmel,rtt-rtc-time-reg = <&gpbr 0x0>;
+};
+
 &shutdown_controller {
 	debounce-delay-us = <976>;
 	status = "okay";
