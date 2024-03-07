@@ -74,6 +74,14 @@
 		device_type = "memory";
 		reg = <0x20000000 0x10000000>;
 	};
+
+	sound {
+		compatible = "mikroe,mikroe-proto";
+		model = "wm8731 @ sam9x75eb";
+		i2s-controller = <&i2s>;
+		audio-codec = <&wm8731>;
+		dai-format = "i2s";
+	};
 };
 
 &can0 {
@@ -248,6 +256,11 @@
 					};
 				};
 			};
+		};
+
+		wm8731: codec@1a {
+			compatible = "wlf,wm8731";
+			reg = <0x1a>;
 		};
 	};
 };
