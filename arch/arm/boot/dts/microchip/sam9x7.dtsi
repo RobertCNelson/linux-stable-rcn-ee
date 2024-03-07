@@ -504,8 +504,9 @@
 			interrupt-names = "int0", "int1";
 			clocks = <&pmc PMC_TYPE_PERIPHERAL 29>, <&pmc PMC_TYPE_GCK 29>;
 			clock-names = "hclk", "cclk";
-			assigned-clocks = <&pmc PMC_TYPE_GCK 29>;
-			assigned-clock-rates = <40000000>;
+			assigned-clocks = <&pmc PMC_TYPE_CORE PMC_UTMI>, <&pmc PMC_TYPE_GCK 30>;
+			assigned-clock-rates = <480000000>, <40000000>;
+			assigned-clock-parents = <&pmc PMC_TYPE_CORE PMC_UTMI>, <&pmc PMC_TYPE_CORE PMC_UTMI>;
 			bosch,mram-cfg = <0x3400 0 0 64 0 0 32 32>;
 			status = "disabled";
 		};
@@ -519,8 +520,9 @@
 			interrupt-names = "int0", "int1";
 			clocks = <&pmc PMC_TYPE_PERIPHERAL 30>, <&pmc PMC_TYPE_GCK 30>;
 			clock-names = "hclk", "cclk";
-			assigned-clocks = <&pmc PMC_TYPE_GCK 30>;
-			assigned-clock-rates = <40000000>;
+			assigned-clocks = <&pmc PMC_TYPE_CORE PMC_UTMI>, <&pmc PMC_TYPE_GCK 30>;
+			assigned-clock-rates = <480000000>, <40000000>;
+			assigned-clock-parents = <&pmc PMC_TYPE_CORE PMC_UTMI>, <&pmc PMC_TYPE_CORE PMC_UTMI>;
 			bosch,mram-cfg = <0x7800 0 0 64 0 0 32 32>;
 			status = "disabled";
 		};
