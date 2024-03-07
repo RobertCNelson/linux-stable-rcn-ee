@@ -86,7 +86,7 @@
 	#address-cells = <1>;
 	#size-cells = <0>;
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_flx6_default>;
+	pinctrl-0 = <&pinctrl_flx6_twi_default>;
 	i2c-analog-filter;
 	i2c-digital-filter;
 	i2c-digital-filter-width-ns = <35>;
