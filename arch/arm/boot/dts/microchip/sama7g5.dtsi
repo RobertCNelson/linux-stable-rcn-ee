@@ -242,7 +242,7 @@
 			compatible = "microchip,sama7g5-ohci", "usb-ohci";
 			reg = <0x00400000 0x100000>;
 			interrupts = <GIC_SPI 106 IRQ_TYPE_LEVEL_HIGH>;
-			clocks = <&pmc PMC_TYPE_PERIPHERAL 106>, <&pmc PMC_TYPE_CORE UTMI1>, <&usb_clk>;
+			clocks = <&pmc PMC_TYPE_PERIPHERAL 106>, <&utmi_clk UTMI1>, <&usb_clk>;
 			clock-names = "ohci_clk", "hclk", "uhpck";
 			status = "disabled";
 		};
