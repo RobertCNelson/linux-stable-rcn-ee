@@ -42,7 +42,7 @@
 		sw1 {
 			label = "USER";
 			gpios = <&pioC 24 GPIO_ACTIVE_LOW>;
-			linux,code = <KEY_PROG1>;
+			linux,code = <KEY_0>;
 			wakeup-source;
 		};
 	};
