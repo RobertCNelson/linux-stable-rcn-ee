@@ -53,17 +53,17 @@
 		pinctrl-0 = <&pinctrl_led_gpio_default>;
 		status = "okay";
 
-		led-0 {
+		red_led: red-led {
 			label = "red";
 			gpios = <&pioC 19 GPIO_ACTIVE_HIGH>;
 		};
 
-		led-1 {
+		green_led: green-led {
 			label = "green";
 			gpios = <&pioC 21 GPIO_ACTIVE_HIGH>;
 		};
 
-		led-2 {
+		blue_led: blue-led {
 			label = "blue";
 			gpios = <&pioC 20 GPIO_ACTIVE_HIGH>;
 			linux,default-trigger = "heartbeat";
