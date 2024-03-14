@@ -974,6 +974,34 @@
 			status = "disabled";
 		};
 
+		/*
+		 * LCDC Clock related properties will be defined in the DT overlay file
+		 * considering LCDC Generic Clock is disabled with LVDS Display.
+		 */
+		hlcdc: hlcdc@f8038000 {
+			compatible = "microchip,sam9x75-xlcdc";
+			reg = <0xf8038000 0x4000>;
+			interrupts = <25 IRQ_TYPE_LEVEL_HIGH 0>;
+			status = "disabled";
+
+			hlcdc-display-controller {
+				compatible = "atmel,hlcdc-display-controller";
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				port@0 {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					reg = <0>;
+				};
+			};
+
+			hlcdc_pwm: hlcdc-pwm {
+				compatible = "atmel,hlcdc-pwm";
+				#pwm-cells = <3>;
+			};
+		};
+
 		flx9: flexcom@f8040000 {
 			compatible = "atmel,sama5d2-flexcom";
 			reg = <0xf8040000 0x200>;
