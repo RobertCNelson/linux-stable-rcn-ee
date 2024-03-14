@@ -63,6 +63,14 @@
 	};
 };
 
+&classd {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_classd>;
+	atmel,pwm-type = "diff";
+	atmel,non-overlap-time = <10>;
+	status = "okay";
+};
+
 &dbgu {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_dbgu>;
@@ -234,6 +242,14 @@
 };
 
 &pinctrl {
+
+	classd {
+		pinctrl_classd: classd {
+			atmel,pins =
+				<AT91_PIOA 18 AT91_PERIPH_C AT91_PINCTRL_PULL_UP
+				 AT91_PIOA 19 AT91_PERIPH_C AT91_PINCTRL_PULL_DOWN>;
+		};
+	};
 
 	dbgu {
 		pinctrl_dbgu: dbgu {
