@@ -312,7 +312,7 @@
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_i2s_default>;
 	#sound-dai-cells = <0>;
-	status = "okay";
+	status = "disabled"; /* Conflict with qspi */
 };
 
 &ohci0 {
@@ -467,6 +467,23 @@
 		};
 	};
 
+	qspi {
+		pinctrl_qspi: qspi {
+			atmel,pins =
+				<AT91_PIOB 19 AT91_PERIPH_A AT91_PINCTRL_SLEWRATE_DIS					/* QSCK */
+				 AT91_PIOB 20 AT91_PERIPH_A AT91_PINCTRL_SLEWRATE_DIS					/* QCS	*/
+				 AT91_PIOB 21 AT91_PERIPH_A (AT91_PINCTRL_PULL_UP | AT91_PINCTRL_SLEWRATE_DIS)		/* QIO0	*/
+				 AT91_PIOB 22 AT91_PERIPH_A (AT91_PINCTRL_PULL_UP | AT91_PINCTRL_SLEWRATE_DIS)		/* QIO1	*/
+				 AT91_PIOB 23 AT91_PERIPH_A (AT91_PINCTRL_PULL_UP | AT91_PINCTRL_SLEWRATE_DIS)		/* QIO2	*/
+				 AT91_PIOB 24 AT91_PERIPH_A (AT91_PINCTRL_PULL_UP | AT91_PINCTRL_SLEWRATE_DIS)		/* QIO3	*/
+				 AT91_PIOB 26 AT91_PERIPH_A (AT91_PINCTRL_PULL_UP | AT91_PINCTRL_SLEWRATE_DIS)		/* QIO4	*/
+				 AT91_PIOB 15 AT91_PERIPH_A (AT91_PINCTRL_PULL_UP | AT91_PINCTRL_SLEWRATE_DIS)		/* QIO5	*/
+				 AT91_PIOB 16 AT91_PERIPH_A (AT91_PINCTRL_PULL_UP | AT91_PINCTRL_SLEWRATE_DIS)		/* QIO6	*/
+				 AT91_PIOB 17 AT91_PERIPH_A (AT91_PINCTRL_PULL_UP | AT91_PINCTRL_SLEWRATE_DIS)		/* QIO7	*/
+				 AT91_PIOB 25 AT91_PERIPH_A (AT91_PINCTRL_PULL_UP | AT91_PINCTRL_SLEWRATE_DIS)>;	/* QINT	*/
+		};
+	};
+
 	sdmmc0 {
 		pinctrl_sdmmc0_default: sdmmc0 {
 			atmel,pins =
@@ -485,6 +502,53 @@
 		};
 	};
 }; /* pinctrl */
+
+&qspi {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_qspi>;
+	status = "okay";
+
+	flash@0 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <100000000>;
+		spi-tx-bus-width = <8>;
+		spi-rx-bus-width = <8>;
+		m25p,fast-read;
+
+		at91bootstrap@0 {
+			label = "ospi: at91bootstrap";
+			reg = <0x0 0x40000>;
+		};
+
+		bootloader@40000 {
+			label = "ospi: bootloader";
+			reg = <0x40000 0xc0000>;
+		};
+
+		bootloaderenvred@100000 {
+			label = "ospi: bootloader env redundant";
+			reg = <0x100000 0x40000>;
+		};
+
+		bootloaderenv@140000 {
+			label = "ospi: bootloader env";
+			reg = <0x140000 0x40000>;
+		};
+
+		dtb@180000 {
+			label = "ospi: device tree";
+			reg = <0x180000 0x80000>;
+		};
+
+		kernel@200000 {
+			label = "ospi: kernel";
+			reg = <0x200000 0x600000>;
+		};
+	};
+};
 
 &rtt {
 	atmel,rtt-rtc-time-reg = <&gpbr 0x0>;
