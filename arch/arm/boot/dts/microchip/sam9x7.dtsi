@@ -1224,6 +1224,7 @@
 			compatible = "microchip,sam9x60-pmecc", "atmel,at91sam9g45-pmecc";
 			reg = <0xffffe000 0x300>,
 			      <0xffffe600 0x100>;
+			clocks = <&pmc PMC_TYPE_PERIPHERAL 48>;
 		};
 
 		mpddrc: mpddrc@ffffe800 {
