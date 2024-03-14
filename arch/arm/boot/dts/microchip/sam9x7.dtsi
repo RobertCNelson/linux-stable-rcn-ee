@@ -997,6 +997,15 @@
 			status = "disabled";
 		};
 
+		pwm0: pwm@f8034000 {
+			compatible = "microchip,sam9x60-pwm";
+			reg = <0xf8034000 0x300>;
+			interrupts = <18 IRQ_TYPE_LEVEL_HIGH 4>;
+			clocks = <&pmc PMC_TYPE_PERIPHERAL 18>;
+			#pwm-cells = <3>;
+			status= "disabled";
+		};
+
 		/*
 		 * LCDC Clock related properties will be defined in the DT overlay file
 		 * considering LCDC Generic Clock is disabled with LVDS Display.
