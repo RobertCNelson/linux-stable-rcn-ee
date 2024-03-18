@@ -4,7 +4,6 @@
 #include <linux/init.h>
 #include <linux/err.h>
 #include <linux/module.h>
-#include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 #include <sound/soc.h>
@@ -13,6 +12,7 @@
 #include <sound/pcm.h>
 #include <asm/dma.h>
 #include <linux/dma-mapping.h>
+#include <linux/of_device.h>
 #include <sound/pcm_params.h>
 #include "q6apm.h"
 
