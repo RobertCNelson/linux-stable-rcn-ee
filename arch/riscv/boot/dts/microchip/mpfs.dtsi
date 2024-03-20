@@ -178,6 +178,12 @@
 		mboxes = <&mbox 0>;
 	};
 
+	scbclk: mssclkclk {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <80000000>;
+	};
+
 	soc {
 		#address-cells = <2>;
 		#size-cells = <2>;
@@ -199,7 +205,7 @@
 		clint: clint@2000000 {
 			compatible = "sifive,fu540-c000-clint", "sifive,clint0";
 			reg = <0x0 0x2000000 0x0 0xC000>;
-			interrupts-extended = <&cpu0_intc 3>, <&cpu0_intc 7>,
+			interrupts-extended = <&cpu0_intc 0xffffffff>, <&cpu0_intc 0xffffffff>,
 					      <&cpu1_intc 3>, <&cpu1_intc 7>,
 					      <&cpu2_intc 3>, <&cpu2_intc 7>,
 					      <&cpu3_intc 3>, <&cpu3_intc 7>,
@@ -212,20 +218,19 @@
 			#address-cells = <0>;
 			#interrupt-cells = <1>;
 			interrupt-controller;
-			interrupts-extended = <&cpu0_intc 11>,
-					      <&cpu1_intc 11>, <&cpu1_intc 9>,
-					      <&cpu2_intc 11>, <&cpu2_intc 9>,
-					      <&cpu3_intc 11>, <&cpu3_intc 9>,
-					      <&cpu4_intc 11>, <&cpu4_intc 9>;
+			interrupts-extended = <&cpu0_intc 0xffffffff>,
+					      <&cpu1_intc 0xffffffff>, <&cpu1_intc 9>,
+					      <&cpu2_intc 0xffffffff>, <&cpu2_intc 9>,
+					      <&cpu3_intc 0xffffffff>, <&cpu3_intc 9>,
+					      <&cpu4_intc 0xffffffff>, <&cpu4_intc 9>;
 			riscv,ndev = <186>;
 		};
-
+	
 		pdma: dma-controller@3000000 {
-			compatible = "sifive,fu540-c000-pdma", "sifive,pdma0";
+			compatible = "microchip,mpfs-pdma", "sifive,fu540-c000-pdma";
 			reg = <0x0 0x3000000 0x0 0x8000>;
 			interrupt-parent = <&plic>;
 			interrupts = <5 6>, <7 8>, <9 10>, <11 12>;
-			dma-channels = <4>;
 			#dma-cells = <1>;
 		};
 
@@ -400,18 +405,20 @@
 		can0: can@2010c000 {
 			compatible = "microchip,mpfs-can";
 			reg = <0x0 0x2010c000 0x0 0x1000>;
-			clocks = <&clkcfg CLK_CAN0>;
+			clocks = <&clkcfg CLK_CAN0>, <&clkcfg CLK_MSSPLL3>;
 			interrupt-parent = <&plic>;
 			interrupts = <56>;
+			resets = <&clkcfg CLK_CAN0>;
 			status = "disabled";
 		};
 
 		can1: can@2010d000 {
 			compatible = "microchip,mpfs-can";
 			reg = <0x0 0x2010d000 0x0 0x1000>;
-			clocks = <&clkcfg CLK_CAN1>;
+			clocks = <&clkcfg CLK_CAN1>, <&clkcfg CLK_MSSPLL3>;
 			interrupt-parent = <&plic>;
 			interrupts = <57>;
+			resets = <&clkcfg CLK_CAN1>;
 			status = "disabled";
 		};
 
@@ -443,39 +450,79 @@
 			status = "disabled";
 		};
 
-		gpio0: gpio@20120000 {
-			compatible = "microchip,mpfs-gpio";
-			reg = <0x0 0x20120000 0x0 0x1000>;
+		irqmux: interrupt-controller@20002054 {
+			compatible = "microchip,mpfs-gpio-irq-mux";
+			reg = <0x0 0x20002054 0x0 0x4>;
 			interrupt-parent = <&plic>;
 			interrupt-controller;
 			#interrupt-cells = <1>;
+			interrupts = <13>, <14>, <15>, <16>,
+				     <17>, <18>, <19>, <20>,
+				     <21>, <22>, <23>, <24>,
+				     <25>, <26>, <27>, <28>,
+				     <29>, <30>, <31>, <32>,
+				     <33>, <34>, <35>, <36>,
+				     <37>, <38>, <39>, <40>,
+				     <41>, <42>, <43>, <44>,
+				     <45>, <46>, <47>, <48>,
+				     <49>, <50>, <51>, <52>,
+				     <53>;
+		};
+
+		gpio0: gpio@20120000 {
+			compatible = "microchip,mpfs-gpio";
+			reg = <0x0 0x20120000 0x0 0x1000>;
+			interrupt-parent = <&irqmux>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+			interrupts = <0>, <1>, <2>, <3>,
+				     <4>, <5>, <6>, <7>,
+				     <8>, <9>, <10>, <11>,
+				     <12>, <13>;
 			clocks = <&clkcfg CLK_GPIO0>;
 			gpio-controller;
 			#gpio-cells = <2>;
+			ngpios = <14>;
 			status = "disabled";
 		};
 
 		gpio1: gpio@20121000 {
 			compatible = "microchip,mpfs-gpio";
 			reg = <0x0 0x20121000 0x0 0x1000>;
-			interrupt-parent = <&plic>;
+			interrupt-parent = <&irqmux>;
 			interrupt-controller;
-			#interrupt-cells = <1>;
+			#interrupt-cells = <2>;
+			interrupts = <32>, <33>, <34>, <35>,
+				     <36>, <37>, <38>, <39>,
+				     <40>, <41>, <42>, <43>,
+				     <44>, <45>, <46>, <47>,
+				     <48>, <49>, <50>, <51>,
+				     <52>, <53>, <54>, <55>;
 			clocks = <&clkcfg CLK_GPIO1>;
 			gpio-controller;
 			#gpio-cells = <2>;
+			ngpios = <24>;
 			status = "disabled";
 		};
 
 		gpio2: gpio@20122000 {
 			compatible = "microchip,mpfs-gpio";
 			reg = <0x0 0x20122000 0x0 0x1000>;
-			interrupt-parent = <&plic>;
+			interrupt-parent = <&irqmux>;
 			interrupt-controller;
-			#interrupt-cells = <1>;
+			#interrupt-cells = <2>;
+			interrupts = <64>, <65>, <66>, <67>,
+				     <68>, <69>, <70>, <71>,
+				     <72>, <73>, <74>, <75>,
+				     <76>, <77>, <78>, <79>,
+				     <80>, <81>, <82>, <83>,
+				     <84>, <85>, <86>, <87>,
+				     <88>, <89>, <90>, <91>,
+				     <92>, <93>, <94>, <95>;
 			clocks = <&clkcfg CLK_GPIO2>;
 			gpio-controller;
 			#gpio-cells = <2>;
+			ngpios = <32>;
 			status = "disabled";
 		};
 
@@ -495,7 +542,7 @@
 			interrupt-parent = <&plic>;
 			interrupts = <86>, <87>;
 			clocks = <&clkcfg CLK_USB>;
-			interrupt-names = "dma","mc";
+			interrupt-names = "dma", "mc";
 			status = "disabled";
 		};
 
@@ -506,6 +553,34 @@
 			interrupt-parent = <&plic>;
 			interrupts = <96>;
 			#mbox-cells = <1>;
+			status = "disabled";
+		};
+
+		syscontroller_qspi: spi@37020100 {
+			compatible = "microchip,mpfs-qspi", "microchip,coreqspi-rtl-v2";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x0 0x37020100 0x0 0x100>;
+			interrupt-parent = <&plic>;
+			interrupts = <110>;
+			clocks = <&scbclk>;
+			status = "disabled";
+		};
+	};
+
+	fabric-bus@22000000 {
+		compatible = "simple-bus";
+		reg = <0x0 0x22000000 0x0 0x10000>;
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		crypto: crypto@22000000 {
+			compatible = "microchip,mpfs-crypto";
+			reg = <0x0 0x22000000 0x0 0x10000>;
+			clocks = <&clkcfg CLK_ATHENA>, <&clkcfg CLK_MSSPLL1>;
+			interrupt-parent = <&plic>;
+			interrupts = <112>;
 			status = "disabled";
 		};
 	};

@@ -5,8 +5,6 @@
 
 #include "mpfs.dtsi"
 #include "mpfs-icicle-kit-fabric.dtsi"
-#include <dt-bindings/gpio/gpio.h>
-#include <dt-bindings/leds/common.h>
 
 /* Clock frequency (in Hz) of the rtcclk */
 #define RTCCLK_FREQ		1000000
@@ -41,34 +39,6 @@
 
 	cpus {
 		timebase-frequency = <RTCCLK_FREQ>;
-	};
-
-	leds {
-		compatible = "gpio-leds";
-
-		led-1 {
-			gpios = <&gpio2 16 GPIO_ACTIVE_HIGH>;
-			color = <LED_COLOR_ID_RED>;
-			label = "led1";
-		};
-
-		led-2 {
-			gpios = <&gpio2 17 GPIO_ACTIVE_HIGH>;
-			color = <LED_COLOR_ID_RED>;
-			label = "led2";
-		};
-
-		led-3 {
-			gpios = <&gpio2 18 GPIO_ACTIVE_HIGH>;
-			color = <LED_COLOR_ID_AMBER>;
-			label = "led3";
-		};
-
-		led-4 {
-			gpios = <&gpio2 19 GPIO_ACTIVE_HIGH>;
-			color = <LED_COLOR_ID_AMBER>;
-			label = "led4";
-		};
 	};
 
 	kernel: memory@80000000 {
@@ -140,6 +110,41 @@
 			reg = <0x0 0xd8000000 0x0 0x2000000>;
 			no-map;
 		};
+
+		contextb_reserved: contextb_reserved@91c00000 {
+			reg = <0x0 0x91c00000 0x0 0x100000>;
+			no-map;
+		};
+
+		vdev0vring0: vdev0vring0@91d00000 {
+			reg = <0x0 0x91d00000 0x0 0x8000>;
+			no-map;
+		};
+
+		vdev0vring1: vdev0vring1@91d08000 {
+			reg = <0x0 0x91d08000 0x0 0x8000>;
+			no-map;
+		};
+
+		vdev0buffer: vdev0buff@91d10000 {
+			compatible = "shared-dma-pool";
+			reg = <0x0 0x91d10000 0x0 0x40000>;
+			no-map;
+		};
+
+		rsctable: rsc-table@91d50000 {
+			reg = <0x0 0x91d50000 0x0 0x1000>;
+			no-map;
+		};
+	};
+
+	rproc_contextb: remote-context {
+		compatible = "microchip,miv-remoteproc";
+		memory-region = <&vdev0buffer>, <&rsctable>,
+				<&contextb_reserved>, <&vdev0vring0>,
+				<&vdev0vring1>;
+		mboxes= <&ihc 0>;
+		status = "okay";
 	};
 
 	udmabuf0 {
@@ -190,16 +195,8 @@
 	status = "okay";
 };
 
-&fpgadma {
-	status = "okay";
-};
-
-&fpgalsram {
-	status = "okay";
-};
-
-&gpio2 {
-	status = "okay";
+&cpu4 {
+	status = "disabled"; // in use by context b
 };
 
 &i2c0 {
@@ -211,6 +208,22 @@
 };
 
 &i2c2 {
+	status = "okay";
+};
+
+&ihc {
+	status = "okay";
+};
+
+&fpgadma {
+	status = "okay";
+};
+
+&fpgalsram {
+	status = "okay";
+};
+
+&gpio2 {
 	status = "okay";
 };
 
@@ -264,7 +277,7 @@
 };
 
 &mmuart3 {
-	status = "okay";
+	status = "disabled"; // in use by context b
 };
 
 &mmuart4 {
