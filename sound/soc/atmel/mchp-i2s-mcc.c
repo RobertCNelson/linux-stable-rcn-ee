@@ -504,12 +504,27 @@ static int mchp_i2s_mcc_is_running(struct mchp_i2s_mcc_dev *dev)
 	return !!(sr & (MCHP_I2SMCC_SR_TXEN | MCHP_I2SMCC_SR_RXEN));
 }
 
+static inline int mchp_i2s_mcc_period_to_maxburst(int period_size, int sample_size)
+{
+	if (!(period_size % (sample_size * 8)))
+		return 8;
+	if (!(period_size % (sample_size * 4)))
+		return 4;
+	if (!(period_size % (sample_size * 2)))
+		return 2;
+	return 1;
+}
+
 static int mchp_i2s_mcc_hw_params(struct snd_pcm_substream *substream,
 				  struct snd_pcm_hw_params *params,
 				  struct snd_soc_dai *dai)
 {
 	unsigned long rate = 0;
 	struct mchp_i2s_mcc_dev *dev = snd_soc_dai_get_drvdata(dai);
+	int sample_bytes = params_physical_width(params) / 8;
+	int period_bytes = params_period_size(params) *
+		params_channels(params) * sample_bytes;
+	int maxburst;
 	u32 mra = 0;
 	u32 mrb = 0;
 	unsigned int channels = params_channels(params);
@@ -519,9 +534,9 @@ static int mchp_i2s_mcc_hw_params(struct snd_pcm_substream *substream,
 	int ret;
 	bool is_playback = (substream->stream == SNDRV_PCM_STREAM_PLAYBACK);
 
-	dev_dbg(dev->dev, "%s() rate=%u format=%#x width=%u channels=%u\n",
+	dev_dbg(dev->dev, "%s() rate=%u format=%#x width=%u channels=%u period_bytes=%d\n",
 		__func__, params_rate(params), params_format(params),
-		params_width(params), params_channels(params));
+		params_width(params), params_channels(params), period_bytes);
 
 	switch (dev->fmt & SND_SOC_DAIFMT_FORMAT_MASK) {
 	case SND_SOC_DAIFMT_I2S:
@@ -630,11 +645,12 @@ static int mchp_i2s_mcc_hw_params(struct snd_pcm_substream *substream,
 	 * We must have the same burst size configured
 	 * in the DMA transfer and in out IP
 	 */
-	mrb |= MCHP_I2SMCC_MRB_DMACHUNK(channels);
+	maxburst = mchp_i2s_mcc_period_to_maxburst(period_bytes, sample_bytes);
+	mrb |= MCHP_I2SMCC_MRB_DMACHUNK(maxburst);
 	if (is_playback)
-		dev->playback.maxburst = 1 << (fls(channels) - 1);
+		dev->playback.maxburst = maxburst;
 	else
-		dev->capture.maxburst = 1 << (fls(channels) - 1);
+		dev->capture.maxburst = maxburst;
 
 	switch (params_format(params)) {
 	case SNDRV_PCM_FORMAT_S8:
@@ -908,14 +924,14 @@ static const struct snd_soc_dai_ops mchp_i2s_mcc_dai_ops = {
 
 static struct snd_soc_dai_driver mchp_i2s_mcc_dai = {
 	.playback = {
-		.stream_name = "I2SMCC-Playback",
+		.stream_name = "Playback",
 		.channels_min = 1,
 		.channels_max = 8,
 		.rates = MCHP_I2SMCC_RATES,
 		.formats = MCHP_I2SMCC_FORMATS,
 	},
 	.capture = {
-		.stream_name = "I2SMCC-Capture",
+		.stream_name = "Capture",
 		.channels_min = 1,
 		.channels_max = 8,
 		.rates = MCHP_I2SMCC_RATES,

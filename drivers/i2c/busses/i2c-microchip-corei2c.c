@@ -76,6 +76,7 @@
 #define CORE_I2C_FREQ		(0x14)
 #define CORE_I2C_GLITCHREG	(0x18)
 #define CORE_I2C_SLAVE1_ADDR	(0x1c)
+#define CORE_I2C_MASK_BYTE	GENMASK(7, 0)
 
 #define PCLK_DIV_960	(CTRL_CR2)
 #define PCLK_DIV_256	(0)
@@ -311,15 +312,10 @@ static irqreturn_t mchp_corei2c_isr(int irq, void *_dev)
 	return ret;
 }
 
-static int mchp_corei2c_xfer_msg(struct mchp_corei2c_dev *idev,
-				 struct i2c_msg *msg)
+static inline int mchp_corei2c_msg_transaction(struct mchp_corei2c_dev *idev)
 {
 	u8 ctrl;
 	unsigned long time_left;
-
-	idev->addr = i2c_8bit_addr_from_msg(msg);
-	idev->msg_len = msg->len;
-	idev->buf = msg->buf;
 	idev->msg_err = 0;
 
 	reinit_completion(&idev->msg_complete);
@@ -336,6 +332,16 @@ static int mchp_corei2c_xfer_msg(struct mchp_corei2c_dev *idev,
 		return -ETIMEDOUT;
 
 	return idev->msg_err;
+}
+
+static int mchp_corei2c_xfer_msg(struct mchp_corei2c_dev *idev,
+				 struct i2c_msg *msg)
+{
+	idev->addr = i2c_8bit_addr_from_msg(msg);
+	idev->msg_len = msg->len;
+	idev->buf = msg->buf;
+
+	return mchp_corei2c_msg_transaction(idev);
 }
 
 static int mchp_corei2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
@@ -358,9 +364,128 @@ static u32 mchp_corei2c_func(struct i2c_adapter *adap)
 	return I2C_FUNC_I2C | I2C_FUNC_SMBUS_EMUL;
 }
 
+static int mchp_corei2c_smbus_xfer_msg(struct mchp_corei2c_dev *idev, u16 addr,
+				       char read_write, int size,
+				       union i2c_smbus_data *data)
+{
+	int ret;
+
+	ret = mchp_corei2c_msg_transaction(idev);
+	if (ret || read_write == I2C_SMBUS_WRITE)
+		return ret;
+
+	if (size > I2C_SMBUS_BYTE) {
+		idev->addr = ((addr << SLAVE_ADDR_SHIFT) | I2C_SMBUS_READ);
+		if (size == I2C_SMBUS_BYTE_DATA || size == I2C_SMBUS_WORD_DATA) {
+			idev->msg_len = size - 1;
+		} else {
+			idev->msg_len = I2C_SMBUS_BLOCK_MAX;
+			data->block[0] = idev->msg_len;
+		}
+
+		ret = mchp_corei2c_msg_transaction(idev);
+		if (ret)
+			return ret;
+	}
+
+	if (size == I2C_SMBUS_BYTE || size == I2C_SMBUS_BYTE_DATA) {
+		data->byte = (*--(idev->buf));
+	} else if (size == I2C_SMBUS_WORD_DATA) {
+		/*
+		 * In case of SMBUS WORD DATA, first DataLow byte will be read
+		 * then DataHigh byte will read.
+		 */
+		data->word = (*(--idev->buf)) << 8;
+		data->word |= (*(--idev->buf));
+	} else {
+		/*
+		 * As per protocol first member of block is size of the block.
+		 * so first extracting the size byte traversing in reverse in
+		 * idev->buf, then extracting the remaining elements in for
+		 * loop based on size byte.
+		 */
+		for (int i = I2C_SMBUS_BLOCK_MAX; i >= 0; i--)
+			idev->buf--;
+		if (*idev->buf > I2C_SMBUS_BLOCK_MAX)
+			data->block[0] = I2C_SMBUS_BLOCK_MAX;
+		else
+			data->block[0] = *idev->buf;
+
+		for (int i = 1; i <= data->block[0]; i++)
+			data->block[i] = (*(++idev->buf));
+	}
+
+	return 0;
+}
+
+static int mchp_corei2c_smbus_xfer(struct i2c_adapter *adap, u16 addr,
+				   unsigned short flags, char read_write,
+				   u8 command, int size, union i2c_smbus_data *data)
+{
+	struct mchp_corei2c_dev *idev = i2c_get_adapdata(adap);
+	int ret;
+
+	idev->addr = (addr << SLAVE_ADDR_SHIFT);
+
+	if (size > I2C_SMBUS_BYTE && read_write == I2C_SMBUS_READ)
+		idev->msg_len = I2C_SMBUS_BYTE;
+	else
+		idev->msg_len = size;
+
+	if (size == I2C_SMBUS_QUICK)
+		idev->buf = NULL;
+	else
+		idev->buf = &command;
+
+	if (size <= I2C_SMBUS_BYTE)
+		idev->addr |= read_write;
+	else
+		idev->addr |= I2C_SMBUS_WRITE;
+
+	switch (size) {
+	case I2C_SMBUS_QUICK:
+		ret = 0;
+		break;
+	case I2C_SMBUS_BYTE:
+		ret = mchp_corei2c_smbus_xfer_msg(idev, addr, read_write, size, data);
+		break;
+	case I2C_SMBUS_BYTE_DATA:
+		if (read_write == I2C_SMBUS_WRITE)
+			idev->buf[1] = data->byte;
+
+		ret = mchp_corei2c_smbus_xfer_msg(idev, addr, read_write, size, data);
+		break;
+	case I2C_SMBUS_WORD_DATA:
+		if (read_write == I2C_SMBUS_WRITE) {
+			idev->buf[1] = (data->word & CORE_I2C_MASK_BYTE);
+			idev->buf[2] = ((data->word >> 8) & CORE_I2C_MASK_BYTE);
+		}
+
+		ret = mchp_corei2c_smbus_xfer_msg(idev, addr, read_write, size, data);
+		break;
+	case I2C_SMBUS_BLOCK_DATA:
+		if (read_write == I2C_SMBUS_WRITE) {
+			int len;
+
+			len = data->block[0];
+			idev->msg_len = len + 2;
+			for (int i = 0; i <= len; i++)
+				idev->buf[i + 1] = data->block[i];
+		}
+
+		ret = mchp_corei2c_smbus_xfer_msg(idev, addr, read_write, size, data);
+		break;
+	default:
+		return -EOPNOTSUPP;
+	}
+
+	return ret;
+}
+
 static const struct i2c_algorithm mchp_corei2c_algo = {
 	.master_xfer = mchp_corei2c_xfer,
 	.functionality = mchp_corei2c_func,
+	.smbus_xfer = mchp_corei2c_smbus_xfer,
 };
 
 static int mchp_corei2c_probe(struct platform_device *pdev)

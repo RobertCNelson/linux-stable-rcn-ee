@@ -47,6 +47,15 @@ properties:
       - const: gclk
     minItems: 1
 
+  sound-name-prefix:
+    pattern: "^I2SMCC[0-9]$"
+    $ref: /schemas/types.yaml#/definitions/string
+    description:
+      used as prefix for sink/source names of the component. Must be a
+      unique string among multiple instances of the same component.
+      The name can be "I2SMCC0" or "I2SMCC1" ... "I2SMCCx", where x depends
+      on the maximum available instances on a Microchip SoC.
+
   dmas:
     items:
       - description: TX DMA Channel

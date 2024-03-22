@@ -37,6 +37,7 @@
 #include <asm/cacheflush.h>
 #include <asm/io.h>
 #include <asm/unaligned.h>
+#include "../core/pwrseq.h"
 
 #define ATMCI_MAX_NR_SLOTS	2
 
@@ -227,6 +228,7 @@ struct mci_slot_pdata {
 /**
  * struct mci_platform_data - board-specific MMC/SDcard configuration
  * @dma_slave: DMA slave interface to use in data transfers.
+ * @dma_filter: Filtering function to filter the DMA channel
  * @slot: Per-slot configuration data.
  */
 struct mci_platform_data {
@@ -674,8 +676,10 @@ atmci_of_init(struct platform_device *pdev)
 					      "cd", GPIOD_IN, "cd-gpios");
 		err = PTR_ERR_OR_ZERO(pdata->slot[slot_id].detect_pin);
 		if (err) {
-			if (err != -ENOENT)
+			if (err != -ENOENT) {
+				of_node_put(cnp);
 				return ERR_PTR(err);
+			}
 			pdata->slot[slot_id].detect_pin = NULL;
 		}
 
@@ -687,8 +691,10 @@ atmci_of_init(struct platform_device *pdev)
 					      "wp", GPIOD_IN, "wp-gpios");
 		err = PTR_ERR_OR_ZERO(pdata->slot[slot_id].wp_pin);
 		if (err) {
-			if (err != -ENOENT)
+			if (err != -ENOENT) {
+				of_node_put(cnp);
 				return ERR_PTR(err);
+			}
 			pdata->slot[slot_id].wp_pin = NULL;
 		}
 	}
@@ -2335,8 +2341,10 @@ static int atmci_init_slot(struct atmel_mci *host,
 
 	host->slot[id] = slot;
 	mmc_regulator_get_supply(mmc);
+	mmc_pwrseq_alloc(mmc);
 	ret = mmc_add_host(mmc);
 	if (ret) {
+		mmc_pwrseq_free(mmc);
 		mmc_free_host(mmc);
 		return ret;
 	}

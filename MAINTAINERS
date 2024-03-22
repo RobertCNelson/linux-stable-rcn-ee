@@ -3285,6 +3285,13 @@ T:	git git://github.com/ndyer/linux.git
 F:	Documentation/devicetree/bindings/input/atmel,maxtouch.yaml
 F:	drivers/input/touchscreen/atmel_mxt_ts.c
 
+ATMEL PTC SUBSYSTEM DRIVER
+M:	Ludovic Desroches <ludovic.desroches@microchip.com>
+L:	linux-input@vger.kernel.org
+S:	Supported
+F:	Documentation/devicetree/bindings/input/atmel,ptc.txt
+F:	drivers/input/misc/atmel_ptc.c
+
 ATMEL WIRELESS DRIVER
 L:	linux-wireless@vger.kernel.org
 S:	Orphan
@@ -14019,6 +14026,14 @@ S:	Supported
 F:	Documentation/devicetree/bindings/regulator/mcp16502-regulator.txt
 F:	drivers/regulator/mcp16502.c
 
+MICROCHIP MCP3564 ADC DRIVER
+M:	Marius Cristea <marius.cristea@microchip.com>
+L:	linux-iio@vger.kernel.org
+S:	Supported
+F:	Documentation/ABI/testing/sysfs-bus-iio-adc-mcp3564
+F:	Documentation/devicetree/bindings/iio/adc/microchip,mcp3564.yaml
+F:	drivers/iio/adc/mcp3564.c
+
 MICROCHIP MCP3911 ADC DRIVER
 M:	Marcus Folkesson <marcus.folkesson@gmail.com>
 M:	Kent Gustavsson <kent@minoris.se>
@@ -14046,6 +14061,13 @@ S:	Supported
 F:	Documentation/devicetree/bindings/nvmem/microchip,sama7g5-otpc.yaml
 F:	drivers/nvmem/microchip-otpc.c
 F:	include/dt-bindings/nvmem/microchip,sama7g5-otpc.h
+
+MICROCHIP PAC1934 POWER/ENERGY MONITOR DRIVER
+M:	Marius Cristea <marius.cristea@microchip.com>
+L:	linux-iio@vger.kernel.org
+S:	Supported
+F:	Documentation/devicetree/bindings/iio/adc/microchip,pac1934.yaml
+F:	drivers/iio/adc/pac1934.c
 
 MICROCHIP PCI1XXXX GP DRIVER
 M:	Vaibhaav Ram T.L <vaibhaavram.tl@microchip.com>
@@ -14107,6 +14129,14 @@ M:	Conor Dooley <conor@kernel.org>
 S:	Supported
 T:	git https://git.kernel.org/pub/scm/linux/kernel/git/conor/linux.git/
 F:	drivers/soc/microchip/
+
+MICROCHIP SAM9x7-COMPATIBLE LVDS CONTROLLER
+M:	Manikandan Muralidharan <manikandan.m@microchip.com>
+M:	Dharma Balasubiramani <dharma.b@microchip.com>
+L:	dri-devel@lists.freedesktop.org
+S:	Supported
+F:	Documentation/devicetree/bindings/display/bridge/microchip,sam9x7-lvds.yaml
+F:	drivers/gpu/drm/bridge/microchip-lvds.c
 
 MICROCHIP SPI DRIVER
 M:	Ryan Wanner <ryan.wanner@microchip.com>
@@ -19577,6 +19607,13 @@ S:	Supported
 N:	sifive
 K:	[^@]sifive
 
+SIFIVE CACHE DRIVER
+M:	Conor Dooley <conor@kernel.org>
+L:	linux-riscv@lists.infradead.org
+S:	Maintained
+F:	Documentation/devicetree/bindings/cache/sifive,ccache0.yaml
+F:	drivers/cache/sifive_ccache.c
+
 SIFIVE FU540 SYSTEM-ON-CHIP
 M:	Paul Walmsley <paul.walmsley@sifive.com>
 M:	Palmer Dabbelt <palmer@dabbelt.com>
@@ -19592,13 +19629,6 @@ S:	Maintained
 F:	Documentation/devicetree/bindings/dma/sifive,fu540-c000-pdma.yaml
 F:	drivers/dma/sf-pdma/
 
-SIFIVE SOC DRIVERS
-M:	Conor Dooley <conor@kernel.org>
-L:	linux-riscv@lists.infradead.org
-S:	Maintained
-T:	git https://git.kernel.org/pub/scm/linux/kernel/git/conor/linux.git/
-F:	Documentation/devicetree/bindings/cache/sifive,ccache0.yaml
-F:	drivers/soc/sifive/
 
 SILEAD TOUCHSCREEN DRIVER
 M:	Hans de Goede <hdegoede@redhat.com>
@@ -20829,6 +20859,17 @@ M:	Eugeniy Paltsev <Eugeniy.Paltsev@synopsys.com>
 S:	Maintained
 F:	Documentation/devicetree/bindings/dma/snps,dw-axi-dmac.yaml
 F:	drivers/dma/dw-axi-dmac/
+
+SYNOPSYS DESIGNWARE MIPI DPHY CSI-2 HOST DRIVER
+M:	Luis Oliveira <luis.oliveira@synopsys.com>
+L:	linux-media@vger.kernel.org
+S:	Maintained
+T:	git git://linuxtv.org/media_tree.git
+F:	drivers/media/platform/dwc
+F:	Documentation/devicetree/bindings/media/snps,dw-csi.yaml
+F:	Documentation/devicetree/bindings/phy/snps,dw-dphy-rx.txt
+F:	include/media/dwc/dw-csi-data.h
+F:	include/media/dwc/dw-dphy-data.h
 
 SYNOPSYS DESIGNWARE DMAC DRIVER
 M:	Viresh Kumar <vireshk@kernel.org>
