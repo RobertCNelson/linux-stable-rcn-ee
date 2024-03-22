@@ -11,7 +11,7 @@ Required properties:
    "microchip,sam9x75-xlcdc"
  - reg: base address and size of the HLCDC device registers.
  - clock-names: the name of the 3 clocks requested by the HLCDC device.
-   Should contain "periph_clk", "sys_clk" and "slow_clk".
+   Should contain "periph_clk", "sys_clk" or "lvds_pll_clk" and "slow_clk".
  - clocks: should contain the 3 clocks requested by the HLCDC device.
  - interrupts: should contain the description of the HLCDC interrupt line
 

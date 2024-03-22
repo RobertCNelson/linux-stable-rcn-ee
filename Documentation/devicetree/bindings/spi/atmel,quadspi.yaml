@@ -19,6 +19,7 @@ properties:
       - microchip,sam9x60-qspi
       - microchip,sama7g5-qspi
       - microchip,sama7g5-ospi
+      - microchip,sam9x7-ospi
 
   reg:
     items:
