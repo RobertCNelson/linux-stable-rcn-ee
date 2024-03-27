@@ -135,6 +135,14 @@
 	};
 };
 
+&fpgadma {
+	status = "okay";
+};
+
+&fpgalsram {
+	status = "okay";
+};
+
 &mbox {
 	status = "okay";
 };
