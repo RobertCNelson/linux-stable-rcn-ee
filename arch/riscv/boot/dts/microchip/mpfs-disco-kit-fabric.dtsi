@@ -30,4 +30,10 @@
 			status = "disabled";
 		};
 	};
+
+	mpfs_dma_proxy: mpfs-dma-proxy {
+		compatible = "microchip,mpfs-dma-proxy";
+		dmas = <&pdma 0>, <&pdma 1>, <&pdma 2>, <&pdma 3>;
+		dma-names = "dma-proxy0", "dma-proxy1", "dma-proxy2", "dma-proxy3";
+	};
 };
