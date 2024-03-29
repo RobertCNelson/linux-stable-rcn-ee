@@ -120,6 +120,10 @@ static int mpfs_gpio_get(struct gpio_chip *gc,
 {
 	struct mpfs_gpio_chip *mpfs_gpio = gpiochip_get_data(gc);
 
+	if (mpfs_gpio_get_direction(gc, gpio_index) == GPIO_LINE_DIRECTION_OUT) {
+		return !!(readl(mpfs_gpio->base + mpfs_gpio->regs->outp) & BIT(gpio_index));
+	}
+
 	return !!(readl(mpfs_gpio->base + mpfs_gpio->regs->inp) & BIT(gpio_index));
 }
 
