@@ -11,6 +11,8 @@ DTC_FLAGS_at91-sama5d3_eds := -@
 DTC_FLAGS_at91-sama5d3_xplained := -@
 DTC_FLAGS_at91-sama5d4_xplained := -@
 DTC_FLAGS_at91-sama7g5ek := -@
+DTC_FLAGS_at91-sam9x75eb := -@
+DTC_FLAGS_at91-sam9x75_curiosity := -@
 dtb-$(CONFIG_SOC_AT91RM9200) += \
 	at91rm9200ek.dtb \
 	mpa1600.dtb
