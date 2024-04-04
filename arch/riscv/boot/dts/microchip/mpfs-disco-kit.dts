@@ -143,6 +143,17 @@
 	status = "okay";
 };
 
+&mac0 {
+	dma-noncoherent;
+	status = "okay";
+	phy-mode = "sgmii";
+	phy-handle = <&phy0>;
+
+	phy0: ethernet-phy@11 {
+		reg = <11>;
+	};
+};
+
 &mbox {
 	status = "okay";
 };
