@@ -1175,7 +1175,7 @@
 
 		sfr: sfr@f8050000 {
 			compatible = "microchip,sam9x60-sfr", "syscon";
-			reg = <0xf8050000 0x100>;
+			reg = <0xf8050000 0x400>;
 		};
 
 		csi2host: csi2host@f8058000 {
