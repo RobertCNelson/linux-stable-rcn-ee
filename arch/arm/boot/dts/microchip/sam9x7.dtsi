@@ -1003,7 +1003,7 @@
 		};
 
 		gmac: ethernet@f802c000 {
-			compatible = "microchip,sam9x7-gem";
+			compatible = "microchip,sam9x7-gem", "microchip,sama7g5-gem";
 			reg = <0xf802c000 0x1000>;
 			interrupts = <24 IRQ_TYPE_LEVEL_HIGH 3		/* Queue 0 */
 				      60 IRQ_TYPE_LEVEL_HIGH 3          /* Queue 1 */
