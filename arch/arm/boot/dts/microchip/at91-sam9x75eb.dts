@@ -84,6 +84,14 @@
 	};
 };
 
+&adc {
+	vddana-supply = <&vdd_3v3>;
+	vref-supply = <&vdd_3v3>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_adc_default>;
+	status = "okay";
+};
+
 &can0 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_can0_default>;
@@ -326,6 +334,11 @@
 };
 
 &pinctrl {
+	adc {
+		pinctrl_adc_default: adc-default {
+			atmel,pins = <AT91_PIOA 30 AT91_PERIPH_A AT91_PINCTRL_NONE>;
+		};
+	};
 
 	can0 {
 		pinctrl_can0_default: can0 {
