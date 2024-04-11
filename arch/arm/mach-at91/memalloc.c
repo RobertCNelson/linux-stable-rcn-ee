@@ -277,7 +277,7 @@ static int memalloc_init(void)
 	}
 
 	/* create /dev/memalloc */
-	m->class = class_create(THIS_MODULE, "memalloc-cls");
+	m->class = class_create("memalloc-cls");
 	if (IS_ERR(m->class)) {
 		ret = PTR_ERR(m->class);
 		goto err;

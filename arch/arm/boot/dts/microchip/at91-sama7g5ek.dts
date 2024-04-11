@@ -14,6 +14,7 @@
 #include <dt-bindings/mfd/atmel-flexcom.h>
 #include <dt-bindings/input/input.h>
 #include <dt-bindings/pinctrl/at91.h>
+#include <dt-bindings/sound/microchip,asrc-card.h>
 #include <dt-bindings/sound/microchip,pdmc.h>
 
 / {
@@ -89,12 +90,21 @@
 	};
 
 	sound: sound {
-		compatible = "simple-audio-card";
-		simple-audio-card,name = "sama7g5ek audio";
 		#address-cells = <1>;
 		#size-cells = <0>;
-		simple-audio-card,dai-link@0 {
+		assigned-clocks = <&pmc PMC_TYPE_CORE PMC_AUDIOPMCPLL>;
+		assigned-clock-rates = <196608000>;
+		compatible = "microchip,asrc-card";
+		microchip,model = "mchp-asrc-card @ sama7g5 EK";
+		status = "okay";
+
+		microchip,audio-asrc = <&asrc 0>, <&asrc 1>, <&asrc 2>, <&asrc 3>;
+
+		microchip,dai-link@0 {
 			reg = <0>;
+			microchip,convert-channels = <2>;
+			microchip,convert-rate = <48000>;
+			microchip,convert-sample-format = <MCHP_ASRC_PCM_FORMAT_S24_LE>;
 			cpu {
 				sound-dai = <&spdiftx>;
 			};
@@ -102,8 +112,12 @@
 				sound-dai = <&spdif_out>;
 			};
 		};
-		simple-audio-card,dai-link@1 {
+
+		microchip,dai-link@1 {
 			reg = <1>;
+			microchip,convert-channels = <2>;
+			microchip,convert-rate = <48000>;
+			microchip,convert-sample-format = <MCHP_ASRC_PCM_FORMAT_S24_LE>;
 			cpu {
 				sound-dai = <&spdifrx>;
 			};
@@ -122,6 +136,10 @@
 		#sound-dai-cells = <0>;
 		compatible = "linux,spdif-dit";
 	};
+};
+
+&asrc {
+	status = "okay";
 };
 
 &adc {
@@ -236,6 +254,38 @@
 		i2c-digital-filter;
 		i2c-digital-filter-width-ns = <35>;
 		status = "okay";
+
+		pac1934@10 {
+			compatible = "microchip,pac1934";
+			reg = <0x10>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "okay";
+
+			channel@1 {
+				reg = <0x1>;
+				shunt-resistor-micro-ohms = <10000>;
+				label = "VDD3V3";
+			};
+
+			channel@2 {
+				reg = <0x2>;
+				shunt-resistor-micro-ohms = <10000>;
+				label = "VDDIODDR";
+			};
+
+			channel@3 {
+				reg = <0x3>;
+				shunt-resistor-micro-ohms = <10000>;
+				label = "VDDCORE";
+			};
+
+			channel@4 {
+				reg = <0x4>;
+				shunt-resistor-micro-ohms = <10000>;
+				label = "VDDCPU";
+			};
+		};
 
 		mcp16502@5b {
 			compatible = "microchip,mcp16502";
@@ -786,6 +836,31 @@
 		pinmux = <PIN_PB1__SPDIF_TX>;
 		bias-disable;
 	};
+
+	pinctrl_usba_vbus_det: usba_vbus_det {
+		pinmux = <PIN_PD11__GPIO>;
+		bias-disable;
+	};
+
+	pinctrl_usbb_vbus_det: usbb_vbus_det {
+		pinmux = <PIN_PC12__GPIO>;
+		bias-disable;
+	};
+
+	pinctrl_usba_vbus_en: usba_vbus_en {
+		pinmux = <PIN_PB2__GPIO>;
+		bias-disable;
+	};
+
+	pinctrl_usbb_vbus_en: usbb_vbus_en {
+		pinmux = <PIN_PC11__GPIO>;
+		bias-disable;
+	};
+
+	pinctrl_usbc_vbus_en: usbc_vbus_en {
+		pinmux = <PIN_PC6__GPIO>;
+		bias-disable;
+	};
 };
 
 &pwm {
@@ -801,7 +876,9 @@
 &sdmmc0 {
 	bus-width = <8>;
 	non-removable;
-	sdhci-caps-mask = <0x0 0x00200000>;
+	mmc-ddr-1_8v;
+	cap-mmc-highspeed;
+	cap-mmc-hw-reset;
 	vmmc-supply = <&vdd_3v3>;
 	vqmmc-supply = <&vldo1>;
 	pinctrl-names = "default";
@@ -811,8 +888,6 @@
 
 &sdmmc1 {
 	bus-width = <4>;
-	no-1-8-v;
-	sdhci-caps-mask = <0x0 0x00200000>;
 	vmmc-supply = <&vdd_3v3>;
 	vqmmc-supply = <&vdd_3v3>;
 	pinctrl-names = "default";
@@ -823,13 +898,13 @@
 &sdmmc2 {
 	bus-width = <4>;
 	no-1-8-v;
-	sdhci-caps-mask = <0x0 0x00200000>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_sdmmc2_default>;
 };
 
 &shdwc {
 	debounce-delay-us = <976>;
+	microchip,lpm-connection = <&gmac1 &main_xtal>;
 	status = "okay";
 
 	input@0 {
@@ -862,6 +937,53 @@
 };
 
 &trng {
+	status = "okay";
+};
+
+&usb0 {
+	atmel,vbus-gpio = <&pioA PIN_PD11 GPIO_ACTIVE_HIGH>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_usba_vbus_det>;
+	phys = <&usb_phy0>;
+	phy-names = "usb";
+	status = "okay";
+};
+
+&usb1 {
+	atmel,vbus-gpio = <&pioA PIN_PC12 GPIO_ACTIVE_HIGH>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_usbb_vbus_det>;
+	phys = <&usb_phy1>;
+	phy-names = "usb";
+	status = "disabled";
+};
+
+&usb2 {
+	num-ports = <3>;
+	atmel,vbus-gpio = <0
+			   &pioA PIN_PC11 GPIO_ACTIVE_HIGH
+			   &pioA PIN_PC6 GPIO_ACTIVE_HIGH
+			  >;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_usbb_vbus_en &pinctrl_usbc_vbus_en>;
+	phys = <&usb_phy1>, <&usb_phy2>;
+	phy-names = "usb", "usb";
+	status = "okay";
+};
+
+&usb3 {
+	status = "okay";
+};
+
+&usb_phy0 {
+	status = "okay";
+};
+
+&usb_phy1 {
+	status = "okay";
+};
+
+&usb_phy2 {
 	status = "okay";
 };
 
