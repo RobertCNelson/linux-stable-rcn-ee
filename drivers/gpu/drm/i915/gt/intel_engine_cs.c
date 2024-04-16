@@ -47,7 +47,7 @@
 #define GEN9_LR_CONTEXT_RENDER_SIZE	(22 * PAGE_SIZE)
 #define GEN11_LR_CONTEXT_RENDER_SIZE	(14 * PAGE_SIZE)
 
-#define GEN8_LR_CONTEXT_OTHER_SIZE	( 2 * PAGE_SIZE)
+#define GEN8_LR_CONTEXT_OTHER_SIZE	(2 * PAGE_SIZE)
 
 #define MAX_MMIO_BASES 3
 struct engine_info {
@@ -906,6 +906,23 @@ static intel_engine_mask_t init_engine_mask(struct intel_gt *gt)
 	if (__HAS_ENGINE(info->engine_mask, GSC0) && !intel_uc_wants_gsc_uc(&gt->uc)) {
 		gt_notice(gt, "No GSC FW selected, disabling GSC CS and media C6\n");
 		info->engine_mask &= ~BIT(GSC0);
+	}
+
+	/*
+	 * Do not create the command streamer for CCS slices beyond the first.
+	 * All the workload submitted to the first engine will be shared among
+	 * all the slices.
+	 *
+	 * Once the user will be allowed to customize the CCS mode, then this
+	 * check needs to be removed.
+	 */
+	if (IS_DG2(gt->i915)) {
+		u8 first_ccs = __ffs(CCS_MASK(gt));
+
+		/* Mask off all the CCS engine */
+		info->engine_mask &= ~GENMASK(CCS3, CCS0);
+		/* Put back in the first CCS engine */
+		info->engine_mask |= BIT(_CCS(first_ccs));
 	}
 
 	return info->engine_mask;

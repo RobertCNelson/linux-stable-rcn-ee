@@ -174,10 +174,6 @@ static void tidss_crtc_atomic_flush(struct drm_crtc *crtc,
 		drm_atomic_crtc_needs_modeset(crtc->state) ? "needs" : "doesn't need",
 		crtc->state->event);
 
-	/* There is nothing to do if CRTC is not going to be enabled. */
-	if (!crtc->state->active)
-		return;
-
 	/*
 	 * Flush CRTC changes with go bit only if new modeset is not
 	 * coming, so CRTC is enabled trough out the commit.
@@ -268,6 +264,16 @@ static void tidss_crtc_atomic_disable(struct drm_crtc *crtc,
 	dev_dbg(ddev->dev, "%s, event %p\n", __func__, crtc->state->event);
 
 	reinit_completion(&tcrtc->framedone_completion);
+
+	/*
+	 * If a layer is left enabled when the videoport is disabled, and the
+	 * vid pipeline that was used for the layer is taken into use on
+	 * another videoport, the DSS will report sync lost issues. Disable all
+	 * the layers here as a work-around.
+	 */
+	for (u32 layer = 0; layer < tidss->feat->num_planes; layer++)
+		dispc_ovr_enable_layer(tidss->dispc, tcrtc->hw_videoport, layer,
+				       false);
 
 	dispc_vp_disable(tidss->dispc, tcrtc->hw_videoport);
 
