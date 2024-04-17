@@ -64,6 +64,13 @@ struct wilc_buffered_eap {
 	unsigned int pkt_offset;
 	u8 *buff;
 };
+
+struct wilc_p2p_var {
+	u8 local_random;
+	u8 recv_random;
+	bool is_wilc_ie;
+};
+
 static const u32 wilc_cipher_suites[] = {
 	WLAN_CIPHER_SUITE_TKIP,
 	WLAN_CIPHER_SUITE_CCMP,
@@ -146,9 +153,8 @@ struct wilc_priv {
 	struct wilc_buffered_eap *buffered_eap;
 
 	struct timer_list eap_buff_timer;
-	bool p2p_listen_state;
 	int scanned_cnt;
-
+	struct wilc_p2p_var p2p;
 	u64 inc_roc_cookie;
 };
 
@@ -178,6 +184,16 @@ struct tcp_ack_filter {
 	bool enabled;
 };
 
+#define WILC_P2P_ROLE_GO	1
+#define WILC_P2P_ROLE_CLIENT	0
+
+struct sysfs_attr_group {
+	bool p2p_mode;
+	u8 ant_swtch_mode;
+	u8 antenna1;
+	u8 antenna2;
+};
+
 struct wilc_vif {
 	u8 idx;
 	u8 iftype;
@@ -196,6 +212,7 @@ struct wilc_vif {
 	bool connecting;
 	struct wilc_priv priv;
 	struct list_head list;
+	bool p2p_listen_state;
 	struct cfg80211_bss *bss;
 	struct cfg80211_external_auth_params auth;
 };
@@ -269,6 +286,7 @@ struct wilc {
 
 	struct device *dev;
 
+	enum wilc_chip_type chip;
 	struct workqueue_struct *hif_workqueue;
 	struct wilc_cfg cfg;
 	void *bus_data;
@@ -278,6 +296,7 @@ struct wilc {
 	struct mutex deinit_lock;
 	u8 sta_ch;
 	u8 op_ch;
+	struct sysfs_attr_group attr_sysfs;
 	struct ieee80211_channel channels[ARRAY_SIZE(wilc_2ghz_channels)];
 	struct ieee80211_rate bitrates[ARRAY_SIZE(wilc_bitrates)];
 	struct ieee80211_supported_band band;
