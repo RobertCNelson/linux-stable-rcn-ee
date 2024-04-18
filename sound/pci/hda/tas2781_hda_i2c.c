@@ -65,13 +65,31 @@ enum calib_data {
 	CALIB_MAX
 };
 
+#define TAS2563_MAX_CHANNELS	4
+
+#define TAS2563_CAL_POWER	TASDEVICE_REG(0, 0x0d, 0x3c)
+#define TAS2563_CAL_R0		TASDEVICE_REG(0, 0x0f, 0x34)
+#define TAS2563_CAL_INVR0	TASDEVICE_REG(0, 0x0f, 0x40)
+#define TAS2563_CAL_R0_LOW	TASDEVICE_REG(0, 0x0f, 0x48)
+#define TAS2563_CAL_TLIM	TASDEVICE_REG(0, 0x10, 0x14)
+#define TAS2563_CAL_N		5
+#define TAS2563_CAL_DATA_SIZE	4
+#define TAS2563_CAL_CH_SIZE	20
+#define TAS2563_CAL_ARRAY_SIZE	80
+
+static unsigned int cal_regs[TAS2563_CAL_N] = {
+	TAS2563_CAL_POWER, TAS2563_CAL_R0, TAS2563_CAL_INVR0,
+	TAS2563_CAL_R0_LOW, TAS2563_CAL_TLIM,
+};
+
+
 struct tas2781_hda {
 	struct device *dev;
 	struct tasdevice_priv *priv;
 	struct snd_kcontrol *dsp_prog_ctl;
 	struct snd_kcontrol *dsp_conf_ctl;
 	struct snd_kcontrol *prof_ctl;
-	struct snd_kcontrol *snd_ctls[3];
+	struct snd_kcontrol *snd_ctls[2];
 };
 
 static int tas2781_get_i2c_res(struct acpi_resource *ares, void *data)
@@ -81,7 +99,7 @@ static int tas2781_get_i2c_res(struct acpi_resource *ares, void *data)
 
 	if (i2c_acpi_get_i2c_resource(ares, &sb)) {
 		if (tas_priv->ndev < TASDEVICE_MAX_CHANNELS &&
-			sb->slave_address != TAS2781_GLOBAL_ADDR) {
+			sb->slave_address != tas_priv->global_addr) {
 			tas_priv->tasdevice[tas_priv->ndev].dev_addr =
 				(unsigned int)sb->slave_address;
 			tas_priv->ndev++;
@@ -142,11 +160,13 @@ static void tas2781_hda_playback_hook(struct device *dev, int action)
 		pm_runtime_get_sync(dev);
 		mutex_lock(&tas_hda->priv->codec_lock);
 		tasdevice_tuning_switch(tas_hda->priv, 0);
+		tas_hda->priv->playback_started = true;
 		mutex_unlock(&tas_hda->priv->codec_lock);
 		break;
 	case HDA_GEN_PCM_ACT_CLOSE:
 		mutex_lock(&tas_hda->priv->codec_lock);
 		tasdevice_tuning_switch(tas_hda->priv, 1);
+		tas_hda->priv->playback_started = false;
 		mutex_unlock(&tas_hda->priv->codec_lock);
 
 		pm_runtime_mark_last_busy(dev);
@@ -177,7 +197,11 @@ static int tasdevice_get_profile_id(struct snd_kcontrol *kcontrol,
 {
 	struct tasdevice_priv *tas_priv = snd_kcontrol_chip(kcontrol);
 
+	mutex_lock(&tas_priv->codec_lock);
+
 	ucontrol->value.integer.value[0] = tas_priv->rcabin.profile_cfg_id;
+
+	mutex_unlock(&tas_priv->codec_lock);
 
 	return 0;
 }
@@ -192,10 +216,14 @@ static int tasdevice_set_profile_id(struct snd_kcontrol *kcontrol,
 
 	val = clamp(nr_profile, 0, max);
 
+	mutex_lock(&tas_priv->codec_lock);
+
 	if (tas_priv->rcabin.profile_cfg_id != val) {
 		tas_priv->rcabin.profile_cfg_id = val;
 		ret = 1;
 	}
+
+	mutex_unlock(&tas_priv->codec_lock);
 
 	return ret;
 }
@@ -233,7 +261,11 @@ static int tasdevice_program_get(struct snd_kcontrol *kcontrol,
 {
 	struct tasdevice_priv *tas_priv = snd_kcontrol_chip(kcontrol);
 
+	mutex_lock(&tas_priv->codec_lock);
+
 	ucontrol->value.integer.value[0] = tas_priv->cur_prog;
+
+	mutex_unlock(&tas_priv->codec_lock);
 
 	return 0;
 }
@@ -249,10 +281,14 @@ static int tasdevice_program_put(struct snd_kcontrol *kcontrol,
 
 	val = clamp(nr_program, 0, max);
 
+	mutex_lock(&tas_priv->codec_lock);
+
 	if (tas_priv->cur_prog != val) {
 		tas_priv->cur_prog = val;
 		ret = 1;
 	}
+
+	mutex_unlock(&tas_priv->codec_lock);
 
 	return ret;
 }
@@ -262,7 +298,11 @@ static int tasdevice_config_get(struct snd_kcontrol *kcontrol,
 {
 	struct tasdevice_priv *tas_priv = snd_kcontrol_chip(kcontrol);
 
+	mutex_lock(&tas_priv->codec_lock);
+
 	ucontrol->value.integer.value[0] = tas_priv->cur_conf;
+
+	mutex_unlock(&tas_priv->codec_lock);
 
 	return 0;
 }
@@ -278,33 +318,16 @@ static int tasdevice_config_put(struct snd_kcontrol *kcontrol,
 
 	val = clamp(nr_config, 0, max);
 
+	mutex_lock(&tas_priv->codec_lock);
+
 	if (tas_priv->cur_conf != val) {
 		tas_priv->cur_conf = val;
 		ret = 1;
 	}
 
+	mutex_unlock(&tas_priv->codec_lock);
+
 	return ret;
-}
-
-/*
- * tas2781_digital_getvol - get the volum control
- * @kcontrol: control pointer
- * @ucontrol: User data
- * Customer Kcontrol for tas2781 is primarily for regmap booking, paging
- * depends on internal regmap mechanism.
- * tas2781 contains book and page two-level register map, especially
- * book switching will set the register BXXP00R7F, after switching to the
- * correct book, then leverage the mechanism for paging to access the
- * register.
- */
-static int tas2781_digital_getvol(struct snd_kcontrol *kcontrol,
-	struct snd_ctl_elem_value *ucontrol)
-{
-	struct tasdevice_priv *tas_priv = snd_kcontrol_chip(kcontrol);
-	struct soc_mixer_control *mc =
-		(struct soc_mixer_control *)kcontrol->private_value;
-
-	return tasdevice_digital_getvol(tas_priv, ucontrol, mc);
 }
 
 static int tas2781_amp_getvol(struct snd_kcontrol *kcontrol,
@@ -313,19 +336,15 @@ static int tas2781_amp_getvol(struct snd_kcontrol *kcontrol,
 	struct tasdevice_priv *tas_priv = snd_kcontrol_chip(kcontrol);
 	struct soc_mixer_control *mc =
 		(struct soc_mixer_control *)kcontrol->private_value;
+	int ret;
 
-	return tasdevice_amp_getvol(tas_priv, ucontrol, mc);
-}
+	mutex_lock(&tas_priv->codec_lock);
 
-static int tas2781_digital_putvol(struct snd_kcontrol *kcontrol,
-	struct snd_ctl_elem_value *ucontrol)
-{
-	struct tasdevice_priv *tas_priv = snd_kcontrol_chip(kcontrol);
-	struct soc_mixer_control *mc =
-		(struct soc_mixer_control *)kcontrol->private_value;
+	ret = tasdevice_amp_getvol(tas_priv, ucontrol, mc);
 
-	/* The check of the given value is in tasdevice_digital_putvol. */
-	return tasdevice_digital_putvol(tas_priv, ucontrol, mc);
+	mutex_unlock(&tas_priv->codec_lock);
+
+	return ret;
 }
 
 static int tas2781_amp_putvol(struct snd_kcontrol *kcontrol,
@@ -334,9 +353,16 @@ static int tas2781_amp_putvol(struct snd_kcontrol *kcontrol,
 	struct tasdevice_priv *tas_priv = snd_kcontrol_chip(kcontrol);
 	struct soc_mixer_control *mc =
 		(struct soc_mixer_control *)kcontrol->private_value;
+	int ret;
+
+	mutex_lock(&tas_priv->codec_lock);
 
 	/* The check of the given value is in tasdevice_amp_putvol. */
-	return tasdevice_amp_putvol(tas_priv, ucontrol, mc);
+	ret = tasdevice_amp_putvol(tas_priv, ucontrol, mc);
+
+	mutex_unlock(&tas_priv->codec_lock);
+
+	return ret;
 }
 
 static int tas2781_force_fwload_get(struct snd_kcontrol *kcontrol,
@@ -344,9 +370,13 @@ static int tas2781_force_fwload_get(struct snd_kcontrol *kcontrol,
 {
 	struct tasdevice_priv *tas_priv = snd_kcontrol_chip(kcontrol);
 
+	mutex_lock(&tas_priv->codec_lock);
+
 	ucontrol->value.integer.value[0] = (int)tas_priv->force_fwload_status;
 	dev_dbg(tas_priv->dev, "%s : Force FWload %s\n", __func__,
 			tas_priv->force_fwload_status ? "ON" : "OFF");
+
+	mutex_unlock(&tas_priv->codec_lock);
 
 	return 0;
 }
@@ -357,6 +387,8 @@ static int tas2781_force_fwload_put(struct snd_kcontrol *kcontrol,
 	struct tasdevice_priv *tas_priv = snd_kcontrol_chip(kcontrol);
 	bool change, val = (bool)ucontrol->value.integer.value[0];
 
+	mutex_lock(&tas_priv->codec_lock);
+
 	if (tas_priv->force_fwload_status == val)
 		change = false;
 	else {
@@ -366,6 +398,8 @@ static int tas2781_force_fwload_put(struct snd_kcontrol *kcontrol,
 	dev_dbg(tas_priv->dev, "%s : Force FWload %s\n", __func__,
 		tas_priv->force_fwload_status ? "ON" : "OFF");
 
+	mutex_unlock(&tas_priv->codec_lock);
+
 	return change;
 }
 
@@ -373,9 +407,6 @@ static const struct snd_kcontrol_new tas2781_snd_controls[] = {
 	ACARD_SINGLE_RANGE_EXT_TLV("Speaker Analog Gain", TAS2781_AMP_LEVEL,
 		1, 0, 20, 0, tas2781_amp_getvol,
 		tas2781_amp_putvol, amp_vol_tlv),
-	ACARD_SINGLE_RANGE_EXT_TLV("Speaker Digital Gain", TAS2781_DVC_LVL,
-		0, 0, 200, 1, tas2781_digital_getvol,
-		tas2781_digital_putvol, dvc_tlv),
 	ACARD_SINGLE_BOOL_EXT("Speaker Force Firmware Load", 0,
 		tas2781_force_fwload_get, tas2781_force_fwload_put),
 };
@@ -403,6 +434,69 @@ static const struct snd_kcontrol_new tas2781_dsp_conf_ctrl = {
 	.get = tasdevice_config_get,
 	.put = tasdevice_config_put,
 };
+
+static void tas2563_apply_calib(struct tasdevice_priv *tas_priv)
+{
+	int offset = 0;
+	__be32 data;
+	int ret;
+
+	for (int i = 0; i < tas_priv->ndev; i++) {
+		for (int j = 0; j < TAS2563_CAL_N; ++j) {
+			data = cpu_to_be32(
+				*(uint32_t *)&tas_priv->cali_data.data[offset]);
+			ret = tasdevice_dev_bulk_write(tas_priv, i, cal_regs[j],
+				(unsigned char *)&data, TAS2563_CAL_DATA_SIZE);
+			if (ret)
+				dev_err(tas_priv->dev,
+					"Error writing calib regs\n");
+			offset += TAS2563_CAL_DATA_SIZE;
+		}
+	}
+}
+
+static int tas2563_save_calibration(struct tasdevice_priv *tas_priv)
+{
+	static efi_guid_t efi_guid = EFI_GUID(0x1f52d2a1, 0xbb3a, 0x457d, 0xbc,
+		0x09, 0x43, 0xa3, 0xf4, 0x31, 0x0a, 0x92);
+
+	static efi_char16_t *efi_vars[TAS2563_MAX_CHANNELS][TAS2563_CAL_N] = {
+		{ L"Power_1", L"R0_1", L"InvR0_1", L"R0_Low_1", L"TLim_1" },
+		{ L"Power_2", L"R0_2", L"InvR0_2", L"R0_Low_2", L"TLim_2" },
+		{ L"Power_3", L"R0_3", L"InvR0_3", L"R0_Low_3", L"TLim_3" },
+		{ L"Power_4", L"R0_4", L"InvR0_4", L"R0_Low_4", L"TLim_4" },
+	};
+
+	unsigned long max_size = TAS2563_CAL_DATA_SIZE;
+	unsigned int offset = 0;
+	efi_status_t status;
+	unsigned int attr;
+
+	tas_priv->cali_data.data = devm_kzalloc(tas_priv->dev,
+			TAS2563_CAL_ARRAY_SIZE, GFP_KERNEL);
+	if (!tas_priv->cali_data.data)
+		return -ENOMEM;
+
+	for (int i = 0; i < tas_priv->ndev; ++i) {
+		for (int j = 0; j < TAS2563_CAL_N; ++j) {
+			status = efi.get_variable(efi_vars[i][j],
+				&efi_guid, &attr, &max_size,
+				&tas_priv->cali_data.data[offset]);
+			if (status != EFI_SUCCESS ||
+				max_size != TAS2563_CAL_DATA_SIZE) {
+				dev_warn(tas_priv->dev,
+				"Calibration data read failed %ld\n", status);
+				return -EINVAL;
+			}
+			offset += TAS2563_CAL_DATA_SIZE;
+		}
+	}
+
+	tas_priv->cali_data.total_sz = offset;
+	tasdevice_apply_calibration(tas_priv);
+
+	return 0;
+}
 
 static void tas2781_apply_calib(struct tasdevice_priv *tas_priv)
 {
@@ -479,7 +573,7 @@ static int tas2781_save_calibration(struct tasdevice_priv *tas_priv)
 		dev_dbg(tas_priv->dev, "%4ld-%2d-%2d, %2d:%2d:%2d\n",
 			tm->tm_year, tm->tm_mon, tm->tm_mday,
 			tm->tm_hour, tm->tm_min, tm->tm_sec);
-		tas2781_apply_calib(tas_priv);
+		tasdevice_apply_calibration(tas_priv);
 	} else
 		tas_priv->cali_data.total_sz = 0;
 
@@ -582,7 +676,10 @@ static void tasdev_fw_ready(const struct firmware *fmw, void *context)
 	/* If calibrated data occurs error, dsp will still works with default
 	 * calibrated data inside algo.
 	 */
-	tas2781_save_calibration(tas_priv);
+	tasdevice_save_calibration(tas_priv);
+
+	tasdevice_tuning_switch(tas_hda->priv, 0);
+	tas_hda->priv->playback_started = true;
 
 out:
 	mutex_unlock(&tas_hda->priv->codec_lock);
@@ -683,10 +780,6 @@ static int tas2781_hda_i2c_probe(struct i2c_client *clt)
 	const char *device_name;
 	int ret;
 
-	if (strstr(dev_name(&clt->dev), "TIAS2781"))
-		device_name = "TIAS2781";
-	else
-		return -ENODEV;
 
 	tas_hda = devm_kzalloc(&clt->dev, sizeof(*tas_hda), GFP_KERNEL);
 	if (!tas_hda)
@@ -698,6 +791,19 @@ static int tas2781_hda_i2c_probe(struct i2c_client *clt)
 	tas_hda->priv = tasdevice_kzalloc(clt);
 	if (!tas_hda->priv)
 		return -ENOMEM;
+
+	if (strstr(dev_name(&clt->dev), "TIAS2781")) {
+		device_name = "TIAS2781";
+		tas_hda->priv->save_calibration = tas2781_save_calibration;
+		tas_hda->priv->apply_calibration = tas2781_apply_calib;
+		tas_hda->priv->global_addr = TAS2781_GLOBAL_ADDR;
+	} else if (strstr(dev_name(&clt->dev), "INT8866")) {
+		device_name = "INT8866";
+		tas_hda->priv->save_calibration = tas2563_save_calibration;
+		tas_hda->priv->apply_calibration = tas2563_apply_calib;
+		tas_hda->priv->global_addr = TAS2563_GLOBAL_ADDR;
+	} else
+		return -ENODEV;
 
 	tas_hda->priv->irq_info.irq = clt->irq;
 	ret = tas2781_read_acpi(tas_hda->priv, device_name);
@@ -740,21 +846,17 @@ static void tas2781_hda_i2c_remove(struct i2c_client *clt)
 static int tas2781_runtime_suspend(struct device *dev)
 {
 	struct tas2781_hda *tas_hda = dev_get_drvdata(dev);
-	int i;
 
 	dev_dbg(tas_hda->dev, "Runtime Suspend\n");
 
 	mutex_lock(&tas_hda->priv->codec_lock);
 
+	/* The driver powers up the amplifiers at module load time.
+	 * Stop the playback if it's unused.
+	 */
 	if (tas_hda->priv->playback_started) {
 		tasdevice_tuning_switch(tas_hda->priv, 1);
 		tas_hda->priv->playback_started = false;
-	}
-
-	for (i = 0; i < tas_hda->priv->ndev; i++) {
-		tas_hda->priv->tasdevice[i].cur_book = -1;
-		tas_hda->priv->tasdevice[i].cur_prog = -1;
-		tas_hda->priv->tasdevice[i].cur_conf = -1;
 	}
 
 	mutex_unlock(&tas_hda->priv->codec_lock);
@@ -765,8 +867,6 @@ static int tas2781_runtime_suspend(struct device *dev)
 static int tas2781_runtime_resume(struct device *dev)
 {
 	struct tas2781_hda *tas_hda = dev_get_drvdata(dev);
-	unsigned long calib_data_sz =
-		tas_hda->priv->ndev * TASDEVICE_SPEAKER_CALIBRATION_SIZE;
 
 	dev_dbg(tas_hda->dev, "Runtime Resume\n");
 
@@ -777,8 +877,7 @@ static int tas2781_runtime_resume(struct device *dev)
 	/* If calibrated data occurs error, dsp will still works with default
 	 * calibrated data inside algo.
 	 */
-	if (tas_hda->priv->cali_data.total_sz > calib_data_sz)
-		tas2781_apply_calib(tas_hda->priv);
+	tasdevice_apply_calibration(tas_hda->priv);
 
 	mutex_unlock(&tas_hda->priv->codec_lock);
 
@@ -788,16 +887,16 @@ static int tas2781_runtime_resume(struct device *dev)
 static int tas2781_system_suspend(struct device *dev)
 {
 	struct tas2781_hda *tas_hda = dev_get_drvdata(dev);
-	int ret;
 
 	dev_dbg(tas_hda->priv->dev, "System Suspend\n");
 
-	ret = pm_runtime_force_suspend(dev);
-	if (ret)
-		return ret;
+	mutex_lock(&tas_hda->priv->codec_lock);
 
 	/* Shutdown chip before system suspend */
-	tasdevice_tuning_switch(tas_hda->priv, 1);
+	if (tas_hda->priv->playback_started)
+		tasdevice_tuning_switch(tas_hda->priv, 1);
+
+	mutex_unlock(&tas_hda->priv->codec_lock);
 
 	/*
 	 * Reset GPIO may be shared, so cannot reset here.
@@ -809,15 +908,9 @@ static int tas2781_system_suspend(struct device *dev)
 static int tas2781_system_resume(struct device *dev)
 {
 	struct tas2781_hda *tas_hda = dev_get_drvdata(dev);
-	unsigned long calib_data_sz =
-		tas_hda->priv->ndev * TASDEVICE_SPEAKER_CALIBRATION_SIZE;
-	int i, ret;
+	int i;
 
-	dev_info(tas_hda->priv->dev, "System Resume\n");
-
-	ret = pm_runtime_force_resume(dev);
-	if (ret)
-		return ret;
+	dev_dbg(tas_hda->priv->dev, "System Resume\n");
 
 	mutex_lock(&tas_hda->priv->codec_lock);
 
@@ -832,8 +925,11 @@ static int tas2781_system_resume(struct device *dev)
 	/* If calibrated data occurs error, dsp will still work with default
 	 * calibrated data inside algo.
 	 */
-	if (tas_hda->priv->cali_data.total_sz > calib_data_sz)
-		tas2781_apply_calib(tas_hda->priv);
+	tasdevice_apply_calibration(tas_hda->priv);
+
+	if (tas_hda->priv->playback_started)
+		tasdevice_tuning_switch(tas_hda->priv, 0);
+
 	mutex_unlock(&tas_hda->priv->codec_lock);
 
 	return 0;
@@ -851,6 +947,7 @@ static const struct i2c_device_id tas2781_hda_i2c_id[] = {
 
 static const struct acpi_device_id tas2781_acpi_hda_match[] = {
 	{"TIAS2781", 0 },
+	{"INT8866", 0 },
 	{}
 };
 MODULE_DEVICE_TABLE(acpi, tas2781_acpi_hda_match);
