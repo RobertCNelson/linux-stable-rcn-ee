@@ -1846,11 +1846,17 @@ int wilc_deinit(struct wilc_vif *vif)
 
 	mutex_lock(&vif->wilc->deinit_lock);
 
+#if KERNEL_VERSION(6, 4, 0) <= LINUX_VERSION_CODE
 	timer_shutdown_sync(&hif_drv->scan_timer);
 	timer_shutdown_sync(&hif_drv->connect_timer);
-	del_timer_sync(&vif->periodic_rssi);
 	timer_shutdown_sync(&hif_drv->remain_on_ch_timer);
-
+#else
+	/* to support compilation on v6.1, will be removed later */
+	del_timer_sync(&hif_drv->scan_timer);
+	del_timer_sync(&hif_drv->connect_timer);
+	del_timer_sync(&hif_drv->remain_on_ch_timer);
+#endif
+	del_timer_sync(&vif->periodic_rssi);
 	if (hif_drv->usr_scan_req.scan_result) {
 		hif_drv->usr_scan_req.scan_result(SCAN_EVENT_ABORTED, NULL,
 						  hif_drv->usr_scan_req.priv);
