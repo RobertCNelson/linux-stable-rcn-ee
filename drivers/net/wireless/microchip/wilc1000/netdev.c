@@ -148,8 +148,8 @@ static int wilc_txq_task(void *vp)
 
 	complete(&wl->txq_thread_started);
 	while (1) {
-		wait_for_completion(&wl->txq_event);
-
+		if (wait_for_completion_interruptible(&wl->txq_event))
+			continue;
 		if (wl->close) {
 			complete(&wl->txq_thread_started);
 
@@ -166,12 +166,24 @@ static int wilc_txq_task(void *vp)
 				srcu_idx = srcu_read_lock(&wl->srcu);
 				list_for_each_entry_rcu(ifc, &wl->vif_list,
 							list) {
-					if (ifc->mac_opened && ifc->ndev)
+					if (ifc->mac_opened &&
+					    netif_queue_stopped(ifc->ndev))
 						netif_wake_queue(ifc->ndev);
 				}
 				srcu_read_unlock(&wl->srcu, srcu_idx);
 			}
-		} while (ret == WILC_VMM_ENTRY_FULL_RETRY && !wl->close);
+			if (ret != WILC_VMM_ENTRY_FULL_RETRY)
+				break;
+			/* Back off TX task from sending packets for some time.
+			 * msleep_interruptible will allow RX task to run and
+			 * free buffers. TX task will be in TASK_INTERRUPTIBLE
+			 * state which will put the thread back to CPU running
+			 * queue when it's signaled even if the timeout isn't
+			 * elapsed. This gives faster chance for reserved SK
+			 * buffers to be free.
+			 */
+			msleep_interruptible(TX_BACKOFF_WEIGHT_MS);
+		} while (!wl->close);
 	}
 	return 0;
 }
@@ -272,7 +284,7 @@ static int wilc_init_fw_config(struct net_device *dev, struct wilc_vif *vif)
 	if (!wilc_wlan_cfg_set(vif, 0, WID_11G_OPERATING_MODE, &b, 1, 0, 0))
 		goto fail;
 
-	b = WILC_FW_PREAMBLE_SHORT;
+	b = WILC_FW_PREAMBLE_AUTO;
 	if (!wilc_wlan_cfg_set(vif, 0, WID_PREAMBLE, &b, 1, 0, 0))
 		goto fail;
 
@@ -404,7 +416,7 @@ static int wilc_init_fw_config(struct net_device *dev, struct wilc_vif *vif)
 
 	b = 1;
 	if (!wilc_wlan_cfg_set(vif, 0, WID_11N_IMMEDIATE_BA_ENABLED, &b, 1,
-			       1, 1))
+			       1, 0))
 		goto fail;
 
 	return 0;
@@ -984,5 +996,6 @@ error:
 	return ERR_PTR(ret);
 }
 
+MODULE_DESCRIPTION("Atmel WILC1000 core wireless driver");
 MODULE_LICENSE("GPL");
 MODULE_FIRMWARE(WILC1000_FW(WILC1000_API_VER));
