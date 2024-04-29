@@ -125,6 +125,13 @@ static const struct mmc_fixup __maybe_unused mmc_blk_fixups[] = {
 		  MMC_QUIRK_TRIM_BROKEN),
 
 	/*
+	 * Kingston EMMC04G-MK27 are showing fast wear rates, lets disable
+	 * TRIM like EMMC04G-M627 and see if that helps, on fresh boards
+	 */
+	MMC_FIXUP("MK2704", CID_MANFID_KINGSTON, 0x0100, add_quirk_mmc,
+		  MMC_QUIRK_BROKEN_SD_DISCARD),
+
+	/*
 	 * Some SD cards reports discard support while they don't
 	 */
 	MMC_FIXUP(CID_NAME_ANY, CID_MANFID_SANDISK_SD, 0x5344, add_quirk_sd,
