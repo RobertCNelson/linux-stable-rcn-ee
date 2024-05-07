@@ -14,7 +14,8 @@ enum {
 	WILC_AP_MODE = 0x1,
 	WILC_STATION_MODE = 0x2,
 	WILC_GO_MODE = 0x3,
-	WILC_CLIENT_MODE = 0x4
+	WILC_CLIENT_MODE = 0x4,
+	WILC_MONITOR_MODE = 0x5
 };
 
 #define WILC_MAX_NUM_PROBED_SSID		10
@@ -29,6 +30,8 @@ enum {
 	WILC_SET_CFG = 0,
 	WILC_GET_CFG
 };
+
+extern uint32_t cfg_packet_timeout;
 
 struct rf_info {
 	u8 link_speed;
@@ -79,7 +82,8 @@ enum conn_event {
 
 enum {
 	WILC_HIF_SDIO = 0,
-	WILC_HIF_SPI = BIT(0)
+	WILC_HIF_SPI = BIT(0),
+	WILC_HIF_SDIO_GPIO_IRQ = BIT(1)
 };
 
 enum {
@@ -95,34 +99,37 @@ struct wilc_rcvd_net_info {
 	struct ieee80211_mgmt *mgmt;
 };
 
+struct wilc_priv;
 struct wilc_user_scan_req {
 	void (*scan_result)(enum scan_event evt,
-			    struct wilc_rcvd_net_info *info, void *priv);
-	void *arg;
+			    struct wilc_rcvd_net_info *info,
+			    struct wilc_priv *priv);
+	struct wilc_priv *priv;
 	u32 ch_cnt;
 };
 
+struct wilc_join_bss_param;
 struct wilc_conn_info {
 	u8 bssid[ETH_ALEN];
 	u8 security;
 	enum authtype auth_type;
 	enum mfptype mfp_type;
-	u8 ch;
 	u8 *req_ies;
 	size_t req_ies_len;
 	u8 *resp_ies;
 	u16 resp_ies_len;
 	u16 status;
-	void (*conn_result)(enum conn_event evt, u8 status, void *priv_data);
-	void *arg;
-	void *param;
+	void (*conn_result)(enum conn_event evt, u8 status,
+			    struct wilc_priv *priv);
+	struct wilc_priv *priv;
+	struct wilc_join_bss_param *param;
 };
 
+struct wilc_vif;
 struct wilc_remain_ch {
 	u16 ch;
-	u32 duration;
-	void (*expired)(void *priv, u64 cookie);
-	void *arg;
+	void (*expired)(struct wilc_vif *vif, u64 cookie);
+	struct wilc_vif *vif;
 	u64 cookie;
 };
 
@@ -151,6 +158,13 @@ struct host_if_drv {
 };
 
 struct wilc_vif;
+
+signed int wilc_send_buffered_eap(struct wilc_vif *vif,
+				  void (*deliver_to_stack)(struct wilc_vif *,
+							   u8 *, u32, u32, u8),
+				  void (*eap_buf_param)(void *), u8 *buff,
+				  unsigned int size, unsigned int pkt_offset,
+				  void *user_arg);
 int wilc_add_ptk(struct wilc_vif *vif, const u8 *ptk, u8 ptk_key_len,
 		 const u8 *mac_addr, const u8 *rx_mic, const u8 *tx_mic,
 		 u8 mode, u8 cipher_mode, u8 index);
@@ -171,11 +185,12 @@ int wilc_set_join_req(struct wilc_vif *vif, u8 *bssid, const u8 *ies,
 int wilc_disconnect(struct wilc_vif *vif);
 int wilc_set_mac_chnl_num(struct wilc_vif *vif, u8 channel);
 int wilc_get_rssi(struct wilc_vif *vif, s8 *rssi_level);
-int wilc_scan(struct wilc_vif *vif, u8 scan_source, u8 scan_type,
-	      u8 *ch_freq_list, u8 ch_list_len,
+int wilc_scan(struct wilc_vif *vif, u8 scan_source,
+	      u8 scan_type, u8 *ch_freq_list,
 	      void (*scan_result_fn)(enum scan_event,
-				     struct wilc_rcvd_net_info *, void *),
-	      void *user_arg, struct cfg80211_scan_request *request);
+				     struct wilc_rcvd_net_info *,
+				     struct wilc_priv *),
+	      struct cfg80211_scan_request *request);
 int wilc_hif_set_cfg(struct wilc_vif *vif,
 		     struct cfg_param_attr *cfg_param);
 int wilc_init(struct net_device *dev, struct host_if_drv **hif_drv_handler);
@@ -192,10 +207,8 @@ int wilc_edit_station(struct wilc_vif *vif, const u8 *mac,
 int wilc_set_power_mgmt(struct wilc_vif *vif, bool enabled, u32 timeout);
 int wilc_setup_multicast_filter(struct wilc_vif *vif, u32 enabled, u32 count,
 				u8 *mc_list);
-int wilc_remain_on_channel(struct wilc_vif *vif, u64 cookie,
-			   u32 duration, u16 chan,
-			   void (*expired)(void *, u64),
-			   void *user_arg);
+int wilc_remain_on_channel(struct wilc_vif *vif, u64 cookie, u16 chan,
+			   void (*expired)(struct wilc_vif *, u64));
 int wilc_listen_state_expired(struct wilc_vif *vif, u64 cookie);
 void wilc_frame_register(struct wilc_vif *vif, u16 frame_type, bool reg);
 int wilc_set_operation_mode(struct wilc_vif *vif, int index, u8 mode,
@@ -207,12 +220,20 @@ int wilc_get_tx_power(struct wilc_vif *vif, u8 *tx_power);
 void wilc_set_wowlan_trigger(struct wilc_vif *vif, bool enabled);
 int wilc_set_external_auth_param(struct wilc_vif *vif,
 				 struct cfg80211_external_auth_params *param);
+/* 0 select antenna 1 , 2 select antenna mode , 2 allow the firmware to choose
+ * the best antenna
+ */
+int wilc_set_antenna(struct wilc_vif *vif, u8 mode);
+int handle_scan_done(struct wilc_vif *vif, enum scan_event evt);
 void wilc_scan_complete_received(struct wilc *wilc, u8 *buffer, u32 length);
 void wilc_network_info_received(struct wilc *wilc, u8 *buffer, u32 length);
 void wilc_gnrl_async_info_received(struct wilc *wilc, u8 *buffer, u32 length);
-void *wilc_parse_join_bss_param(struct cfg80211_bss *bss,
-				struct cfg80211_crypto_settings *crypto);
+struct wilc_join_bss_param *
+wilc_parse_join_bss_param(struct cfg80211_bss *bss,
+			  struct cfg80211_crypto_settings *crypto);
 int wilc_set_default_mgmt_key_index(struct wilc_vif *vif, u8 index);
-void wilc_handle_disconnect(struct wilc_vif *vif);
 
+void wilc_handle_disconnect(struct wilc_vif *vif);
+int wilc_of_parse_power_pins(struct wilc *wilc);
+void wilc_wlan_power(struct wilc *wilc, bool on);
 #endif

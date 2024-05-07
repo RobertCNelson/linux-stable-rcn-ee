@@ -250,7 +250,7 @@
 	num-ports = <3>;
 	atmel,vbus-gpio = <0
 			   &pioC 27 GPIO_ACTIVE_HIGH
-			   &pioB 18 GPIO_ACTIVE_HIGH>;
+			   &pioC 31 GPIO_ACTIVE_HIGH>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_usb_default>;
 	status = "okay";
@@ -365,7 +365,7 @@
 	ohci0 {
 		pinctrl_usb_default: usb-default {
 			atmel,pins = <AT91_PIOC 27 AT91_PERIPH_GPIO AT91_PINCTRL_NONE
-				      AT91_PIOB 18 AT91_PERIPH_GPIO AT91_PINCTRL_NONE>;
+				      AT91_PIOC 31 AT91_PERIPH_GPIO AT91_PINCTRL_NONE>;
 		};
 	};
 

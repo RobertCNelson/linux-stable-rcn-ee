@@ -23,6 +23,7 @@ properties:
     items:
       - enum:
           - hannstar,hsd060bhw4
+          - microchip,ac40t08a-mipi-panel
       - const: himax,hx8394
 
   reg: true
@@ -42,7 +43,6 @@ properties:
 required:
   - compatible
   - reg
-  - reset-gpios
   - backlight
   - port
   - vcc-supply

@@ -1194,6 +1194,15 @@
 			reg = <0xf8050000 0x400>;
 		};
 
+		dsi: dsi@f8054000 {
+			compatible = "microchip,sam9x75-mipi-dsi";
+			reg = <0xf8054000 0x200>;
+			clocks = <&pmc PMC_TYPE_PERIPHERAL 54>, <&pmc PMC_TYPE_GCK 55>;
+			clock-names = "pclk", "refclk";
+			microchip,sfr = <&sfr>;
+			status = "disabled";
+		};
+
 		csi2host: csi2host@f8058000 {
 			compatible = "snps,dw-csi";
 			#address-cells = <1>;

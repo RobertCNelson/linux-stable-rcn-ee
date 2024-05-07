@@ -47,6 +47,11 @@ static const struct wilc_cfg_str g_cfg_str[] = {
 	{WID_NIL, NULL}
 };
 
+static const struct wilc_cfg_bin g_cfg_bin[] = {
+	{WID_ANTENNA_SELECTION, NULL},
+	{WID_NIL, NULL}
+};
+
 #define WILC_RESP_MSG_TYPE_CONFIG_REPLY		'R'
 #define WILC_RESP_MSG_TYPE_STATUS_INFO		'I'
 #define WILC_RESP_MSG_TYPE_NETWORK_INFO		'N'
@@ -186,7 +191,40 @@ static void wilc_wlan_parse_response_frame(struct wilc *wl, u8 *info, int size)
 
 			len = 2 + get_unaligned_le16(&info[2]);
 			break;
+		case WID_BIN_DATA:
+			while (cfg->bin[i].id != WID_NIL &&
+			       cfg->bin[i].id != wid)
+				i++;
 
+			if (cfg->bin[i].id == wid) {
+				u16 length = (info[3] << 8) | info[2];
+				u8 checksum = 0;
+				int j = 0;
+
+				/*
+				 * Compute the Checksum of received
+				 * data field
+				 */
+				for (j = 0; j < length; j++)
+					checksum += info[4 + j];
+				/*
+				 * Verify the checksum of received BIN
+				 * DATA
+				 */
+				if (checksum != info[4 + length]) {
+					pr_err("%s: Checksum Failed\n",
+					       __func__);
+					return;
+				}
+
+				memcpy(cfg->bin[i].bin, &info[2], length + 2);
+				/*
+				 * value length + data length +
+				 * checksum
+				 */
+				len = 2 + length + 1;
+			}
+			break;
 		default:
 			break;
 		}
@@ -310,6 +348,21 @@ int wilc_wlan_cfg_get_val(struct wilc *wl, u16 wid, u8 *buffer,
 				ret = size;
 			}
 		}
+	} else if (type == CFG_BIN_CMD) { /* binary command */
+		while (cfg->bin[i].id != WID_NIL && cfg->bin[i].id != wid)
+			i++;
+
+		if (cfg->bin[i].id == wid) {
+			u32 size = cfg->bin[i].bin[0] |
+				(cfg->bin[i].bin[1] << 8);
+
+			if (buffer_size >= size) {
+				memcpy(buffer, &cfg->bin[i].bin[2], size);
+				ret = size;
+			}
+		}
+	} else {
+		pr_err("[CFG]: illegal type (%08x)\n", wid);
 	}
 	return ret;
 }
@@ -358,6 +411,7 @@ void wilc_wlan_cfg_indicate_rx(struct wilc *wilc, u8 *frame, int size,
 int wilc_wlan_cfg_init(struct wilc *wl)
 {
 	struct wilc_cfg_str_vals *str_vals;
+	struct wilc_bin_vals *bin_vals;
 	int i = 0;
 
 	wl->cfg.b = kmemdup(g_cfg_byte, sizeof(g_cfg_byte), GFP_KERNEL);
@@ -380,6 +434,15 @@ int wilc_wlan_cfg_init(struct wilc *wl)
 	if (!str_vals)
 		goto out_s;
 
+	wl->cfg.bin = kmemdup(g_cfg_bin, sizeof(g_cfg_bin), GFP_KERNEL);
+	if (!wl->cfg.bin)
+		goto out_str_val;
+
+	bin_vals = kzalloc(sizeof(*bin_vals), GFP_KERNEL);
+	if (!bin_vals)
+		goto out_bin;
+
+	/* store the string cfg parameters */
 	wl->cfg.str_vals = str_vals;
 	/* store the string cfg parameters */
 	wl->cfg.s[i].id = WID_FIRMWARE_VERSION;
@@ -393,8 +456,22 @@ int wilc_wlan_cfg_init(struct wilc *wl)
 	i++;
 	wl->cfg.s[i].id = WID_NIL;
 	wl->cfg.s[i].str = NULL;
+
+	/* store the bin parameters */
+	i = 0;
+	wl->cfg.bin[i].id = WID_ANTENNA_SELECTION;
+	wl->cfg.bin[i].bin = bin_vals->antenna_param;
+	i++;
+
+	wl->cfg.bin[i].id = WID_NIL;
+	wl->cfg.bin[i].bin = NULL;
+
 	return 0;
 
+out_bin:
+	kfree(wl->cfg.bin);
+out_str_val:
+	kfree(str_vals);
 out_s:
 	kfree(wl->cfg.s);
 out_w:
@@ -413,4 +490,6 @@ void wilc_wlan_cfg_deinit(struct wilc *wl)
 	kfree(wl->cfg.w);
 	kfree(wl->cfg.s);
 	kfree(wl->cfg.str_vals);
+	kfree(wl->cfg.bin);
+	kfree(wl->cfg.bin_vals);
 }
