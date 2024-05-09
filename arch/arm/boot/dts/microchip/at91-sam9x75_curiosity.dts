@@ -75,7 +75,7 @@
 	vddana-supply = <&vdd_3v3>;
 	vref-supply = <&vdd_3v3>;
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_adc_default>;
+	pinctrl-0 = <&pinctrl_adc_default &pinctrl_adtrg_default>;
 	status = "okay";
 };
 
@@ -269,6 +269,10 @@
 	adc {
 		pinctrl_adc_default: adc-default {
 			atmel,pins = <AT91_PIOA 31 AT91_PERIPH_A AT91_PINCTRL_NONE>;
+		};
+
+		pinctrl_adtrg_default: adtrg-default {
+			atmel,pins = <AT91_PIOB 18 AT91_PERIPH_B AT91_PINCTRL_PULL_UP>;
 		};
 	};
 
