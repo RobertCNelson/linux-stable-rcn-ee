@@ -69,7 +69,6 @@ struct mchp_crypto_info {
 };
 
 struct mchp_crypto_ctx {
-	struct crypto_engine_ctx	engine_ctx;
 	struct mchp_crypto_dev		*cryp;
 	u8				key[AES_MAX_KEY_SIZE];
 	int				keylen;

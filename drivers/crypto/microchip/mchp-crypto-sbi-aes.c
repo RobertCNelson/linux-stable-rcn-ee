@@ -38,7 +38,7 @@
 
 struct mchp_crypto_aes_algo {
 	u64 algonum;
-	struct skcipher_alg algo;
+	struct skcipher_engine_alg algo;
 };
 
 struct mchp_crypto_aes_req {
@@ -220,17 +220,13 @@ static int mchp_aes_init_tfm(struct crypto_skcipher *tfm)
 	crypto_skcipher_set_reqsize(tfm, sizeof(struct mchp_crypto_ctx) +
 				    sizeof(struct skcipher_request));
 
-	ctx->engine_ctx.op.do_one_request = mchp_aes_do_one_req;
-	ctx->engine_ctx.op.prepare_request = NULL;
-	ctx->engine_ctx.op.unprepare_request = NULL;
-
 	return 0;
 }
 
 static struct mchp_crypto_aes_algo mchp_aes_algs[] = {
 {
 	.algonum = CRYPTO_ALG_AES_ECB,
-	.algo = {
+	.algo.base = {
 		.base.cra_name		= "ecb(aes)",
 		.base.cra_driver_name	= "microchip-ecb-aes",
 		.base.cra_priority	= 300,
@@ -246,10 +242,13 @@ static struct mchp_crypto_aes_algo mchp_aes_algs[] = {
 		.decrypt		= mchp_aes_ecb_decrypt,
 		.min_keysize		= AES_MIN_KEY_SIZE,
 		.max_keysize		= AES_MAX_KEY_SIZE,
-	}
+	},
+	.algo.op = {
+		.do_one_request = mchp_aes_do_one_req
+	},
 }, {
 	.algonum = CRYPTO_ALG_AES_CBC,
-	.algo = {
+	.algo.base = {
 		.base.cra_name		= "cbc(aes)",
 		.base.cra_driver_name	= "microchip-cbc-aes",
 		.base.cra_priority	= 300,
@@ -266,10 +265,13 @@ static struct mchp_crypto_aes_algo mchp_aes_algs[] = {
 		.min_keysize		= AES_MIN_KEY_SIZE,
 		.max_keysize		= AES_MAX_KEY_SIZE,
 		.ivsize			= AES_BLOCK_SIZE,
-	}
+	},
+	.algo.op = {
+		.do_one_request = mchp_aes_do_one_req
+	},
 }, {
 	.algonum = CRYPTO_ALG_AES_OFB,
-	.algo = {
+	.algo.base = {
 		.base.cra_name		= "ofb(aes)",
 		.base.cra_driver_name	= "microchip-ofb-aes",
 		.base.cra_priority	= 300,
@@ -286,10 +288,13 @@ static struct mchp_crypto_aes_algo mchp_aes_algs[] = {
 		.min_keysize		= AES_MIN_KEY_SIZE,
 		.max_keysize		= AES_MAX_KEY_SIZE,
 		.ivsize			= AES_BLOCK_SIZE,
-	}
+	},
+	.algo.op = {
+		.do_one_request = mchp_aes_do_one_req
+	},
 }, {
 	.algonum = CRYPTO_ALG_AES_CFB,
-	.algo = {
+	.algo.base = {
 		.base.cra_name		= "cfb(aes)",
 		.base.cra_driver_name	= "microchip-cfb-aes",
 		.base.cra_priority	= 300,
@@ -306,10 +311,13 @@ static struct mchp_crypto_aes_algo mchp_aes_algs[] = {
 		.min_keysize		= AES_MIN_KEY_SIZE,
 		.max_keysize		= AES_MAX_KEY_SIZE,
 		.ivsize			= AES_BLOCK_SIZE,
-	}
+	},
+	.algo.op = {
+		.do_one_request = mchp_aes_do_one_req
+	},
 }, {
 	.algonum = CRYPTO_ALG_AES_CTR,
-	.algo = {
+	.algo.base = {
 		.base.cra_name		= "ctr(aes)",
 		.base.cra_driver_name	= "microchip-ctr-aes",
 		.base.cra_priority	= 300,
@@ -326,7 +334,10 @@ static struct mchp_crypto_aes_algo mchp_aes_algs[] = {
 		.min_keysize		= AES_MIN_KEY_SIZE,
 		.max_keysize		= AES_MAX_KEY_SIZE,
 		.ivsize			= AES_BLOCK_SIZE,
-	}
+	},
+	.algo.op = {
+		.do_one_request = mchp_aes_do_one_req
+	},
 },
 };
 
@@ -339,7 +350,7 @@ int mchp_aes_register_algs(struct mchp_crypto_dev *cryp)
 		if (!(algonum & cryp->crypto->cipher_algo))
 			continue;
 
-		ret = crypto_register_skcipher(&mchp_aes_algs[i].algo);
+		ret = crypto_register_skcipher(&mchp_aes_algs[i].algo.base);
 		if (ret)
 			return ret;
 	}
@@ -355,6 +366,6 @@ void mchp_aes_unregister_algs(struct mchp_crypto_dev *cryp)
 		if (!(algonum & cryp->crypto->cipher_algo))
 			continue;
 
-		crypto_unregister_skcipher(&mchp_aes_algs[i].algo);
+		crypto_unregister_skcipher(&mchp_aes_algs[i].algo.base);
 	}
 }
