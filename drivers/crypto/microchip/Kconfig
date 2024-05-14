@@ -8,6 +8,9 @@ config CRYPTO_DEV_POLARFIRE_SOC
 	depends on SOC_MICROCHIP_POLARFIRE || COMPILE_TEST
 	select CRYPTO_ENGINE
 	select CRYPTO_AES
+	select CRYPTO_AEAD
+	select CRYPTO_AKCIPHER
+	select CRYPTO_KPP
 	select CRYPTO_SKCIPHER
 	default y
 	help
