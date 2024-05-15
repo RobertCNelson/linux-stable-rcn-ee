@@ -38,22 +38,26 @@
 	leds {
 		compatible = "gpio-leds";
 		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_led_gpio_default>;
-
-		led-red {
+		led_red: led-red {
+			pinctrl-0 = <&pinctrl_red_led_gpio_default>;
 			label = "red";
 			gpios = <&pioC 14 GPIO_ACTIVE_HIGH>;
+			status = "okay";
 		};
 
-		led-green {
+		led_green: led-green {
+			pinctrl-0 = <&pinctrl_green_led_gpio_default>;
 			label = "green";
 			gpios = <&pioC 21 GPIO_ACTIVE_HIGH>;
+			status = "okay";
 		};
 
-		led-blue {
+		led_blue: led-blue {
+			pinctrl-0 = <&pinctrl_blue_led_gpio_default>;
 			label = "blue";
 			gpios = <&pioC 20 GPIO_ACTIVE_HIGH>;
 			linux,default-trigger = "heartbeat";
+			status = "okay";
 		};
 	};
 
@@ -341,10 +345,14 @@
 	};
 
 	leds {
-		pinctrl_led_gpio_default: led-gpio-default {
-			atmel,pins = <AT91_PIOC 14 AT91_PERIPH_GPIO AT91_PINCTRL_NONE
-				      AT91_PIOC 21 AT91_PERIPH_GPIO AT91_PINCTRL_NONE
-				      AT91_PIOC 20 AT91_PERIPH_GPIO AT91_PINCTRL_NONE>;
+		pinctrl_red_led_gpio_default: red-led-gpio-default {
+			atmel,pins = <AT91_PIOC 14 AT91_PERIPH_GPIO AT91_PINCTRL_NONE>;
+		};
+		pinctrl_green_led_gpio_default: green-led-gpio-default {
+			atmel,pins = <AT91_PIOC 21 AT91_PERIPH_GPIO AT91_PINCTRL_NONE>;
+		};
+		pinctrl_blue_led_gpio_default: blue-led-gpio-default {
+			atmel,pins = <AT91_PIOC 20 AT91_PERIPH_GPIO AT91_PINCTRL_NONE>;
 		};
 	};
 
