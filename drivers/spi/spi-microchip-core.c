@@ -258,6 +258,9 @@ static int mchp_corespi_setup(struct spi_device *spi)
 	struct mchp_corespi *corespi = spi_master_get_devdata(spi->master);
 	u32 reg;
 
+	if (spi_get_csgpiod(spi, 0))
+		return 0;
+
 	/*
 	 * Active high slaves need to be specifically set to their inactive
 	 * states during probe by adding them to the "control group" & thus
@@ -515,6 +518,7 @@ static int mchp_corespi_probe(struct platform_device *pdev)
 	master->num_chipselect = num_cs;
 	master->mode_bits = SPI_CPOL | SPI_CPHA | SPI_CS_HIGH;
 	master->setup = mchp_corespi_setup;
+	master->use_gpio_descriptors = true;
 	master->bits_per_word_mask = SPI_BPW_MASK(8);
 	master->transfer_one = mchp_corespi_transfer_one;
 	master->prepare_message = mchp_corespi_prepare_message;
