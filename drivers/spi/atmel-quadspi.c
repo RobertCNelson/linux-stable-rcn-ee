@@ -1614,7 +1614,6 @@ static int __maybe_unused atmel_qspi_runtime_resume(struct device *dev)
 	if (aq->caps->has_qspick)
 		ret = clk_enable(aq->qspick);
 
-	ret = clk_enable(aq->qspick);
 	if (ret)
 		clk_disable(aq->pclk);
 
