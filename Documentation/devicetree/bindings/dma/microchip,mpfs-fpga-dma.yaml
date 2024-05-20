@@ -39,7 +39,7 @@ additionalProperties: false
 examples:
   - |
     dma: dma-controller@60020000 {
-        compatible = "microchip,mpfs-fpga-dma-uio";
+        compatible = "microchip,mpfs-fpga-dma";
         reg = <0x60020000 0x1000>;
         interrupt-parent = <&plic>;
         interrupts = <120>;
