@@ -76,7 +76,6 @@
 			compatible = "shared-dma-pool";
 			size = <0x0 0x4000000>;
 			no-map;
-			linux,dma-default;
 			alloc-ranges = <0x0 0xc4000000 0x0 0x4000000>;
 		};
 
