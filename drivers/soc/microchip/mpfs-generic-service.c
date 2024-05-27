@@ -183,6 +183,13 @@ static int mpfs_generic_service_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, generic_service_priv);
 	misc_register(&mpfs_generic_service_dev);
+	/*
+	 * This driver exposes all the system controller functions to userspace
+	 * without performing any validation. Additionally, while access to the
+	 * system controller itself is serialised, services requested using this
+	 * driver from userspace may interfere with kernel's own use of the
+	 * same services.
+	 */
 	dev_warn(&pdev->dev,
 		 "Registered MPFS generic service - FOR DEVELOPMENT ONLY, DO NOT USE IN PRODUCTION\n");
 
