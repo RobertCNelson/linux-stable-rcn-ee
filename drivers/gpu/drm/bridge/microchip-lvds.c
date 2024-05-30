@@ -120,7 +120,7 @@ static void mchp_lvds_enable(struct drm_bridge *bridge)
 	struct mchp_lvds *lvds = bridge_to_lvds(bridge);
 	int ret;
 
-	ret = clk_enable(lvds->pclk);
+	ret = clk_prepare_enable(lvds->pclk);
 	if (ret < 0) {
 		DRM_DEV_ERROR(lvds->dev, "failed to enable lvds pclk %d\n", ret);
 		return;
@@ -176,12 +176,6 @@ static int mchp_lvds_probe(struct platform_device *pdev)
 	if (IS_ERR(lvds->pclk)) {
 		DRM_DEV_ERROR(lvds->dev, "could not get pclk_lvds\n");
 		return PTR_ERR(lvds->pclk);
-	}
-
-	ret = clk_prepare(lvds->pclk);
-	if (ret < 0) {
-		DRM_DEV_ERROR(lvds->dev, "failed to prepare pclk_lvds\n");
-		return ret;
 	}
 
 	port = of_graph_get_remote_node(dev->of_node, 1, 0);
