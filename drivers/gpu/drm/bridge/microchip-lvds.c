@@ -156,7 +156,6 @@ static int mchp_lvds_probe(struct platform_device *pdev)
 	struct mchp_lvds *lvds;
 	struct resource *res;
 	struct device_node *port;
-	int ret;
 
 	if (!dev->of_node)
 		return -ENODEV;
