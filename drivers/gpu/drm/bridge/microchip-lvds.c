@@ -129,7 +129,7 @@ static void mchp_lvds_enable(struct drm_bridge *bridge)
 	ret = pm_runtime_get_sync(lvds->dev);
 	if (ret < 0) {
 		DRM_DEV_ERROR(lvds->dev, "failed to get pm runtime: %d\n", ret);
-		clk_disable(lvds->pclk);
+		clk_disable_unprepare(lvds->pclk);
 		return;
 	}
 
@@ -141,7 +141,7 @@ static void mchp_lvds_disable(struct drm_bridge *bridge)
 	struct mchp_lvds *lvds = bridge_to_lvds(bridge);
 
 	pm_runtime_put(lvds->dev);
-	clk_disable(lvds->pclk);
+	clk_disable_unprepare(lvds->pclk);
 }
 
 static const struct drm_bridge_funcs mchp_lvds_bridge_funcs = {
@@ -211,10 +211,7 @@ static int mchp_lvds_probe(struct platform_device *pdev)
 
 static int mchp_lvds_remove(struct platform_device *pdev)
 {
-	struct mchp_lvds *lvds = platform_get_drvdata(pdev);
-
 	pm_runtime_disable(&pdev->dev);
-	clk_unprepare(lvds->pclk);
 
 	return 0;
 }
