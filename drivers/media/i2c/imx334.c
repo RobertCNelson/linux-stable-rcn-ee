@@ -60,6 +60,13 @@
 #define IMX334_REG_TP		0x329e
 #define IMX334_TP_COLOR_HBARS	0xA
 #define IMX334_TP_COLOR_VBARS	0xB
+#define IMX334_TP_BLACK		0x0
+#define IMX334_TP_WHITE		0x1
+#define IMX334_TP_PINK		0x5
+#define IMX334_TP_BLUE		0x6
+#define IMX334_TP_RED		0x7
+#define IMX334_TP_BLACK_GREY	0xC
+
 
 #define IMX334_TPG_EN_DOUT	0x329c
 #define IMX334_TP_ENABLE	0x1
@@ -778,12 +785,24 @@ static const char * const imx334_test_pattern_menu[] = {
 	"Disabled",
 	"Color Bars Ver",
 	"Color Bars Hor",
+	"Black and Grey Bars",
+	"Black Color",
+	"White Color",
+	"Pink Color",
+	"Blue Color",
+	"Red Color",
 };
 
 static const int imx334_test_pattern_val[] = {
 	IMX334_TP_DISABLE,
 	IMX334_TP_COLOR_HBARS,
 	IMX334_TP_COLOR_VBARS,
+	IMX334_TP_BLACK_GREY,
+	IMX334_TP_BLACK,
+	IMX334_TP_WHITE,
+	IMX334_TP_PINK,
+	IMX334_TP_BLUE,
+	IMX334_TP_RED,
 };
 
 static const struct imx334_reg raw10_framefmt_regs[] = {
