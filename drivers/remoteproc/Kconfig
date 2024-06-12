@@ -57,8 +57,9 @@ config INGENIC_VPU_RPROC
 config MIV_REMOTEPROC
 	tristate "MIV remoteproc support"
 	depends on SOC_MICROCHIP_POLARFIRE
-	select MAILBOX
-	select MIV_IHC
+	depends on MAILBOX
+	depends on MIV_IHC
+	depends on RISCV_SBI
 	help
 	  Say y here to support booting and loading firmware to harts (cores)
 	  associated with an Asymmetric Multiprocessing (AMP) context in
