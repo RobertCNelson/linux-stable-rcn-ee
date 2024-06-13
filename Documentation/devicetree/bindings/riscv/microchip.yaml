@@ -22,6 +22,7 @@ properties:
           - enum:
               - microchip,mpfs-icicle-reference-rtlv2203
               - microchip,mpfs-icicle-reference-rtlv2210
+              - microchip,mpfs-icicle-reference-rtl-v2406
           - const: microchip,mpfs-icicle-kit
           - const: microchip,mpfs
       - items:
