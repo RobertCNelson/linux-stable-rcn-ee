@@ -1,0 +1,76 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: "http://devicetree.org/schemas/remoteproc/microchip,ipc-remoteproc.yaml#"
+$schema: "http://devicetree.org/meta-schemas/core.yaml#"
+
+title: Microchip IPC Remote Processor
+
+description:
+  Microchip family of RISC-V SoCs typically have one or more
+  clusters. These clusters can be configured to run in an Asymmetric
+  Multi Processing (AMP) mode where clusters are split in independent
+  software contexts.
+
+  This document defines the binding for the remoteproc component that
+  loads and boots firmwares on remote clusters.
+
+  This SBI interface is compatible with the Mi-V Inter-hart
+  Communication (IHC) IP.
+
+maintainers:
+  - Valentina Fernandez <valentina.fernandezalanis@microchip.com>
+
+properties:
+  compatible:
+    const: microchip,ipc-remoteproc
+
+  mboxes:
+    description:
+      This property is required only if the rpmsg/virtio functionality is used.
+      Microchip IPC mailbox specifier. To be used for communication with a
+      remote cluster. The specifier format is as per the bindings,
+      Documentation/devicetree/bindings/mailbox/microchip,sbi-ipc.yaml
+    maxItems: 1
+
+  microchip,auto-boot:
+    $ref: /schemas/types.yaml#/definitions/flag
+    description:
+      If defined, when remoteproc is probed, it loads the default firmware and
+      starts the remote processor.
+
+  memory-region:
+    description:
+      If present, a phandle for a reserved memory area that used for vdev buffer,
+      resource table, vring region and others used by remote cluster.
+
+required:
+  - compatible
+
+additionalProperties: false
+
+examples:
+  - |
+
+    reserved-memory {
+        #address-cells = <1>;
+        #size-cells = <1>;
+
+        contextb: contextb_reserved@81000000 {
+          reg = <0x81000000 0x400000>;
+          no-map;
+        };
+    };
+
+    soc {
+      #address-cells = <2>;
+      #size-cells = <2>;
+
+      rproc-contextb {
+          compatible = "microchip,miv-remoteproc";
+          memory-region = <&contextb>;
+          mboxes= <&ihc 8>;
+      };
+    };
+
+...
