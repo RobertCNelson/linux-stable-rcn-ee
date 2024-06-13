@@ -57,8 +57,9 @@ config INGENIC_VPU_RPROC
 config MIV_REMOTEPROC
 	tristate "MIV remoteproc support"
 	depends on SOC_MICROCHIP_POLARFIRE
-	select MAILBOX
-	select MIV_IHC
+	depends on MAILBOX
+	depends on MIV_IHC
+	depends on RISCV_SBI
 	help
 	  Say y here to support booting and loading firmware to harts (cores)
 	  associated with an Asymmetric Multiprocessing (AMP) context in
@@ -66,6 +67,18 @@ config MIV_REMOTEPROC
 
 	  This can be either built-in or a loadable module.
 	  If compiled as module, the module will be called miv_remoteproc.
+	  If unsure say N.
+
+config MCHP_IPC_REMOTEPROC
+	tristate "Microchip IPC remoteproc support"
+	depends on MCHP_SBI_IPC_MBOX || COMPILE_TEST
+	depends on RISCV_SBI
+	help
+	  Say y here to support booting and loading firmware to remote
+	  processors on various Microchip family of RISC-V SoCs via the
+	  remote processor framework.
+	  This can be either built-in or a loadable module.
+	  If compiled as module, the module will be called mchp_ipc_remoteproc.
 	  If unsure say N.
 
 config MTK_SCP
