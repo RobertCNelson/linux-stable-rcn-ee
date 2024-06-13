@@ -1359,26 +1359,22 @@ static int mc_host_probe(struct platform_device *pdev)
 
 	port->dev = dev;
 
+	port->bridge_base_addr = devm_platform_ioremap_resource_byname(pdev, "bridge");
+	port->ctrl_base_addr = devm_platform_ioremap_resource_byname(pdev, "ctrl");
+	if(!IS_ERR(port->bridge_base_addr) && !IS_ERR(port->ctrl_base_addr))
+		goto addrs_set;
+
 	/*
 	 * The original, incorrect, binding that lumped the control and
 	 * bridge addresses together still needs to be handled by the driver.
 	 */
 	axi_base_addr = devm_platform_ioremap_resource_byname(pdev, "apb");
-	if (!IS_ERR(axi_base_addr)) {
-		port->bridge_base_addr = axi_base_addr + MC_PCIE1_BRIDGE_ADDR;
-		port->ctrl_base_addr = axi_base_addr + MC_PCIE1_CTRL_ADDR;
-		goto addrs_set;
-	}
-
-	port->bridge_base_addr = devm_platform_ioremap_resource_byname(pdev, "bridge");
-	if (IS_ERR(port->bridge_base_addr))
+	if (IS_ERR(axi_base_addr))
 		return dev_err_probe(dev, PTR_ERR(port->bridge_base_addr),
-				     "legacy apb register and bridge region missing");
+				     "both legacy apb register and ctrl/bridge regions missing");
 
-	port->ctrl_base_addr = devm_platform_ioremap_resource_byname(pdev, "ctrl");
-	if (IS_ERR(port->ctrl_base_addr))
-		return dev_err_probe(dev, PTR_ERR(port->ctrl_base_addr),
-				     "legacy apb register and ctrl region missing");
+	port->bridge_base_addr = axi_base_addr + MC_PCIE1_BRIDGE_ADDR;
+	port->ctrl_base_addr = axi_base_addr + MC_PCIE1_CTRL_ADDR;
 
 addrs_set:
 	mc_disable_interrupts(port);
