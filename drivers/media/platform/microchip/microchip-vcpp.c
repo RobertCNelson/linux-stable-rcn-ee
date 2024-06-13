@@ -19,6 +19,7 @@
 #include <linux/of.h>
 #include <linux/of_graph.h>
 #include <linux/of_address.h>
+#include <linux/of_reserved_mem.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
 #include <linux/videodev2.h>
@@ -75,7 +76,7 @@
 #define MCHP_VCPP_FRAME_START			0x1
 #define MCHP_VCPP_FRAME_STOP			0x0
 
-#define MCHP_VCPP_MAX_FRAMES			32
+#define MCHP_VCPP_MAX_FRAMES			8
 
 /* The compression ratio is calculated for every 60 frames */
 #define MCHP_VCPP_CR_MAX_FRAMES_RESET_COUNT	60
@@ -107,16 +108,6 @@ struct mchp_vcpp_buffer {
 	dma_addr_t paddr;
 	size_t size;
 	bool prepared;
-};
-
-/**
- * struct mchp_vcpp_cam_buffer - camera dma buffers and size
- * @paddr:	camera stream base address
- * @size:	size of buffer
- */
-struct mchp_vcpp_cam_buffer {
-	dma_addr_t paddr;
-	size_t size;
 };
 
 /**
@@ -173,7 +164,6 @@ struct mchp_vcpp_fpga {
 	spinlock_t qlock;
 	struct list_head buf_list;
 	struct list_head subdev_entities;
-	struct mchp_vcpp_cam_buffer cambuf;
 	struct v4l2_async_notifier notifier;
 	struct media_device mdev;
 	struct media_pad vid_cap_pad;
@@ -1333,6 +1323,16 @@ static int mchp_vcpp_probe(struct platform_device *pdev)
 	ret = mchp_vcpp_graph_init(mchp_vcpp);
 	if (ret < 0) {
 		dev_err(mchp_vcpp->dev, "mchp dscmi graph init failed %d\n", ret);
+		goto v4l2_unregister;
+	}
+
+	ret = of_reserved_mem_device_init(&pdev->dev);
+	if (ret)
+		dev_dbg(&pdev->dev, "of_reserved_mem_device_init: %d\n", ret);
+
+	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
+	if (ret) {
+		dev_err(&pdev->dev, "dma_set_mask_and_coherent: %d\n", ret);
 		goto v4l2_unregister;
 	}
 
