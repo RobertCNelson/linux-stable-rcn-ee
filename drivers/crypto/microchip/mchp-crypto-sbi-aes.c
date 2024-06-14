@@ -350,7 +350,7 @@ int mchp_aes_register_algs(struct mchp_crypto_dev *cryp)
 		if (!(algonum & cryp->crypto->cipher_algo))
 			continue;
 
-		ret = crypto_register_skcipher(&mchp_aes_algs[i].algo.base);
+		ret = crypto_engine_register_skcipher(&mchp_aes_algs[i].algo);
 		if (ret)
 			return ret;
 	}
@@ -366,6 +366,6 @@ void mchp_aes_unregister_algs(struct mchp_crypto_dev *cryp)
 		if (!(algonum & cryp->crypto->cipher_algo))
 			continue;
 
-		crypto_unregister_skcipher(&mchp_aes_algs[i].algo.base);
+		crypto_engine_unregister_skcipher(&mchp_aes_algs[i].algo);
 	}
 }
