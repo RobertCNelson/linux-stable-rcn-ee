@@ -188,6 +188,10 @@
 	};
 };
 
+&core_pwm0 {
+	status = "okay";
+};
+
 &fpgadma {
 	status = "okay";
 };
@@ -205,6 +209,10 @@
 };
 
 &i2c0 {
+	status = "okay";
+};
+
+&i2c2 {
 	status = "okay";
 };
 
@@ -234,6 +242,10 @@
 	sd-uhs-sdr50;
 	sd-uhs-sdr104;
 	no-1-8-v;
+	status = "okay";
+};
+
+&mmuart1 {
 	status = "okay";
 };
 
