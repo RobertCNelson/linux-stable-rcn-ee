@@ -8,6 +8,7 @@
  *
  */
 
+#include <linux/auxiliary_bus.h>
 #include <linux/io.h>
 #include <linux/err.h>
 #include <linux/init.h>
@@ -220,6 +221,64 @@ static const struct mbox_chan_ops mpfs_mbox_ops = {
 	.last_tx_done = mpfs_mbox_last_tx_done,
 };
 
+static void mpfs_mbox_auxdev_release(struct device *dev)
+{
+	struct auxiliary_device *auxdev = to_auxiliary_dev(dev);
+
+	kfree(auxdev);
+}
+
+static struct auxiliary_device *mpfs_mbox_adev_alloc(struct device *parent_dev)
+{
+	struct auxiliary_device *auxdev;
+	int ret;
+
+	auxdev = kzalloc(sizeof(*auxdev), GFP_KERNEL);
+	if(!auxdev)
+		return ERR_PTR(-ENOMEM);
+
+	auxdev->name = "tvs-mpfs";
+	auxdev->dev.parent = parent_dev;
+	auxdev->dev.release = mpfs_mbox_auxdev_release;
+	auxdev->id = 10u;
+
+	ret = auxiliary_device_init(auxdev);
+	if(ret) {
+		kfree(auxdev);
+		return ERR_PTR(ret);
+	}
+
+	return auxdev;
+}
+
+static void mpfs_mbox_unregister_auxdev(void *dev)
+{
+	struct auxiliary_device *auxdev = dev;
+
+	auxiliary_device_delete(auxdev);
+	auxiliary_device_uninit(auxdev);
+}
+
+int mpfs_mbox_auxdev_register(struct device *parent_dev, void __iomem *base)
+{
+	struct auxiliary_device *auxdev;
+	int ret;
+
+	auxdev = mpfs_mbox_adev_alloc(parent_dev);
+	if(IS_ERR(auxdev))
+		return PTR_ERR(auxdev);
+
+	auxdev->dev.platform_data = base;
+
+	ret = auxiliary_device_add(auxdev);
+	if(ret) {
+		auxiliary_device_uninit(auxdev);
+		return ret;
+	}
+
+	return devm_add_action_or_reset(parent_dev, mpfs_mbox_unregister_auxdev, auxdev);
+}
+
 static int mpfs_mbox_probe(struct platform_device *pdev)
 {
 	struct mpfs_mbox *mbox;
@@ -261,6 +320,9 @@ static int mpfs_mbox_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Registering MPFS mailbox controller failed\n");
 		return ret;
 	}
+
+	mpfs_mbox_auxdev_register(&pdev->dev, mbox->ctrl_base);
+
 	dev_info(&pdev->dev, "Registered MPFS mailbox controller driver\n");
 
 	return 0;
