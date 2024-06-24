@@ -50,23 +50,23 @@
 			clock-frequency = <100000>;
 			status = "disabled";
 		};
+
+		mailbox@50000000 {
+			compatible = "microchip,miv-ihc-rtl-v2";
+			reg = <0x0 0x50000000 0x0 0x1C000>;
+			interrupt-parent = <&plic>;
+			interrupts = <180>, <179>, <178>;
+			interrupt-names = "hart-1", "hart-2", "hart-3";
+			#mbox-cells = <1>;
+			status = "disabled";
+		};
 	};
 
 	ihc: mailbox {
 		compatible = "microchip,sbi-ipc";
 		interrupt-parent = <&plic>;
-		interrupts = <180 179 178>;
-		interrupt-names = "hart1", "hart2", "hart3";
-		#mbox-cells = <1>;
-		status = "disabled";
-	};
-
-	mailbox@50000000 {
-		compatible = "microchip,miv-ihc-rtl-v2";
-		reg = <0x0 0x50000000 0x0 0x1C000>;
-		interrupt-parent = <&plic>;
-		interrupts = <180 179 178>;
-		interrupt-names = "hart1", "hart2", "hart3";
+		interrupts = <180>, <179>, <178>;
+		interrupt-names = "hart-1", "hart-2", "hart-3";
 		#mbox-cells = <1>;
 		status = "disabled";
 	};
