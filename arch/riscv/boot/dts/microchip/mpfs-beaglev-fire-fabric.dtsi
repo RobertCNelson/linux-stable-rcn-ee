@@ -68,23 +68,13 @@
 					  "XCVR3_LOCK", "XCVR3_ERROR", "XCVR_0B_REF_CLK_PLL_LOCK",
 					  "XCVR_0C_REF_CLK_PLL_LOCK", "B0_HSIO81N";
 		};
-
-		mailbox@50000000 {
-			compatible = "microchip,miv-ihc-rtl-v2";
-			reg = <0x0 0x50000000 0x0 0x1C000>;
-			interrupt-parent = <&plic>;
-			interrupts = <178>, <179>, <180>, <181>;
-			interrupt-names = "hart-1", "hart-2", "hart-3", "hart-4";
-			#mbox-cells = <1>;
-			status = "disabled";
-		};
 	};
 
 	ihc: mailbox {
-		compatible = "microchip,sbi-ipc";
+		compatible = "microchip,miv-ihc";
 		interrupt-parent = <&plic>;
-		interrupts = <178>, <179>, <180>, <181>;
-		interrupt-names = "hart-1", "hart-2", "hart-3", "hart-4";
+		interrupts = <IHC_HART1_INT>;
+		microchip,miv-ihc-remote-context-id = <IHC_CONTEXT_B>;
 		#mbox-cells = <1>;
 		status = "disabled";
 	};

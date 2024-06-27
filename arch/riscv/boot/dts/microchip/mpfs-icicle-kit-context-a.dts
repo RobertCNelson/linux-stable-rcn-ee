@@ -13,7 +13,7 @@
 	#address-cells = <2>;
 	#size-cells = <2>;
 	model = "Microchip PolarFire-SoC Icicle Kit";
-	compatible = "microchip,mpfs-icicle-reference-rtl-v2406", "microchip,mpfs-icicle-kit",
+	compatible = "microchip,mpfs-icicle-reference-rtlv2210", "microchip,mpfs-icicle-kit",
 		     "microchip,mpfs";
 
 	soc {
@@ -138,11 +138,11 @@
 	};
 
 	rproc_contextb: remote-context {
-		compatible = "microchip,ipc-remoteproc";
+		compatible = "microchip,miv-remoteproc";
 		memory-region = <&vdev0buffer>, <&rsctable>,
 				<&contextb_reserved>, <&vdev0vring0>,
 				<&vdev0vring1>;
-		mboxes= <&ihc 8>;
+		mboxes= <&ihc 0>;
 		status = "okay";
 	};
 
