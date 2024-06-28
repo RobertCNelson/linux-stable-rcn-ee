@@ -890,7 +890,7 @@ static int mpfs_can_probe(struct platform_device *pdev)
 	SET_NETDEV_DEV(ndev, &pdev->dev);
 
 	ret = clk_bulk_get_all(&pdev->dev, &priv->clks);
-	if (ret < 0)
+	if (ret < 2)
 		goto err;
 
 	priv->num_clocks = ret;
