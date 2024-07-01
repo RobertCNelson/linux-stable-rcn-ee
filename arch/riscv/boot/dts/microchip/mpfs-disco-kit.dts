@@ -122,7 +122,7 @@
 
 		hss: hss-buffer@103fc00000 {
 			compatible = "shared-dma-pool";
-			reg = <0x10 0x3fc00000 0x0 0x400000>;
+			reg = <0x10 0x3fc00000 0x0 0x200000>;
 			no-map;
 		};
 
