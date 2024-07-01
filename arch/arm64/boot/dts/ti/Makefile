@@ -81,9 +81,15 @@ dtb-$(CONFIG_ARCH_K3) += k3-j721s2-evm.dtb
 dtb-$(CONFIG_ARCH_K3) += k3-am69-sk.dtb
 dtb-$(CONFIG_ARCH_K3) += k3-j784s4-evm.dtb
 
+dtb-$(CONFIG_ARCH_K3) += BONE-I2C1.dtbo
+dtb-$(CONFIG_ARCH_K3) += BONE-I2C2.dtbo
+dtb-$(CONFIG_ARCH_K3) += BONE-I2C3.dtbo
+
 # Enable support for device-tree overlays
 DTC_FLAGS_k3-am625-sk += -@
 DTC_FLAGS_k3-am62-lp-sk += -@
 DTC_FLAGS_k3-am6548-iot2050-advanced-m2 += -@
 DTC_FLAGS_k3-j721e-common-proc-board += -@
 DTC_FLAGS_k3-j721s2-common-proc-board += -@
+DTC_FLAGS_k3-am67a-beagley-ai += -@
+DTC_FLAGS_k3-j721e-beagleboneai64 += -@
