@@ -124,6 +124,10 @@ dtb- += k3-am625-beagleplay-csi2-ov5640.dtb \
 	k3-j721e-evm-pcie0-ep.dtb \
 	k3-j721s2-evm-pcie1-ep.dtb
 
+dtb-$(CONFIG_ARCH_K3) += BONE-I2C1.dtbo
+dtb-$(CONFIG_ARCH_K3) += BONE-I2C2.dtbo
+dtb-$(CONFIG_ARCH_K3) += BONE-I2C3.dtbo
+
 # Enable support for device-tree overlays
 DTC_FLAGS_k3-am625-beagleplay += -@
 DTC_FLAGS_k3-am625-sk += -@
@@ -133,3 +137,5 @@ DTC_FLAGS_k3-am642-tqma64xxl-mbax4xxl += -@
 DTC_FLAGS_k3-am6548-iot2050-advanced-m2 += -@
 DTC_FLAGS_k3-j721e-common-proc-board += -@
 DTC_FLAGS_k3-j721s2-common-proc-board += -@
+DTC_FLAGS_k3-am67a-beagley-ai += -@
+DTC_FLAGS_k3-j721e-beagleboneai64 += -@
