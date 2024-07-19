@@ -106,14 +106,18 @@ struct mchp_corei2c_dev {
 	void __iomem *base;
 	struct device *dev;
 	struct clk *i2c_clk;
+	struct i2c_msg *msg_queue;
 	u8 *buf;
 	struct completion msg_complete;
 	struct i2c_adapter adapter;
 	int msg_err;
+	int total_num;
+	int current_num;
 	u32 bus_clk_rate;
 	u32 isr_status;
 	u16 msg_len;
 	u8 addr;
+	bool repeated_send_needed;
 };
 
 static void mchp_corei2c_core_disable(struct mchp_corei2c_dev *idev)
@@ -222,6 +226,35 @@ static int mchp_corei2c_fill_tx(struct mchp_corei2c_dev *idev)
 	return 0;
 }
 
+static void mchp_corei2c_next_msg(struct mchp_corei2c_dev *idev)
+{
+
+	if (idev->current_num < idev->total_num) {
+		struct i2c_msg *this_msg = ++(idev->msg_queue);
+		u8 ctrl;
+
+		if (idev->current_num < (idev->total_num - 1)) {
+			struct i2c_msg *next_msg = idev->msg_queue;
+
+			idev->repeated_send_needed = next_msg->flags & I2C_M_RD;
+		} else {
+			idev->repeated_send_needed = false;
+		}
+
+		idev->addr = i2c_8bit_addr_from_msg(this_msg);
+		idev->msg_len = this_msg->len;
+		idev->buf = this_msg->buf;
+
+		ctrl = readb(idev->base + CORE_I2C_CTRL);
+		ctrl |= CTRL_STA;
+		writeb(ctrl, idev->base + CORE_I2C_CTRL);
+
+		idev->current_num++;
+	} else {
+		complete(&idev->msg_complete);
+	}
+}
+
 static irqreturn_t mchp_corei2c_handle_isr(struct mchp_corei2c_dev *idev)
 {
 	u32 status = idev->isr_status;
@@ -247,10 +280,15 @@ static irqreturn_t mchp_corei2c_handle_isr(struct mchp_corei2c_dev *idev)
 		break;
 	case STATUS_M_SLAW_ACK:
 	case STATUS_M_TX_DATA_ACK:
-		if (idev->msg_len > 0)
+		if (idev->msg_len > 0) {
 			mchp_corei2c_fill_tx(idev);
-		else
-			last_byte = true;
+		} else {
+			if (idev->repeated_send_needed) {
+				finished = true;
+			} else {
+				last_byte = true;
+			}
+		}
 		break;
 	case STATUS_M_TX_DATA_NACK:
 	case STATUS_M_SLAR_NACK:
@@ -287,7 +325,7 @@ static irqreturn_t mchp_corei2c_handle_isr(struct mchp_corei2c_dev *idev)
 		mchp_corei2c_stop(idev);
 
 	if (last_byte || finished)
-		complete(&idev->msg_complete);
+		mchp_corei2c_next_msg(idev);
 
 	return IRQ_HANDLED;
 }
@@ -311,21 +349,47 @@ static irqreturn_t mchp_corei2c_isr(int irq, void *_dev)
 	return ret;
 }
 
-static int mchp_corei2c_xfer_msg(struct mchp_corei2c_dev *idev,
-				 struct i2c_msg *msg)
+static int mchp_corei2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
+			     int num)
 {
-	u8 ctrl;
+	struct mchp_corei2c_dev *idev = i2c_get_adapdata(adap);
+	struct i2c_msg *this_msg = msgs;
 	unsigned long time_left;
-
-	idev->addr = i2c_8bit_addr_from_msg(msg);
-	idev->msg_len = msg->len;
-	idev->buf = msg->buf;
-	idev->msg_err = 0;
-
-	reinit_completion(&idev->msg_complete);
+	u8 ctrl;
 
 	mchp_corei2c_core_enable(idev);
 
+	/*
+	 * The isr controls the flow of a transfer, this info needs to be saved
+	 * to a location that it can access the queue information from.
+	 */
+	idev->repeated_send_needed = false;
+	idev->msg_queue = msgs;
+	idev->total_num = num;
+	idev->current_num = 0;
+
+	/*
+	 * But the first entry to the isr is triggered by the start in this
+	 * function, so the first message needs to be "dequeued".
+	 */
+	idev->addr = i2c_8bit_addr_from_msg(this_msg);
+	idev->msg_len = this_msg->len;
+	idev->buf = this_msg->buf;
+	idev->msg_err = 0;
+
+	if (idev->total_num > 1) {
+		struct i2c_msg *next_msg = msgs + 1;
+
+		idev->repeated_send_needed = next_msg->flags & I2C_M_RD;
+	}
+
+	idev->current_num++;
+
+	reinit_completion(&idev->msg_complete);
+
+	/*
+	 * Send the first start to pass control to the interrupt handler
+	 */
 	ctrl = readb(idev->base + CORE_I2C_CTRL);
 	ctrl |= CTRL_STA;
 	writeb(ctrl, idev->base + CORE_I2C_CTRL);
@@ -335,20 +399,12 @@ static int mchp_corei2c_xfer_msg(struct mchp_corei2c_dev *idev,
 	if (!time_left)
 		return -ETIMEDOUT;
 
-	return idev->msg_err;
-}
-
-static int mchp_corei2c_xfer(struct i2c_adapter *adap, struct i2c_msg *msgs,
-			     int num)
-{
-	struct mchp_corei2c_dev *idev = i2c_get_adapdata(adap);
-	int i, ret;
-
-	for (i = 0; i < num; i++) {
-		ret = mchp_corei2c_xfer_msg(idev, msgs++);
-		if (ret)
-			return ret;
-	}
+	/*
+	 * TODO: fix error handing with new xfer based lifecycle as this will
+	 * only report the last error received after all are sent
+	 */
+	if (idev->msg_err)
+		return idev->msg_err;
 
 	return num;
 }
