@@ -1,3 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (c) 2012 - 2023 Microchip Technology Inc., and its subsidiaries.
+ * All rights reserved.
+ */
+
 #include <linux/delay.h>
 #include <linux/of.h>
 #include <linux/version.h>
