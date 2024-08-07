@@ -1,8 +1,8 @@
-// SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0-only OR MIT
 /*
  * Device Tree Source for J721E SoC Family Main Domain peripherals
  *
- * Copyright (C) 2016-2020 Texas Instruments Incorporated - https://www.ti.com/
+ * Copyright (C) 2016-2024 Texas Instruments Incorporated - https://www.ti.com/
  */
 #include <dt-bindings/phy/phy.h>
 #include <dt-bindings/phy/phy-ti.h>
@@ -181,7 +181,7 @@
 	};
 
 	main_navss: bus@30000000 {
-		compatible = "simple-mfd";
+		compatible = "simple-bus";
 		#address-cells = <2>;
 		#size-cells = <2>;
 		ranges = <0x00 0x30000000 0x00 0x30000000 0x00 0x0c400000>;
@@ -546,8 +546,17 @@
 		/* Proxy 0 addressing */
 		reg = <0x0 0x11c000 0x0 0x2b4>;
 		#pinctrl-cells = <1>;
+		pinctrl-single,gpio-range =
+			<&main_pmx0_range 0 18 PIN_GPIO_RANGE_IOPAD>,
+			<&main_pmx0_range 19 110 PIN_GPIO_RANGE_IOPAD>,
+			<&main_pmx0_range 129 29 PIN_GPIO_RANGE_IOPAD>,
+			<&main_pmx0_range 164 7 PIN_GPIO_RANGE_IOPAD>;
 		pinctrl-single,register-width = <32>;
 		pinctrl-single,function-mask = <0xffffffff>;
+
+		main_pmx0_range: gpio-range {
+			#pinctrl-single,gpio-range-cells = <3>;
+		};
 	};
 
 	/* TIMERIO pad input CTRLMMR_TIMER*_CTRL registers */
