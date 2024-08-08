@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: GPL-2.0-only OR BSD-2-Clause
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/soc/microchip/microchip,mpfs-control-scb.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Microchip PolarFire SoC System Controller Bus (SCB) Control Register region
+
+maintainers:
+  - Conor Dooley <conor.dooley@microchip.com>
+
+description:
+  An assortment of system controller related registers, including voltage and
+  temperature sensors and the status/control registers for the system
+  controller's mailbox.
+
+properties:
+  compatible:
+    items:
+      - const: microchip,mpfs-control-scb
+      - const: syscon
+      - const: simple-mfd
+
+  reg:
+    maxItems: 1
+
+required:
+  - compatible
+  - reg
+
+additionalProperties: false
+
+examples:
+  - |
+    soc {
+      #address-cells = <1>;
+      #size-cells = <1>;
+
+      syscon@37020000 {
+        compatible = "microchip,mpfs-control-scb", "syscon", "simple-mfd";
+        reg = <0x37020000 0x100>;
+      };
+    };
+
