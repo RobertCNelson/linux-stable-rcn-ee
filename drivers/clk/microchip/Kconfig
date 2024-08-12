@@ -8,5 +8,6 @@ config MCHP_CLK_MPFS
 	depends on ARCH_MICROCHIP_POLARFIRE || COMPILE_TEST
 	default ARCH_MICROCHIP_POLARFIRE
 	select AUXILIARY_BUS
+	select COMMON_CLK_REGMAP
 	help
 	  Supports Clock Configuration for PolarFire SoC
