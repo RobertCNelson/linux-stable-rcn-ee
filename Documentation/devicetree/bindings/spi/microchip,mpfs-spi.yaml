@@ -51,7 +51,7 @@ allOf:
     then:
       properties:
         num-cs:
-          default: 2
+          default: 1
 
   - if:
       properties:
@@ -64,7 +64,7 @@ allOf:
     then:
       properties:
         num-cs:
-          maximum: 2
+          maximum: 1
 
 unevaluatedProperties: false
 
