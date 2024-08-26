@@ -129,6 +129,17 @@ static const struct mmc_fixup __maybe_unused mmc_blk_fixups[] = {
 		  MMC_QUIRK_TRIM_BROKEN),
 
 	/*
+	 * Kingston EMMC04G-MK27 are showing fast wear rates
+	 * 2024???? : testing MMC_QUIRK_TRIM_BROKEN (eMMC died)
+	 * 20240708 : testing MMC_QUIRK_BROKEN_SD_DISCARD (eMMC failing)
+	 * 20240717 : testing MMC_QUIRK_TRIM_BROKEN | MMC_QUIRK_BROKEN_CACHE_FLUSH (eMMC died)
+	 * 20240808 : testing MMC_QUIRK_TRIM_BROKEN | MMC_QUIRK_BROKEN_SD_DISCARD | MMC_QUIRK_BROKEN_CACHE_FLUSH | MMC_QUIRK_ERASE_BROKEN (eMMC failing)
+	 * 20240826 : testing MMC_QUIRK_TRIM_BROKEN | MMC_QUIRK_BROKEN_SD_CACHE
+	 */
+	MMC_FIXUP("MK2704", CID_MANFID_KINGSTON, 0x0100, add_quirk_mmc,
+		  MMC_QUIRK_TRIM_BROKEN | MMC_QUIRK_BROKEN_SD_CACHE),
+
+	/*
 	 * Some SD cards reports discard support while they don't
 	 */
 	MMC_FIXUP(CID_NAME_ANY, CID_MANFID_SANDISK_SD, 0x5344, add_quirk_sd,
