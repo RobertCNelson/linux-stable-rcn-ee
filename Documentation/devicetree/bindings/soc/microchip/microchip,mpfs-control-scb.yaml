@@ -16,11 +16,16 @@ description:
 
 properties:
   compatible:
-    items:
-      - const: microchip,mpfs-control-scb
-      - const: syscon
-      - const: simple-mfd
-
+    oneOf:
+      - items:
+          - const: microchip,pic64gx-control-scb
+          - const: microchip,mpfs-control-scb
+          - const: syscon
+          - const: simple-mfd
+      - items:
+          - const: microchip,mpfs-control-scb
+          - const: syscon
+          - const: simple-mfd
   reg:
     maxItems: 1
 
