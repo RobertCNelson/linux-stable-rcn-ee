@@ -2563,6 +2563,7 @@ static void atmel_aes_get_cap(struct atmel_aes_dev *dd)
 	case 0x600:
 		dd->caps.has_6words_limitation = 1;
 		fallthrough;
+	case 0x800:
 	case 0x500:
 		dd->caps.has_dualbuff = 1;
 		dd->caps.has_cfb64 = 1;
