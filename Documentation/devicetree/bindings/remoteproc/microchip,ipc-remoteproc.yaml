@@ -67,7 +67,7 @@ examples:
       #size-cells = <2>;
 
       rproc-contextb {
-          compatible = "microchip,miv-remoteproc";
+          compatible = "microchip,ipc-remoteproc";
           memory-region = <&contextb>;
           mboxes= <&ihc 8>;
       };
