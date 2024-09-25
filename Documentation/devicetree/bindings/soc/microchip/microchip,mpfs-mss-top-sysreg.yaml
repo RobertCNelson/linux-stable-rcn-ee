@@ -32,6 +32,17 @@ properties:
       of PolarFire clock/reset IDs.
     const: 1
 
+  '#address-cells':
+    const: 1
+
+  '#size-cells':
+    const: 1
+
+  interrupt-controller@54:
+    type: object
+    description: |
+      This interrupt controller is the GPIO interrupt multiplexer.
+
 required:
   - compatible
   - reg
