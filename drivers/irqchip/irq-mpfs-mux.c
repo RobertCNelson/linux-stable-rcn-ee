@@ -347,7 +347,7 @@ out_unmap:
 
 static const struct of_device_id mpfs_irq_mux_match[] = {
 	{ .compatible = "microchip,mpfs-gpio-irq-mux" },
-
+	{}
 };
 
 static struct platform_driver mpfs_irq_mux_driver = {
