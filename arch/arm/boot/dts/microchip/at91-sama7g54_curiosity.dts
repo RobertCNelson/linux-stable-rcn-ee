@@ -416,6 +416,23 @@
 		bias-pull-up;
 		slew-rate = <0>;
 	};
+
+	pinctrl_vbus_det: usba-vbus-det {
+		pinmux = <PIN_PC6__GPIO>;
+		bias-disable;
+	};
+
+	pinctrl_vbus_en: usb-vbus-en {
+		pinmux = <PIN_PE1__GPIO>,
+			 <PIN_PE2__GPIO>;
+		bias-disable;
+	};
+
+	pinctrl_vbus_oc: usb-vbus-oc {
+		pinmux = <PIN_PD31__GPIO>,
+			 <PIN_PE0__GPIO>;
+		bias-disable;
+	};
 };
 
 &rtt {
@@ -473,6 +490,46 @@
 };
 
 &trng {
+	status = "okay";
+};
+
+&usb0 {
+	atmel,vbus-gpio = <&pioA PIN_PC6 GPIO_ACTIVE_HIGH>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_vbus_det>;
+	phys = <&usb_phy0>;
+	phy-names = "usb";
+	status = "okay";
+};
+
+&usb2 {
+	num-ports = <3>;
+	atmel,vbus-gpio = <0
+			   &pioA PIN_PE1 GPIO_ACTIVE_HIGH
+			   &pioA PIN_PE2 GPIO_ACTIVE_HIGH>;
+	atmel,oc-gpio = <0
+			   &pioA PIN_PD31 GPIO_ACTIVE_HIGH
+			   &pioA PIN_PE0 GPIO_ACTIVE_HIGH>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_vbus_en &pinctrl_vbus_oc>;
+	phys = <&usb_phy1>, <&usb_phy2>;
+	phy-names = "usb", "usb";
+	status = "okay";
+};
+
+&usb3 {
+	status = "okay";
+};
+
+&usb_phy0 {
+	status = "okay";
+};
+
+&usb_phy1 {
+	status = "okay";
+};
+
+&usb_phy2 {
 	status = "okay";
 };
 

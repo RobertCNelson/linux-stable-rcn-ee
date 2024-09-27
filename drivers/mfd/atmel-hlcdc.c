@@ -45,7 +45,7 @@ static int regmap_atmel_hlcdc_reg_write(void *context, unsigned int reg,
 		ret = readl_poll_timeout_atomic(hregmap->regs + ATMEL_HLCDC_SR,
 						status,
 						!(status & ATMEL_HLCDC_SIP),
-						1, 100);
+						1, 400);
 		if (ret) {
 			dev_err(hregmap->dev,
 				"Timeout! Clock domain synchronization is in progress!\n");
@@ -118,6 +118,7 @@ static int atmel_hlcdc_probe(struct platform_device *pdev)
 	hlcdc->sys_clk = devm_clk_get(dev, "sys_clk");
 	if (IS_ERR(hlcdc->sys_clk)) {
 		dev_dbg(dev, "failed to get sys_clk\n");
+               hlcdc->sys_clk = NULL;
 		hlcdc->lvds_pll_clk = devm_clk_get(dev, "lvds_pll_clk");
 		if (IS_ERR(hlcdc->lvds_pll_clk)) {
 			dev_err(dev, "failed to get GCK and LVDS_PLL\n");
@@ -151,6 +152,7 @@ static const struct of_device_id atmel_hlcdc_match[] = {
 	{ .compatible = "atmel,sama5d4-hlcdc" },
 	{ .compatible = "microchip,sam9x60-hlcdc" },
 	{ .compatible = "microchip,sam9x75-xlcdc" },
+	{ .compatible = "microchip,sama7d65-xlcdc" },
 	{ /* sentinel */ },
 };
 MODULE_DEVICE_TABLE(of, atmel_hlcdc_match);

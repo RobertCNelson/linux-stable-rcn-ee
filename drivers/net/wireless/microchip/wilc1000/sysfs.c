@@ -24,6 +24,8 @@ static ssize_t wilc_sysfs_show(struct kobject *kobj,
 		attr_val = wl->attr_sysfs.antenna1;
 	else if (strcmp(attr->attr.name, "antenna2") == 0)
 		attr_val = wl->attr_sysfs.antenna2;
+	else if (strcmp(attr->attr.name, "fw_dbg_level") == 0)
+		attr_val = wl->attr_sysfs.fw_dbg_level;
 
 	return sprintf(buf, "%d\n", attr_val);
 }
@@ -47,6 +49,15 @@ static ssize_t wilc_sysfs_store(struct kobject *kobj,
 		wl->attr_sysfs.antenna1 = attr_val;
 	} else if (strcmp(attr->attr.name, "antenna2") == 0) {
 		wl->attr_sysfs.antenna2 = attr_val;
+	} else if (strcmp(attr->attr.name, "fw_dbg_level") == 0) {
+		if (attr_val < WILC_FW_PRINT_LVL_ERROR || attr_val > WILC_FW_PRINT_LVL_MAX) {
+			pr_err("valid fw debug levels:\n 1-WILC_FW_PRINT_LVL_ERROR, \n 2-WILC_FW_PRINT_LVL_DEBUG \n 3-WILC_FW_PRINT_LVL_INFO,"
+				"\n 4-WILC_FW_PRINT_LVL_FUN_PT \n5-WILC_FW_PRINT_LVL_MAX\n");
+		}
+		else {
+			wl->attr_sysfs.fw_dbg_level = attr_val;
+			wilc_set_fw_debug_level(wl, wl->attr_sysfs.fw_dbg_level);
+		}
 	}
 
 	return count;
@@ -64,11 +75,15 @@ static struct kobj_attribute ant_swtch_antenna1_attr =
 static struct kobj_attribute ant_swtch_antenna2_attr =
 	__ATTR(antenna2, 0664, wilc_sysfs_show, wilc_sysfs_store);
 
+static struct kobj_attribute fw_dbg_level_attr =
+	__ATTR(fw_dbg_level, 0664, wilc_sysfs_show, wilc_sysfs_store);
+
 static struct attribute *wilc_attrs[] = {
 	&p2p_mode_attr.attr,
 	&ant_swtch_mode_attr.attr,
 	&ant_swtch_antenna1_attr.attr,
 	&ant_swtch_antenna2_attr.attr,
+	&fw_dbg_level_attr.attr,
 	NULL
 };
 
@@ -97,6 +112,7 @@ void wilc_sysfs_init(struct wilc *wilc)
 	wl->attr_sysfs.ant_swtch_mode = ANT_SWTCH_INVALID_GPIO_CTRL;
 	wl->attr_sysfs.antenna1 = 0xFF;
 	wl->attr_sysfs.antenna2 = 0xFF;
+	wl->attr_sysfs.fw_dbg_level = WILC_FW_PRINT_LVL_ERROR;
 }
 
 void wilc_sysfs_exit(void)

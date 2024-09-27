@@ -54,6 +54,12 @@
 #define WILC_HOST_RX_CTRL_0		(WILC_PERIPH_REG_BASE + 0x70)
 #define WILC_HOST_RX_CTRL_1		(WILC_PERIPH_REG_BASE + 0x74)
 #define WILC_HOST_VMM_CTL		(WILC_PERIPH_REG_BASE + 0x78)
+#define WILC_HOST_GP_REG		0x24
+#define WILC_ARM_GP_REG			0x28
+#define WILC_MSG_MAC_OPEN		(0x1 | (0x1 << 8))
+#define WILC_MSG_MAC_CLOSE		(0x1 | (0x2 << 8))
+#define WILC_MSG_MAC_RESET		(0x1 | (0x3 << 8))
+
 #define WILC_HOST_RX_CTRL		(WILC_PERIPH_REG_BASE + 0x80)
 #define WILC_HOST_RX_EXTRA_SIZE		(WILC_PERIPH_REG_BASE + 0x84)
 #define WILC_HOST_TX_CTRL_1		(WILC_PERIPH_REG_BASE + 0x88)
@@ -183,6 +189,8 @@
 
 #define WILC_VMM_TBL_RX_SHADOW_BASE	WILC_AHB_SHARE_MEM_BASE
 #define WILC_VMM_TBL_RX_SHADOW_SIZE	256
+#define VMM_TBL_RX_SHADOW_BASE   	0xA0420
+#define VMM_TBL_RX_SHADOW_SIZE		256
 
 #define WILC_GP_REG_0			0x149c
 #define WILC_GP_REG_1			0x14a0
@@ -211,6 +219,29 @@
 #define WILC_CORTUS_RESET_MUX_SEL	0x1118
 #define WILC_CORTUS_BOOT_REGISTER	0xc0000
 #define WILC3000_CHIP_ID		0x3b0000
+#define WILC_S02_CHIP_ID		0x1
+#define WILC_S02_FW_VERSION		0x2
+
+/* WILC_S02- MSG Handler */
+#define WILC_S02_CANCEL_RX		0x0
+#define WILC_S02_START_WLAN		0x1
+#define WILC_S02_HOST_MALLOC		0x2
+#define WILC_S02_FW_UPGRADE		0x3
+#define WILC_S02_SOFT_RESET		0x4
+#define WILC_S02_SDIO_TEST		0x6
+#define WILC_S02_SDIO_VMM_CLEAR		0x7
+#define WILC_S02_REG_ADDR_WMM_STAT	0x9
+
+/* type of soft resets */
+#define WILC_S02_RAM_RESET		BIT(0)
+#define WILC_S02_FLASH_RESET		BIT(1)
+#define WILC_S02_WLAN_RESET		BIT(2)
+
+#define WILC_S02_REG_ADDR_FW_UPDATE	0x5
+#define WILC_S02_REG_ADDR_SHADOW_RX_TBL	0x6
+
+#define WILC_S02_REG_ADDR_CFG		0x8
+
 
 #define WILC_CORTUS_BOOT_FROM_IRAM	0x71
 
@@ -224,6 +255,8 @@
 #define WILC_1000_BASE_ID_2B_REV2	(WILC_1000_BASE_ID_2B + 2)
 
 #define WILC_3000_BASE_ID		0x300000
+#define WILC_S02_BASE_ID		0x000053
+
 
 #define WILC_CHIP_REV_FIELD		GENMASK(11, 0)
 
@@ -236,6 +269,12 @@ static inline bool is_wilc3000(u32 id)
 {
 	return (id & (~WILC_CHIP_REV_FIELD)) == WILC_3000_BASE_ID;
 }
+
+static inline bool is_wilcs02_chip(u32 id)
+{
+	return (id & (WILC_CHIP_REV_FIELD)) == WILC_S02_BASE_ID;
+}
+
 
 /********************************************
  *
@@ -262,6 +301,7 @@ static inline bool is_wilc3000(u32 id)
 #define GPIO_NUM_RESET		60
 
 #define NQUEUES			4
+#define ECDA_MAX_LIMIT		32
 #define AC_BUFFER_SIZE		1000
 
 #define VO_AC_COUNT_FIELD		GENMASK(31, 25)
@@ -344,7 +384,11 @@ static inline bool is_wilc3000(u32 id)
 
 #define DATA_INT_CLR		CLR_INT0
 
+#define SDIO_MSG_VMM_INT_CLR	0x7
+
 #define ENABLE_RX_VMM		(SEL_VMM_TBL1 | EN_VMM)
+#define DISBLE_RX_VMM		(SDIO_MSG_VMM_INT_CLR | 1 << 8)
+#define DISBLE_TX_VMM		(SDIO_MSG_VMM_INT_CLR | 2 << 8)
 #define ENABLE_TX_VMM		(SEL_VMM_TBL0 | EN_VMM)
 /* time for expiring the completion of cfg packets */
 #define WILC_CFG_PKTS_TIMEOUT	msecs_to_jiffies(3000)
@@ -402,6 +446,17 @@ struct rxq_entry_t {
 enum wilc_chip_type {
 	WILC_1000,
 	WILC_3000,
+	WILC_S02,
+};
+
+struct wilc_vmm_ctl {
+	u32 vmm_tbl_rx_shadow_base;
+	u32 vmm_tbl_fw_update_base;
+	u32 host_vmm_rx_ctl;
+	u32 host_vmm_tx_ctl;
+	u32 host_tx_ctl;
+	u32 host_rx_ctl;
+	u32 host_wmm_stat;
 };
 
 /********************************************
@@ -460,6 +515,7 @@ struct wilc_vif;
 int wilc_wlan_firmware_download(struct wilc *wilc, const u8 *buffer,
 				u32 buffer_size);
 int wilc_wlan_start(struct wilc *wilc);
+int wilc_wlan_start_wilcs02_fw(struct wilc *wilc);
 int wilc_wlan_stop(struct wilc *wilc, struct wilc_vif *vif);
 int wilc_wlan_txq_add_net_pkt(struct net_device *dev,
 			      struct tx_complete_data *tx_data, u8 *buffer,
@@ -493,4 +549,5 @@ void acquire_bus(struct wilc *wilc, enum bus_acquire acquire, int source);
 void release_bus(struct wilc *wilc, enum bus_release release, int source);
 int wilc_wlan_init(struct net_device *dev);
 u32 wilc_get_chipid(struct wilc *wilc, bool update);
+int wilcs02_init_vmm_registers(struct wilc *wilc);
 #endif

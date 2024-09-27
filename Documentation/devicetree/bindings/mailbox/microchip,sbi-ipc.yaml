@@ -45,6 +45,22 @@ properties:
       channel and do not vary depending on platform firmware.
     const: 1
 
+  microchip,ihc-chan-disabled-mask:
+    description:
+      Represents the enable/disable state of the bi-directional IHC channels
+      within the MIV-IHC IP configuration. The mask is a 16-bit value, but only
+      the first 15 bits are utilized.Each of the bits corresponds to
+      one of the 15 IHC channels.
+      A bit set to '1' indicates that the corresponding channel is disabled,
+      and any read or write operations to that channel will return zero.
+      A bit set to '0' indicates that the corresponding channel is enabled
+      and will be accessible through its dedicated address range registers.
+      The remaining bit of the 16-bit mask is reserved and should be ignored.
+      The actual enable/disable state of each channel is determined by the
+      IP block’s configuration.
+    $ref: /schemas/types.yaml#/definitions/uint16
+    default: 0
+
 required:
   - compatible
   - interrupts
@@ -89,6 +105,7 @@ examples:
   - |
     mailbox@50000000 {
       compatible = "microchip,miv-ihc-rtl-v2";
+      microchip,ihc-chan-disabled-mask=  /bits/ 16 <0>;
       reg = <0x50000000 0x1C000>;
       interrupt-parent = <&plic>;
       interrupts = <180>, <179>, <178>;

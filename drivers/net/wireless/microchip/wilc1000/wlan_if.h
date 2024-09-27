@@ -197,6 +197,14 @@ enum {
 	WILC_FW_AUTH_REQ_IDX = 2
 };
 
+enum {
+    WILC_FW_PRINT_LVL_ERROR   = 1,
+    WILC_FW_PRINT_LVL_DEBUG   = 2,
+    WILC_FW_PRINT_LVL_INFO    = 3,
+    WILC_FW_PRINT_LVL_FUN_PT  = 4,
+    WILC_FW_PRINT_LVL_MAX,
+};
+
 enum wid_type {
 	WID_CHAR		= 0,
 	WID_SHORT		= 1,
@@ -686,6 +694,7 @@ enum {
 	WID_USE_PRIORITY_EAPOL		= 0x00D1,
 
 	WID_DEFAULT_MGMT_KEY_ID		= 0x00D2,
+	WID_FW_PRINT_LEVEL			= 0x0216,
 	/*  EMAC Short WID list */
 	/*  RTS Threshold */
 	/*

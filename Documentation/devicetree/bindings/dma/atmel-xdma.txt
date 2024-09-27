@@ -16,6 +16,11 @@ the dmas property of client devices.
     interface identifier,
     - bit 30-24: PERID, peripheral identifier.
 
+Optional properties:
+- dma-channels: Specify total DMA channels per XDMAC. It is required when the
+                number of channels could not be got from register XDMAC_GTYPE
+                (accessing from non-secure world for some devices).
+
 Example:
 
 dma1: dma-controller@f0004000 {

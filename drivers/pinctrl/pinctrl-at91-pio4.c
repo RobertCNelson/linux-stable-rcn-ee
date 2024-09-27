@@ -1074,6 +1074,12 @@ static const struct atmel_pioctrl_data microchip_sama7g5_pioctrl_data = {
 	.slew_rate_support	= 1,
 };
 
+static const struct atmel_pioctrl_data microchip_sama7d65_pioctrl_data = {
+	.nbanks			= 5,
+	.last_bank_count	= 14, /* sama7d65 has only PE0 to PE13 */
+	.slew_rate_support	= 1,
+};
+
 static const struct of_device_id atmel_pctrl_of_match[] = {
 	{
 		.compatible = "atmel,sama5d2-pinctrl",
@@ -1081,6 +1087,9 @@ static const struct of_device_id atmel_pctrl_of_match[] = {
 	}, {
 		.compatible = "microchip,sama7g5-pinctrl",
 		.data = &microchip_sama7g5_pioctrl_data,
+	}, {
+		.compatible = "microchip,sama7d65-pinctrl",
+		.data = &microchip_sama7d65_pioctrl_data,
 	}, {
 		/* sentinel */
 	}

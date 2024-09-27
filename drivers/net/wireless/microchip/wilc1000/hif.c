@@ -4,6 +4,7 @@
  * All rights reserved.
  */
 
+#include "cfg80211.h"
 #include "netdev.h"
 
 #define WILC_HIF_SCAN_TIMEOUT_MS                5000
@@ -517,7 +518,8 @@ wilc_parse_join_bss_param(struct cfg80211_bss *bss,
 	struct ieee80211_p2p_noa_attr noa_attr;
 	const struct cfg80211_bss_ies *ies;
 	struct wilc_join_bss_param *param;
-	u8 rates_len = 0, ies_len;
+	u8 rates_len = 0;
+	int ies_len;
 	int ret;
 
 	param = kzalloc(sizeof(*param), GFP_KERNEL);
@@ -2586,4 +2588,16 @@ int wilc_set_antenna(struct wilc_vif *vif, u8 mode)
 		PRINT_ER(vif->ndev, "Failed to set antenna mode\n");
 
 	return ret;
+}
+
+void wilc_set_fw_debug_level(struct wilc *wl, u8 dbg_level)
+{
+	struct wilc_vif *vif = wilc_get_wl_to_vif(wl);
+	struct wid wid;
+
+	wid.id = WID_FW_PRINT_LEVEL;
+	wid.type = WID_CHAR;
+	wid.size = sizeof(char);
+	wid.val = &dbg_level;
+	wilc_send_config_pkt(vif, WILC_SET_CFG, &wid, 1);
 }

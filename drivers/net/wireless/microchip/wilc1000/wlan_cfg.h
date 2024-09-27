@@ -51,7 +51,7 @@ struct wilc_cfg {
 	struct wilc_cfg_bin *bin;
 	struct wilc_bin_vals *bin_vals;
 };
-
+//#define WILCS02_TEST_BUS_INTERFACE
 struct wilc;
 int wilc_wlan_cfg_set_wid(u8 *frame, u32 offset, u16 id, u8 *buf, int size);
 int wilc_wlan_cfg_get_wid(u8 *frame, u32 offset, u16 id);
