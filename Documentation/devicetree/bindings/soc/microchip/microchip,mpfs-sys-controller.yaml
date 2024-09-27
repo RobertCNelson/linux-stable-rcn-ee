@@ -24,7 +24,11 @@ properties:
     maxItems: 1
 
   compatible:
-    const: microchip,mpfs-sys-controller
+    oneOf:
+      - items:
+          - const: microchip,pic64gx-sys-controller
+          - const: microchip,mpfs-sys-controller
+      - const: microchip,mpfs-sys-controller
 
   microchip,bitstream-flash:
     $ref: /schemas/types.yaml#/definitions/phandle

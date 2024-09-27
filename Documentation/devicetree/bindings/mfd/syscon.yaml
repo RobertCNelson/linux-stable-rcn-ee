@@ -25,7 +25,6 @@ select:
       contains:
         enum:
           - syscon
-
   required:
     - compatible
 
@@ -53,6 +52,8 @@ properties:
               - mediatek,mt8135-pctl-a-syscfg
               - mediatek,mt8135-pctl-b-syscfg
               - mediatek,mt8365-syscfg
+              - microchip,mpfs-sysreg-scb
+              - microchip,pic64gx-sysreg-scb
               - microchip,lan966x-cpu-syscon
               - microchip,sparx5-cpu-syscon
               - mstar,msc313-pmsleep
