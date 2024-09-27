@@ -192,7 +192,7 @@
 		};
 	};
 
-	scbclk: clock-80mhz {
+	scbclk: clock-80000000 {
 		compatible = "fixed-clock";
 		#clock-cells = <0>;
 		clock-frequency = <80000000>;
