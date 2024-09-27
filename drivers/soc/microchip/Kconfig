@@ -25,3 +25,14 @@ config POLARFIRE_SOC_GENERIC_SERVICE
 	  module will be called mpfs_generic_service.
 
 	  If unsure, say N.
+
+config POLARFIRE_SOC_SYSCONS
+	bool "PolarFire SoC (MPFS) syscon drivers"
+	default y
+	depends on SOC_MICROCHIP_POLARFIRE
+	select MFD_CORE
+	help
+	  Filler text
+
+	  If unsure, say N.
+
