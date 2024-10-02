@@ -204,8 +204,7 @@
 	};
 
 	syscontroller: syscontroller {
-		compatible = "microchip,pic64gx-sys-controller",
-			     "microchip,mpfs-sys-controller";
+		compatible = "microchip,pic64gx-sys-controller";
 		mboxes = <&mbox 0>;
 	};
 
