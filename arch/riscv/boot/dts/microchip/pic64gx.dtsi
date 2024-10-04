@@ -192,7 +192,7 @@
 		};
 	};
 
-	scbclk: clock-80mhz {
+	scbclk: clock-80000000 {
 		compatible = "fixed-clock";
 		#clock-cells = <0>;
 		clock-frequency = <80000000>;
@@ -204,8 +204,7 @@
 	};
 
 	syscontroller: syscontroller {
-		compatible = "microchip,pic64gx-sys-controller",
-			     "microchip,mpfs-sys-controller";
+		compatible = "microchip,pic64gx-sys-controller";
 		mboxes = <&mbox 0>;
 	};
 
@@ -216,7 +215,7 @@
 		ranges;
 
 		clint: clint@2000000 {
-			compatible = "sifive,fu540-c000-clint", "sifive,clint0";
+			compatible = "microchip,pic64gx-clint", "sifive,clint0";
 			reg = <0x0 0x2000000 0x0 0xC000>;
 			interrupts-extended = <&cpu0_intc 0xffffffff>, <&cpu0_intc 0xffffffff>,
 					      <&cpu1_intc 3>, <&cpu1_intc 7>,
@@ -248,7 +247,7 @@
 		};
 
 		plic: interrupt-controller@c000000 {
-			compatible = "sifive,fu540-c000-plic", "sifive,plic-1.0.0";
+			compatible = "microchip,pic64gx-plic", "sifive,plic-1.0.0";
 			reg = <0x0 0xc000000 0x0 0x4000000>;
 			#address-cells = <0>;
 			#interrupt-cells = <1>;
