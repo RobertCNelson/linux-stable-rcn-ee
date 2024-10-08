@@ -33,7 +33,6 @@ static const struct sdio_device_id wilc_sdio_ids[] = {
 MODULE_DEVICE_TABLE(sdio, wilc_sdio_ids);
 
 #define WILC_SDIO_BLOCK_SIZE		512
-#define WILC_MMC_SPI_BLOCK_SIZE		256
 
 struct wilc_sdio {
 	bool irq_gpio;
@@ -154,7 +153,7 @@ out:
 
 	if (ret)
 		dev_err(&func->dev, "%s..%s failed, err(%d) %d %d\n", __func__,
-			cmd->read_write == 1 ? "write":"read",
+			cmd->read_write == 1 ? "write" : "read",
 			ret, size, cmd->increment);
 
 	return ret;
@@ -183,9 +182,8 @@ static int wilc_sdio_probe(struct sdio_func *func,
 	sdio_priv->is_mmc_spi = func->card->host->caps & MMC_CAP_SPI;
 
 	if (IS_ENABLED(CONFIG_WILC_HW_OOB_INTR) || func->card->host->caps &
-	    MMC_CAP_SPI) {
+	    MMC_CAP_SPI)
 		io_type = WILC_HIF_SDIO_GPIO_IRQ;
-	}
 	else
 		io_type = WILC_HIF_SDIO;
 
@@ -203,6 +201,7 @@ static int wilc_sdio_probe(struct sdio_func *func,
 	if (sdio_priv->is_mmc_spi) {
 		struct device *dev = func->card->host->parent;
 		struct gpio_desc *gpio_interrupt;
+
 		wilc->dt_dev = dev;
 
 		/* mmc-spi holds the default irq for card detect, so use another GPIO for SPI interrupt */
@@ -248,7 +247,6 @@ static int wilc_sdio_probe(struct sdio_func *func,
 			goto disable_rtc_clk;
 	}
 
-
 	if (!init_power) {
 		wilc_wlan_power(wilc, false);
 		init_power = 1;
@@ -265,7 +263,7 @@ static int wilc_sdio_probe(struct sdio_func *func,
 
 	if (wilc->chip == WILC_S02) {
 		ret = wilc_s02_reset_firmware(wilc,
-					     WILC_S02_SOFT_RESET | (WILC_S02_WLAN_RESET << 8));
+					      WILC_S02_SOFT_RESET | (WILC_S02_WLAN_RESET << 8));
 		if (ret < 0) {
 			pr_err("Failed to start firmware\n");
 			ret = -EIO;
@@ -274,7 +272,6 @@ static int wilc_sdio_probe(struct sdio_func *func,
 		ret = wilc_s02_check_firmware_download(wilc);
 		if (ret)
 			goto disable_rtc_clk;
-
 	}
 	wilc_bt_init(wilc);
 
@@ -376,8 +373,8 @@ static int wilc_sdio_enable_interrupt(struct wilc *dev)
 
 	sdio_intr_lock  = WILC_SDIO_HOST_NO_TAKEN;
 
-	if(dev->chip == WILC_S02)
-	    dev->hif_func->hif_clear_int_ext(dev, DATA_INT_CLR | ENABLE_RX_VMM);
+	if (dev->chip == WILC_S02)
+		dev->hif_func->hif_clear_int_ext(dev, DATA_INT_CLR | ENABLE_RX_VMM);
 
 	sdio_claim_host(func);
 	ret = sdio_claim_irq(func, wilc_sdio_interrupt);
@@ -585,9 +582,7 @@ static int wilc_sdio_write(struct wilc *wilc, u32 addr, u8 *buf, u32 size)
 		cmd.count = nblk;
 		cmd.buffer = buf;
 		cmd.block_size = block_size;
-		if (addr > 0)
-		{
-
+		if (addr > 0) {
 			ret = wilc_sdio_set_func0_csa_address(wilc, addr);
 			if (ret)
 				return ret;
@@ -665,7 +660,6 @@ static int wilc_read_chip_id(struct wilc *wilc, u32 addr, u32 *data)
 	}
 	le32_to_cpus(data);
 	return 0;
-
 }
 
 static int wilc_read_wilcs02_chip_id(struct wilc *wilc, u32 addr, u32 *data)
@@ -698,7 +692,6 @@ static int wilc_read_wilcs02_chip_id(struct wilc *wilc, u32 addr, u32 *data)
 	}
 	le32_to_cpus(data);
 	return 0;
-
 }
 
 static int wilc_sdio_read_reg(struct wilc *wilc, u32 addr, u32 *data)
@@ -779,7 +772,7 @@ static int wilc_sdio_read_reg(struct wilc *wilc, u32 addr, u32 *data)
 			ret = wilc_sdio_cmd53(wilc, &cmd);
 			if (ret) {
 				dev_err(&func->dev,
-				"Failed cmd53, read reg (%08x)...\n", addr);
+					"Failed cmd53, read reg (%08x)...\n", addr);
 				return ret;
 			}
 		}
@@ -870,7 +863,6 @@ static int wilc_sdio_read(struct wilc *wilc, u32 addr, u8 *buf, u32 size)
 			wilc->hif_func->hif_write_reg(wilc,
 						      wilc->vmm_ctl.host_vmm_tx_ctl,
 						      SDIO_MSG_VMM_INT_CLR);
-
 	}
 
 	return 0;
@@ -908,7 +900,7 @@ static int wilc_sdio_init(struct wilc *wilc, bool resume)
 	test_mode = is_test_mode;
 #endif
 	dev_info(&func->dev, "SDIO single driver speed: %d %s\n",
-		 func->card->host->ios.clock, test_mode? "loopback mode": "");
+		 func->card->host->ios.clock, test_mode ? "loopback mode" : "");
 
 	if (!sdio_priv->is_mmc_spi) {
 		/* Patch for sdio interrupt latency issue */
@@ -936,10 +928,7 @@ static int wilc_sdio_init(struct wilc *wilc, bool resume)
 		goto pm_runtime_put;
 	}
 
-	if (sdio_priv->is_mmc_spi)
-		sdio_priv->block_size = WILC_MMC_SPI_BLOCK_SIZE;
-	else
-		sdio_priv->block_size = WILC_SDIO_BLOCK_SIZE;
+	sdio_priv->block_size = WILC_SDIO_BLOCK_SIZE;
 
 	/**
 	 *      function 0 block size
@@ -1059,7 +1048,6 @@ static int wilc_sdio_init(struct wilc *wilc, bool resume)
 		chipid = wilc_get_chipid(wilc, true);
 		if (is_wilcs02_chip(chipid)) {
 			wilc->chip = WILC_S02;
-			func->card->quirks |= MMC_QUIRK_BROKEN_BYTE_MODE_512;
 			wilcs02_init_vmm_registers(wilc);
 		} else if (is_wilc3000(chipid)) {
 			wilc->chip = WILC_3000;
@@ -1120,8 +1108,7 @@ static int wilc_sdio_read_size(struct wilc *wilc, u32 *size)
 	u32 tmp;
 	struct sdio_cmd52 cmd;
 
-	if (wilc->chip == WILC_S02)
-	{
+	if (wilc->chip == WILC_S02) {
 		wilc_s02_sdio_read_size(wilc, size);
 		return 0;
 	}
