@@ -10,9 +10,53 @@
 #include <linux/ieee80211.h>
 
 #define WILC_MAX_NUM_STA			9
-#define WILC_MAX_RATES_SUPPORTED		12
+#define WILC_MAX_RATES_SUPPORTED	12
 #define WILC_MAX_NUM_PMKIDS			16
-#define WILC_MAX_NUM_SCANNED_CH			14
+#define WILC_MAX_NUM_SCANNED_CH		14
+
+#define COEX_ENABLED_BIT		BIT(0)
+#define COEX_INTERFACE_TYPE_BIT		BIT(0)
+#define COEX_WLAN_BT_PRIORITY_BIT	(BIT(0) | BIT(1))
+#define COEX_ANTENNA_MODE_BIT		BIT(0)
+
+/* BT/Wi-Fi coexistence arbiter
+0 - Disabled
+1 - Enabled */
+enum {
+	WLAN_BT_COEX_DISABLED = 0x0,
+	WLAN_BT_COEX_ENABLED = 0x1
+};
+
+/* BT/Wi-Fi coexistence arbiter WLAN vs BT Priority */
+enum {
+	WLAN_BT_COEX_PRIO_WLAN_TX_GT_BTLP   = 0x1,
+	WLAN_BT_COEX_PRIO_WLAN_RX_GT_BTLP   = 0x2,
+	WLAN_BT_COEX_PRIO_WLAN_TBTT_GT_BTLP = 0x4,
+	WLAN_BT_COEX_PRIO_WLAN_TBTT_GT_BTHP = 0x8
+};
+
+/* BT/Wi-Fi coexistence arbiter antenna mode
+0 - Dedicated antenna"
+1 - Shared antenna */
+enum {
+	WLAN_BT_COEX_ANT_MODE_DEDICATED = 0x0,
+	WLAN_BT_COEX_ANT_MODE_SHARED    = 0x1
+};
+
+/* BT/Wi-Fi coexistence arbiter interface type
+0 - 3-wire interface (BT_Act, BT_Prio, WLAN_Act)
+1 - 2-wire interface (BT_Prio, WLAN_Act)*/
+enum {
+	WLAN_BT_COEX_3WIRE_IF = 0x0,
+	WLAN_BT_COEX_2WIRE_IF = 0x1
+};
+
+enum {
+	WILC_AMPDU_RX_DIS_TX_DIS	= 0, /* AMPDU disabled for RX, disabled for TX */
+	WILC_AMPDU_RX_EN_TX_DIS		= 1, /* AMPDU enable for RX, disabled for TX */
+	WILC_AMPDU_RX_DIS_TX_EN		= 2, /* AMPDU disabled for RX, enable for TX */
+	WILC_AMPDU_RX_EN_TX_EN		= 3, /* AMPDU enable for RX, enable for TX */
+};
 
 struct wilc_assoc_resp {
 	__le16 capab_info;
@@ -126,5 +170,10 @@ struct wilc_external_auth_param {
 	u8 ssid_len;
 	__le32 key_mgmt_suites;
 	__le16 status;
+} __packed;
+
+struct wilc_fw_debug_level {
+	u8 level;
+	__le32 mod_filter;
 } __packed;
 #endif

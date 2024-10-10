@@ -237,5 +237,7 @@ int wilc_set_default_mgmt_key_index(struct wilc_vif *vif, u8 index);
 void wilc_handle_disconnect(struct wilc_vif *vif);
 int wilc_of_parse_power_pins(struct wilc *wilc);
 void wilc_wlan_power(struct wilc *wilc, bool on);
-void wilc_set_fw_debug_level(struct wilc *wl,u8 dbg_level);
+int wilc_init_coex_config(struct wilc_vif *vif);
+int wilc_set_coex_param(struct wilc *wilc, int wid, u8 b);
+void wilc_set_fw_debug_level(struct wilc *wl);
 #endif

@@ -35,6 +35,7 @@ extern int wait_for_recovery;
 #define ANT_SWTCH_INVALID_GPIO_CTRL		0
 #define ANT_SWTCH_SNGL_GPIO_CTRL		1
 #define ANT_SWTCH_DUAL_GPIO_CTRL		2
+#define RD_COUNTRY_CODE_LEN 6
 
 struct wilc_wfi_stats {
 	unsigned long rx_packets;
@@ -199,7 +200,12 @@ struct sysfs_attr_group {
 	u8 ant_swtch_mode;
 	u8 antenna1;
 	u8 antenna2;
+	u8 coex_enabled;
+	u8 coex_inteface_type;
+	u8 coex_wlan_bt_priority;
+	u8 coex_antenna_mode;
 	u8 fw_dbg_level;
+	u32 fw_dbg_mod_filter;
 };
 
 struct wilc_vif {
@@ -351,4 +357,5 @@ int wilc_bt_power_up(struct wilc *wilc, int source);
 int wilc_bt_power_down(struct wilc *wilc, int source);
 int wilc_s02_reset_firmware(struct wilc *wilc, u32 type);
 int wilc_s02_check_firmware_download(struct wilc *wl);
+void host_set_reg_info(struct wilc_vif *vif, u8 *reg_info);
 #endif
