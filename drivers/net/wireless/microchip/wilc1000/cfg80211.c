@@ -18,6 +18,31 @@
 /* Operation at 2.4 GHz with channels 1-13 */
 #define WILC_WLAN_OPERATING_CLASS_2_4GHZ		0x51
 
+enum country_code_local {
+	COUNTRY_CODE_FCC   = 0,
+	COUNTRY_CODE_EMEA  = 1,
+	COUNTRY_CODE_JPN   = 2,
+	COUNTRY_CODE_MAX
+};
+
+struct country_code_enum {
+	enum country_code_local cc;
+	const char *alpha2;
+	const char *rio0_ctr;
+};
+
+static struct country_code_enum country_str[] = {
+	{COUNTRY_CODE_FCC,  "US",  "USA"},
+	{COUNTRY_CODE_FCC,  "CN",  "USA"},
+	{COUNTRY_CODE_FCC,  "MX",  "USA"},
+	{COUNTRY_CODE_EMEA, "GB", "EMEA"},
+	{COUNTRY_CODE_EMEA, "FR", "EMEA"},
+	{COUNTRY_CODE_EMEA, "EU", "EMEA"},
+	{COUNTRY_CODE_EMEA, "DE", "EMEA"},
+	{COUNTRY_CODE_JPN,  "JP",  "JPN"},
+};
+
+extern char reg_dom_buffer[];
 static const struct ieee80211_txrx_stypes
 	wilc_wfi_cfg80211_mgmt_types[NUM_NL80211_IFTYPES] = {
 	[NL80211_IFTYPE_STATION] = {
@@ -47,6 +72,15 @@ static const struct ieee80211_txrx_stypes
 			BIT(IEEE80211_STYPE_AUTH >> 4) |
 			BIT(IEEE80211_STYPE_DEAUTH >> 4)
 	},
+};
+
+struct ieee80211_regdomain mydriver_GEN_regdom = {
+	.n_reg_rules = 1,
+	.alpha2 =  "NH",
+	.reg_rules = {
+		/* IEEE 802.11b/g, channels 1..14 */
+		REG_RULE(2412 - 10, 2484 + 10, 40, 0, 20, 0),
+	}
 };
 
 #ifdef CONFIG_PM
@@ -1707,7 +1741,6 @@ static int add_station(struct wiphy *wiphy, struct net_device *dev,
 	struct wilc_priv *priv = &vif->priv;
 
 	if (vif->iftype == WILC_AP_MODE || vif->iftype == WILC_GO_MODE) {
-
 		PRINT_INFO(vif->ndev, CFG80211_DBG,
 			   "Adding station parameters %d\n", params->aid);
 		PRINT_INFO(vif->ndev, HOSTAPD_DBG, "ASSOC ID = %d\n",
@@ -2046,7 +2079,7 @@ static int set_antenna(struct wiphy *wiphy, u32 tx_ant, u32 rx_ant)
 		return -EINVAL;
 	}
 
-	ret = wilc_set_antenna(vif, (u8)(tx_ant-1));
+	ret = wilc_set_antenna(vif, (u8)(tx_ant - 1));
 	if (ret)
 		PRINT_ER(vif->ndev, "Failed to set tx antenna\n");
 	srcu_read_unlock(&wl->srcu, srcu_idx);
@@ -2192,6 +2225,80 @@ free_wl:
 	return ret;
 }
 
+static int set_reg_rules(struct wiphy *wiphy)
+{
+	struct ieee80211_regdomain *rd;
+	u16 size_of_regd;
+	u16 num_rules = mydriver_GEN_regdom.n_reg_rules;
+	u16 i;
+	int ret;
+
+	size_of_regd = (sizeof(struct ieee80211_regdomain) +
+			(num_rules * sizeof(struct ieee80211_reg_rule)));
+
+	rd = kzalloc(size_of_regd, GFP_KERNEL);
+	if (!rd)
+		return -ENOMEM;
+
+	memcpy(rd, &mydriver_GEN_regdom, sizeof(struct ieee80211_regdomain));
+	for (i = 0; i < num_rules; i++)
+		memcpy(&rd->reg_rules[i], &mydriver_GEN_regdom.reg_rules[i],
+		       sizeof(struct ieee80211_reg_rule));
+
+	ret = regulatory_set_wiphy_regd(wiphy, rd);
+	kfree(rd);
+
+	return ret;
+}
+
+static const char * get_rio0_domain_name(struct wiphy *wiphy,
+					 struct regulatory_request *request)
+{
+	u16 i;
+
+	for (i = 0; i < (sizeof(country_str)/sizeof(country_str[0])); i++) {
+		if (!strcmp(request->alpha2, country_str[i].alpha2)) {
+			if (reg_dom_buffer[1] != 0) {
+				if (strstr(reg_dom_buffer, country_str[i].rio0_ctr))
+					return country_str[i].rio0_ctr;
+			}
+		}
+	}
+	return NULL;
+}
+
+static void rio0_reg_notifier(struct wiphy *wiphy,
+			      struct regulatory_request *request)
+{
+	struct wilc *wl = wiphy_priv(wiphy);
+	struct wilc_vif *vif = wilc_get_wl_to_vif(wl);
+	u8 reg_dom_set[RD_COUNTRY_CODE_LEN + 4] = {0};
+
+	if (wl->chip != WILC_S02) {
+		netdev_info(vif->ndev, "self managed regulatory availabale only for rio-0 platform");
+		return;
+	}
+	netdev_info(vif->ndev, "requested country code %s", request->alpha2);
+
+	if (request->initiator != NL80211_REGDOM_SET_BY_USER) {
+		netdev_err(vif->ndev,
+			   "Incorrect inititation of reg domain %d",
+			   request->initiator);
+		return;
+	}
+	reg_dom_set[0] = RD_COUNTRY_CODE_LEN;
+	reg_dom_set[1] = 0;
+	if (get_rio0_domain_name(wiphy,request)) {
+		strcpy((char *)(&reg_dom_set[2]),
+		       get_rio0_domain_name(wiphy, request));
+		netdev_info(vif->ndev, "setting reg domain to %s",
+			    (char *)(&reg_dom_set[2]));
+		host_set_reg_info(vif, reg_dom_set);
+	} else {
+		netdev_info(vif->ndev, "No update to the domain");
+	}
+}
+
 struct wilc *wilc_create_wiphy(struct device *dev)
 {
 	struct wiphy *wiphy;
@@ -2244,11 +2351,20 @@ struct wilc *wilc_create_wiphy(struct device *dev)
 	wiphy->features |= NL80211_FEATURE_SAE;
 	set_wiphy_dev(wiphy, dev);
 	wl->wiphy = wiphy;
+
+	wiphy->regulatory_flags = REGULATORY_WIPHY_SELF_MANAGED;
+	wiphy->reg_notifier = rio0_reg_notifier;
+
 	ret = wiphy_register(wiphy);
 	if (ret) {
 		wiphy_free(wiphy);
 		return NULL;
 	}
+
+	ret = set_reg_rules(wiphy);
+	if (ret)
+		return NULL;
+
 	return wl;
 }
 

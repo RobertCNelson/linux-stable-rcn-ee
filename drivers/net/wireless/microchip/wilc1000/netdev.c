@@ -16,6 +16,8 @@
 #define WILC_MULTICAST_TABLE_SIZE	8
 #define WILC_MAX_FW_VERSION_STR_SIZE	50
 
+#define MAX_COUNTRY_CODE_LEN 40
+
 /* latest API version supported */
 #define WILC1000_API_VER		1
 
@@ -39,14 +41,18 @@
 static int wilc_mac_open(struct net_device *ndev);
 static int wilc_mac_close(struct net_device *ndev);
 
+u8 reg_dom[MAX_COUNTRY_CODE_LEN] = {0};
+u8 reg_dom_set[RD_COUNTRY_CODE_LEN + 4] = {RD_COUNTRY_CODE_LEN, 0};
+char reg_dom_buffer[MAX_COUNTRY_CODE_LEN] = {0};
+static char *reg_domain_param;
 
 #ifdef WILC_S02_TEST_BUS_INTERFACE
-static int frame_size= WILC_S02_TEST_FRAME_SIZE;	/* configure the frame size of loopback */
+static int frame_size = WILC_S02_TEST_FRAME_SIZE;	/* configure the frame size of loopback */
 module_param(frame_size, int, 0644);
 MODULE_PARM_DESC(frame_size,
 		 "use to configure frame size, default 1546");
 
-bool is_test_mode= false;	/* enable loopback test */
+bool is_test_mode = false;	/* enable loopback test */
 module_param(is_test_mode, bool, 0644);
 MODULE_PARM_DESC(is_test_mode,
 		 "use to enable loopback test mode, is_loopback_mode = 1 means loopback is enable, default disabled");
@@ -407,11 +413,10 @@ static int wilc_wlan_get_firmware(struct wilc *wilc)
 
 	ret = request_firmware(&wilc_fw, firmware, wilc->dev);
 	if (ret != 0) {
-		if (wilc->chip != WILC_S02) {
+		if (wilc->chip != WILC_S02)
 			pr_err("%s - firmware not available\n", firmware);
-		} else {
+		else
 			pr_err("Use pre-installed firmware for WILC-SO2 LinkController\n");
-		}
 		return -EINVAL;
 	}
 	wilc->firmware = wilc_fw;
@@ -448,13 +453,13 @@ static int wilc_start_firmware(struct net_device *dev)
 #endif
 	{
 		if (!wait_for_completion_timeout(&wilc->sync_event,
-					 msecs_to_jiffies(m))) {
-		PRINT_INFO(vif->ndev, INIT_DBG, "Firmware start timed out\n");
-		return -ETIME;
-	}
+						 msecs_to_jiffies(m))) {
+			PRINT_INFO(vif->ndev, INIT_DBG, "Firmware start timed out\n");
+			return -ETIME;
+		}
 
-	if (wilc->mac_status == WILC_MAC_STATUS_PRE_INIT)
-		return -ETIME;
+		if (wilc->mac_status == WILC_MAC_STATUS_PRE_INIT)
+			return -ETIME;
 	}
 	PRINT_INFO(vif->ndev, INIT_DBG, "Firmware successfully started\n");
 	wilc->initialized = 1;
@@ -491,6 +496,7 @@ static int wilc_init_fw_config(struct net_device *dev, struct wilc_vif *vif)
 	u8 b;
 	u16 hw;
 	u32 w;
+	struct wilc_fw_debug_level dbg_level;
 
 	netdev_dbg(dev, "Start configuring Firmware\n");
 	hif_drv = (struct host_if_drv *)priv->hif_drv;
@@ -644,10 +650,17 @@ static int wilc_init_fw_config(struct net_device *dev, struct wilc_vif *vif)
 	if (!wilc_wlan_cfg_set(vif, 0, WID_11N_CURRENT_TX_MCS, &b, 1, 0, 0))
 		goto fail;
 
-	b = vif->wilc->attr_sysfs.fw_dbg_level;
-	if (!wilc_wlan_cfg_set(vif, 0, WID_FW_PRINT_LEVEL, &b, 1, 0, 0))
-		goto fail;
+	if (vif->wilc->chip == WILC_S02) {
+		dbg_level.level = vif->wilc->attr_sysfs.fw_dbg_level;
+		dbg_level.mod_filter = cpu_to_le32(vif->wilc->attr_sysfs.fw_dbg_mod_filter);
+		if (!wilc_wlan_cfg_set(vif, 0, WID_DEBUG_MODULE_LEVEL,
+				       (u8 *)&dbg_level, 1, 0, 0))
+			goto fail;
 
+		b = WILC_AMPDU_RX_EN_TX_DIS;
+		if (!wilc_wlan_cfg_set(vif, 0, WID_AMPDU_ENABLE, &b, 1, 0, 0))
+			goto fail;
+	}
 	b = 1;
 	if (!wilc_wlan_cfg_set(vif, 0, WID_11N_IMMEDIATE_BA_ENABLED, &b, 1,
 			       1, 0))
@@ -799,10 +812,49 @@ int wilc_s02_check_firmware_download(struct wilc *wl)
 	return ret;
 }
 
+static void host_get_reg_info(struct wilc_vif *vif, u8 *reg_info)
+{
+	int result;
+	struct wid wid;
+
+	wid.id = WID_REG_DOMAIN_INFO;
+	wid.type = WID_STR;
+	wid.val = reg_info;
+	wid.size = 256;
+
+	result = wilc_send_config_pkt(vif, WILC_GET_CFG, &wid, 1);
+	if (result) {
+		*reg_info = 0;
+		netdev_err(vif->ndev, "Failed to get %s\n", __func__);
+		return;
+	}
+}
+
+void host_set_reg_info(struct wilc_vif *vif,
+					u8 *reg_info)
+{
+	int result;
+	struct wid wid;
+
+	wid.id = WID_REG_DOMAIN_INFO;
+	wid.type = WID_STR;
+	wid.val = reg_info;
+	wid.size = RD_COUNTRY_CODE_LEN + 4;
+
+	result = wilc_send_config_pkt(vif, WILC_SET_CFG, &wid, 1);
+	if (result) {
+		*reg_info = 0;
+		netdev_err(vif->ndev, "Failed to set %s\n", __func__);
+		return;
+	}
+}
+
 static int wilc_wlan_initialize(struct net_device *dev, struct wilc_vif *vif)
 {
 	int ret = 0;
 	struct wilc *wl = vif->wilc;
+	char *ptr;
+	char *r_active;
 
 	if (!wl->initialized) {
 		wl->mac_status = WILC_MAC_STATUS_INIT;
@@ -857,7 +909,7 @@ static int wilc_wlan_initialize(struct net_device *dev, struct wilc_vif *vif)
 							     sizeof(firmware_ver));
 				firmware_ver[size] = '\0';
 				PRINT_INFO(dev, INIT_DBG, "WILC Firmware Ver = %s\n",
-					firmware_ver);
+					   firmware_ver);
 			}
 
 			ret = wilc_init_fw_config(dev, vif);
@@ -865,6 +917,40 @@ static int wilc_wlan_initialize(struct net_device *dev, struct wilc_vif *vif)
 				netdev_err(dev, "Failed to configure firmware\n");
 				ret = -EIO;
 				goto fail_fw_start;
+			}
+
+			if (wl->chip == WILC_S02) {
+				host_get_reg_info(vif, reg_dom);
+
+				if (reg_dom[1] != 0) {
+					reg_dom[0] = '"';
+					reg_dom[MAX_COUNTRY_CODE_LEN - 1] = '"';
+					strcpy(reg_dom_buffer, reg_dom);
+					ptr = strstr(reg_dom, "**");
+					r_active = (char *)strsep(&ptr, ",");
+					for (int i = 0; i < MAX_COUNTRY_CODE_LEN; i++) {
+						if (reg_dom_buffer[i] == ',')
+							reg_dom_buffer[i] = ' ';
+					}
+					PRINT_INFO(dev, INIT_DBG, "country code byffer from firmware %s\n", &reg_dom_buffer[1]);
+					PRINT_INFO(dev, INIT_DBG, "Currently active country code = %s\n", (char *)&r_active[2]);
+					if (reg_domain_param) {
+						int len = strlen(reg_domain_param);
+
+						PRINT_INFO(dev, INIT_DBG, "\n reg_domain_param %s length %d setting the reg domain\n", reg_domain_param, len);
+						strncpy((char *)(&reg_dom_set[2]), reg_domain_param, len);
+						host_set_reg_info(vif, reg_dom_set);
+					}
+				} else {
+					PRINT_INFO(dev, INIT_DBG, "continue with default GEN domain\n");
+				}
+
+				ret = wilc_init_coex_config(vif);
+				if (ret < 0) {
+					netdev_err(dev, "Failed to conigure coex params\n");
+					ret = -EIO;
+					goto fail_fw_start;
+				}
 			}
 		}
 		wl->initialized = true;
@@ -939,7 +1025,7 @@ static int wilc_mac_open(struct net_device *ndev)
 	{
 		wait_for_recovery = 0;
 		wilc_set_operation_mode(vif, wilc_get_vif_idx(vif), vif->iftype,
-				vif->idx);
+					vif->idx);
 
 		if (is_valid_ether_addr(ndev->dev_addr)) {
 			ether_addr_copy(addr, ndev->dev_addr);
@@ -1037,9 +1123,8 @@ static void wilc_set_multicast_list(struct net_device *dev)
 	u8 *cur_mc;
 
 #ifdef WILC_S02_TEST_BUS_INTERFACE
-	if (is_test_mode){
+	if (is_test_mode)
 		return;
-	}
 #endif
 	PRINT_INFO(vif->ndev, INIT_DBG,
 		   "Setting mcast List with count = %d.\n", dev->mc.count);
@@ -1228,9 +1313,8 @@ void wilc_frmw_to_host(struct wilc_vif *vif, u8 *buff, u32 size,
 		return;
 	}
 	skb = dev_alloc_skb(frame_len);
-	if (!skb) {
+	if (!skb)
 		return;
-	}
 
 	skb->dev = vif->ndev;
 	skb_put_data(skb, buff_to_send, frame_len);
@@ -1264,7 +1348,6 @@ void wilc_wfi_mgmt_rx(struct wilc *wilc, u8 *buff, u32 size, bool is_auth)
 		if (vif->mgmt_reg_stypes & type_bit &&
 		    vif->p2p_listen_state)
 			wilc_wfi_p2p_rx(vif, buff, size);
-
 
 		if (vif->monitor_flag)
 			wilc_wfi_monitor_rx(wilc->monitor_dev, buff, size);

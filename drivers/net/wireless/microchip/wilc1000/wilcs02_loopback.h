@@ -1,3 +1,9 @@
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Copyright (c) 2022 - 2024 Microchip Technology Inc., and its subsidiaries.
+ * All rights reserved.
+ */
+
 #ifndef WILC_S02_LOOP_BACK_H
 #define WILC_S02_LOOP_BACK_H
 

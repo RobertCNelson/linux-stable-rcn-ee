@@ -44,6 +44,7 @@ static const struct wilc_cfg_str g_cfg_str[] = {
 	{WID_FIRMWARE_VERSION, NULL},
 	{WID_MAC_ADDR, NULL},
 	{WID_ASSOC_RES_INFO, NULL},
+    {WID_REG_DOMAIN_INFO, NULL},
 	{WID_NIL, NULL}
 };
 
@@ -453,6 +454,9 @@ int wilc_wlan_cfg_init(struct wilc *wl)
 	i++;
 	wl->cfg.s[i].id = WID_ASSOC_RES_INFO;
 	wl->cfg.s[i].str = str_vals->assoc_rsp;
+	i++;
+    wl->cfg.s[i].id = WID_REG_DOMAIN_INFO;
+	wl->cfg.s[i].str = str_vals->reg_dom;
 	i++;
 	wl->cfg.s[i].id = WID_NIL;
 	wl->cfg.s[i].str = NULL;

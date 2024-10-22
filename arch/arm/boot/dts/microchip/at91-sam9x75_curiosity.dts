@@ -494,7 +494,7 @@
 	mmc-ddr-3_3v;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_sdmmc1_default>;
-	status = "okay";
+	status = "disabled";
 };
 
 &slow_xtal {

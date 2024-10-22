@@ -189,7 +189,7 @@
 
 #define WILC_VMM_TBL_RX_SHADOW_BASE	WILC_AHB_SHARE_MEM_BASE
 #define WILC_VMM_TBL_RX_SHADOW_SIZE	256
-#define VMM_TBL_RX_SHADOW_BASE   	0xA0420
+#define VMM_TBL_RX_SHADOW_BASE		0xA0420
 #define VMM_TBL_RX_SHADOW_SIZE		256
 
 #define WILC_GP_REG_0			0x149c
@@ -242,7 +242,6 @@
 
 #define WILC_S02_REG_ADDR_CFG		0x8
 
-
 #define WILC_CORTUS_BOOT_FROM_IRAM	0x71
 
 #define WILC_1000_BASE_ID		0x100000
@@ -256,7 +255,6 @@
 
 #define WILC_3000_BASE_ID		0x300000
 #define WILC_S02_BASE_ID		0x000053
-
 
 #define WILC_CHIP_REV_FIELD		GENMASK(11, 0)
 
@@ -274,7 +272,6 @@ static inline bool is_wilcs02_chip(u32 id)
 {
 	return (id & (WILC_CHIP_REV_FIELD)) == WILC_S02_BASE_ID;
 }
-
 
 /********************************************
  *

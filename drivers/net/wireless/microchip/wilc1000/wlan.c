@@ -279,16 +279,14 @@ void wilc_enable_tcp_ack_filter(struct wilc_vif *vif, bool value)
 	vif->ack_filter.enabled = value;
 }
 
-int wilc_wlan_txq_add_cfg_pkt(struct wilc_vif *vif, u8 *buffer,
-				     u32 buffer_size)
+int wilc_wlan_txq_add_cfg_pkt(struct wilc_vif *vif, u8 *buffer, u32 buffer_size)
 {
 	struct txq_entry_t *tqe;
 	struct wilc *wilc = vif->wilc;
 
 #ifdef WILC_S02_TEST_BUS_INTERFACE
-	if (is_test_mode && test_in_progress){
+	if (is_test_mode && test_in_progress)
 		return 0;
-	}
 #endif
 
 	PRINT_INFO(vif->ndev, TX_DBG, "Adding config packet ...\n");
@@ -502,7 +500,7 @@ int wilc_wlan_txq_add_net_pkt(struct net_device *dev,
 	tqe->vif = vif;
 
 #ifdef WILC_S02_TEST_BUS_INTERFACE
-	if(is_test_mode){
+	if (is_test_mode) {
 		q_num = 0;
 		tqe->ack_idx = NOT_TCP_ACK;
 		wilc_wlan_txq_add_to_tail(dev, q_num, tqe);
@@ -1223,7 +1221,6 @@ int wilc_wlan_handle_txq(struct wilc *wilc, u32 *txq_count)
 		kfree(tqe);
 	} while (--entries);
 
-
 	acquire_bus(wilc, WILC_BUS_ACQUIRE_AND_WAKEUP, DEV_WIFI);
 
 	if (wilc->chip != WILC_S02) {
@@ -1451,7 +1448,6 @@ int wilc_wlan_firmware_download(struct wilc *wilc, const u8 *buffer,
 
 	offset = 0;
 	pr_debug("%s: Downloading firmware size = %d\n", __func__, buffer_size);
-
 
 	acquire_bus(wilc, WILC_BUS_ACQUIRE_AND_WAKEUP, DEV_WIFI);
 	if (wilc->chip != WILC_S02) {
