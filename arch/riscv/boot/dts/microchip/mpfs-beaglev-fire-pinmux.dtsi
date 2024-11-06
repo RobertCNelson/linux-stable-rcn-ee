@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright (c) 2020-2021 Microchip Technology Inc
+ * Copyright (C) 2022-2024 Robert Nelson, BeagleBoard.org Foundation
+ */
+
+/ {
+	chosen {
+		base_dtb = "mpfs-beaglev-fire.dts";
+		base_dtb_timestamp = __TIMESTAMP__;
+	};
+};

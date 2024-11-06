@@ -6,6 +6,7 @@
 #include <dt-bindings/gpio/gpio.h>
 #include "mpfs.dtsi"
 #include "mpfs-beaglev-fire-fabric.dtsi"
+#include "mpfs-beaglev-fire-pinmux.dtsi"
 
 /* Clock frequency (in Hz) of the rtcclk */
 #define RTCCLK_FREQ		1000000
