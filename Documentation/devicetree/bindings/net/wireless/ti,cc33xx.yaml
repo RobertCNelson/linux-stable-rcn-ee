@@ -1,0 +1,59 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/net/wireless/ti,cc33xx.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Texas Instruments CC33xx Wireless LAN Controller
+
+maintainers:
+  - Michael Nemanov <michael.nemanov@ti.com>
+
+description:
+  The CC33xx is a family of IEEE 802.11ax chips from Texas Instruments.
+  These chips must be connected via SDIO and support in-band / out-of-band IRQ.
+
+properties:
+  $nodename:
+    pattern: "^wifi@2"
+
+  compatible:
+    oneOf:
+      - const: ti,cc3300
+      - items:
+          - enum:
+              - ti,cc3301
+              - ti,cc3350
+              - ti,cc3351
+          - const: ti,cc3300
+
+  reg:
+    const: 2
+
+  interrupts:
+    description:
+      The out-of-band interrupt line.
+      Can be IRQ_TYPE_EDGE_RISING or IRQ_TYPE_LEVEL_HIGH.
+      If property is omitted, SDIO in-band IRQ will be used.
+    maxItems: 1
+
+required:
+  - compatible
+  - reg
+
+additionalProperties: false
+
+examples:
+  - |
+    #include <dt-bindings/interrupt-controller/irq.h>
+
+    mmc {
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        wifi@2 {
+            compatible = "ti,cc3300";
+            reg = <2>;
+            interrupts = <19 IRQ_TYPE_EDGE_RISING>;
+        };
+    };
