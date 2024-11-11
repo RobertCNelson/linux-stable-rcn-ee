@@ -63,6 +63,7 @@ properties:
                   Endpoint bus width.
                 enum:
                   - 12  # 12 data lines connected and dual-edge mode
+                  - 18  # 18 data lines connected and single-edge mode
                   - 24  # 24 data lines connected and single-edge mode
                 default: 24
 
