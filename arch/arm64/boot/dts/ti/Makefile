@@ -229,6 +229,17 @@ dtb- += k3-am625-beagleplay-csi2-ov5640.dtb \
 	k3-j784s4-evm-quad-port-eth-exp1.dtb \
 	k3-j784s4-evm-usxgmii-exp1-exp2.dtb
 
+dtb-$(CONFIG_ARCH_K3) += BONE-I2C1.dtbo
+dtb-$(CONFIG_ARCH_K3) += BONE-I2C2.dtbo
+dtb-$(CONFIG_ARCH_K3) += BONE-I2C3.dtbo
+dtb-$(CONFIG_ARCH_K3) += k3-j721e-beagleboneai64-BBORG_MOTOR.dtbo
+dtb-$(CONFIG_ARCH_K3) += k3-j721e-beagleboneai64-pwm-epwm0-p8_13.dtbo
+dtb-$(CONFIG_ARCH_K3) += k3-j721e-beagleboneai64-pwm-epwm0-p8_13-p8_19.dtbo
+dtb-$(CONFIG_ARCH_K3) += k3-j721e-beagleboneai64-pwm-epwm0-p8_19.dtbo
+dtb-$(CONFIG_ARCH_K3) += k3-j721e-beagleboneai64-pwm-epwm2-p9_14.dtbo
+dtb-$(CONFIG_ARCH_K3) += k3-j721e-beagleboneai64-pwm-epwm2-p9_14-p9_16.dtbo
+dtb-$(CONFIG_ARCH_K3) += k3-j721e-beagleboneai64-pwm-epwm2-p9_16.dtbo
+
 # Enable support for device-tree overlays
 DTC_FLAGS_k3-am625-beagleplay += -@
 DTC_FLAGS_k3-am625-phyboard-lyra-rdk += -@
@@ -247,3 +258,5 @@ DTC_FLAGS_k3-j721e-common-proc-board += -@
 DTC_FLAGS_k3-j721e-sk += -@
 DTC_FLAGS_k3-j721s2-common-proc-board += -@
 DTC_FLAGS_k3-j784s4-evm += -@
+DTC_FLAGS_k3-am67a-beagley-ai += -@
+DTC_FLAGS_k3-j721e-beagleboneai64 += -@
