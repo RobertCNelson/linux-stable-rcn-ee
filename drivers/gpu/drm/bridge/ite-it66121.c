@@ -713,6 +713,8 @@ static u32 *it66121_bridge_atomic_get_input_bus_fmts(struct drm_bridge *bridge,
 	if (ctx->bus_width == 12)
 		/* IT66121FN Datasheet specifies Little-Endian ordering */
 		input_fmts[0] = MEDIA_BUS_FMT_RGB888_2X12_LE;
+	else if (ctx->bus_width == 18)
+		input_fmts[0] = MEDIA_BUS_FMT_RGB666_1X18;
 	else
 		/* TOFIX support more input bus formats in 24bit width */
 		input_fmts[0] = MEDIA_BUS_FMT_RGB888_1X24;
@@ -1533,7 +1535,7 @@ static int it66121_probe(struct i2c_client *client)
 	of_property_read_u32(ep, "bus-width", &ctx->bus_width);
 	of_node_put(ep);
 
-	if (ctx->bus_width != 12 && ctx->bus_width != 24)
+	if (ctx->bus_width != 12 && ctx->bus_width != 18 && ctx->bus_width != 24)
 		return -EINVAL;
 
 	ep = of_graph_get_remote_node(dev->of_node, 1, -1);
