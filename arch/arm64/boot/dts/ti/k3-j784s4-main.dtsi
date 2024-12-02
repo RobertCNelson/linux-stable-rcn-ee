@@ -1118,11 +1118,12 @@
 		      <0x00 0x02927000 0x00 0x400>,
 		      <0x00 0x0e000000 0x00 0x00800000>,
 		      <0x44 0x00000000 0x00 0x00001000>;
+		ranges = <0x01000000 0x0 0x00001000 0x44 0x00001000 0x0 0x0010000>,
+			 <0x02000000 0x0 0x00011000 0x44 0x00011000 0x0 0x7fef000>;
 		reg-names = "intd_cfg", "user_cfg", "reg", "cfg";
 		interrupt-names = "link_state";
 		interrupts = <GIC_SPI 342 IRQ_TYPE_EDGE_RISING>;
 		device_type = "pci";
-		ti,syscon-pcie-ctrl = <&pcie2_ctrl 0x0>;
 		max-link-speed = <3>;
 		num-lanes = <2>;
 		power-domains = <&k3_pds 334 TI_SCI_PD_EXCLUSIVE>;
@@ -1135,9 +1136,8 @@
 		device-id = <0xb012>;
 		msi-map = <0x0 &gic_its 0x20000 0x10000>;
 		dma-coherent;
-		ranges = <0x01000000 0x0 0x00001000 0x44 0x00001000 0x0 0x0010000>,
-			 <0x02000000 0x0 0x00011000 0x44 0x00011000 0x0 0x7fef000>;
 		dma-ranges = <0x02000000 0x0 0x0 0x0 0x0 0x10000 0x0>;
+		ti,syscon-pcie-ctrl = <&pcie2_ctrl 0x0>;
 		status = "disabled";
 	};
 
@@ -1147,11 +1147,12 @@
 		      <0x00 0x02937000 0x00 0x400>,
 		      <0x00 0x0e800000 0x00 0x00800000>,
 		      <0x44 0x10000000 0x00 0x00001000>;
+		ranges = <0x01000000 0x0 0x00001000 0x44 0x10001000 0x0 0x0010000>,
+			 <0x02000000 0x0 0x00011000 0x44 0x10011000 0x0 0x7fef000>;
 		reg-names = "intd_cfg", "user_cfg", "reg", "cfg";
 		interrupt-names = "link_state";
 		interrupts = <GIC_SPI 354 IRQ_TYPE_EDGE_RISING>;
 		device_type = "pci";
-		ti,syscon-pcie-ctrl = <&pcie3_ctrl 0x0>;
 		max-link-speed = <3>;
 		num-lanes = <2>;
 		power-domains = <&k3_pds 335 TI_SCI_PD_EXCLUSIVE>;
@@ -1164,9 +1165,8 @@
 		device-id = <0xb012>;
 		msi-map = <0x0 &gic_its 0x30000 0x10000>;
 		dma-coherent;
-		ranges = <0x01000000 0x0 0x00001000 0x44 0x10001000 0x0 0x0010000>,
-			 <0x02000000 0x0 0x00011000 0x44 0x10011000 0x0 0x7fef000>;
 		dma-ranges = <0x02000000 0x0 0x0 0x0 0x0 0x10000 0x0>;
+		ti,syscon-pcie-ctrl = <&pcie3_ctrl 0x0>;
 		status = "disabled";
 	};
 
@@ -1246,6 +1246,7 @@
 
 	serdes_wiz2: wiz@5020000 {
 		compatible = "ti,j784s4-wiz-10g";
+		ranges = <0x05020000 0x00 0x05020000 0x10000>;
 		#address-cells = <1>;
 		#size-cells = <1>;
 		power-domains = <&k3_pds 406 TI_SCI_PD_EXCLUSIVE>;
@@ -1256,7 +1257,6 @@
 		num-lanes = <4>;
 		#reset-cells = <1>;
 		#clock-cells = <1>;
-		ranges = <0x05020000 0x00 0x05020000 0x10000>;
 		status = "disabled";
 
 		serdes2: serdes@5020000 {
