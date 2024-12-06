@@ -32,11 +32,11 @@
 	};
 
 	memory@80000000 {
-		device_type = "memory";
-		bootph-all;
 		/* 32G RAM */
 		reg = <0x00000000 0x80000000 0x00000000 0x80000000>,
 		      <0x00000008 0x80000000 0x00000007 0x80000000>;
+		device_type = "memory";
+		bootph-all;
 	};
 
 	reserved_memory: reserved-memory {
