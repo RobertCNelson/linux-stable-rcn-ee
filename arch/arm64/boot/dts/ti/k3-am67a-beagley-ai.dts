@@ -11,6 +11,7 @@
 #include <dt-bindings/leds/common.h>
 #include <dt-bindings/net/ti-dp83867.h>
 #include "k3-j722s.dtsi"
+#include "k3-am67a-beagley-ai-pinmux.dtsi"
 
 / {
 	compatible = "beagle,am67a-beagley-ai", "ti,j722s";
@@ -19,7 +20,10 @@
 	aliases {
 		serial0 = &wkup_uart0;
 		serial2 = &main_uart0;
+		serial3 = &main_uart1;
+		serial6 = &main_uart6;
 		mmc1 = &sdhci1;
+		i2c1 = &mcu_i2c0;
 		rtc0 = &rtc;
 	};
 
@@ -123,6 +127,20 @@
 		regulator-boot-on;
 	};
 
+	wlan_en: regulator-7 {
+		compatible = "regulator-fixed";
+		regulator-name = "wlan_en";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		enable-active-high;
+		/* regulator-always-on; */
+		regulator-off-in-suspend;
+		vin-supply = <&vdd_3v3>;
+		gpio = <&main_gpio0 4 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&wifi_en_pins_default>;
+	};
+
 	leds {
 		compatible = "gpio-leds";
 		pinctrl-names = "default";
@@ -221,6 +239,30 @@
 			J722S_IOPAD(0x0254, PIN_OUTPUT, 7) /* (E25) USB0_DRVVBUS.GPIO1_50 */
 		>;
 	};
+
+	wifi_pins_default: wifi-default-pins {
+		pinctrl-single,pins = <
+			J722S_IOPAD(0x0120, PIN_INPUT, 0) /* (F27) MMC2_CMD */
+			J722S_IOPAD(0x0118, PIN_OUTPUT, 0) /* (H26) MMC2_CLK */
+			J722S_IOPAD(0x011C, PIN_INPUT, 0) /* () MMC2_CLKLB */
+			J722S_IOPAD(0x0114, PIN_INPUT, 0) /* (G26) MMC2_DAT0 */
+			J722S_IOPAD(0x0110, PIN_INPUT_PULLUP, 0) /* (G27) MMC2_DAT1 */
+			J722S_IOPAD(0x010c, PIN_INPUT_PULLUP, 0) /* (H27) MMC2_DAT2 */
+			J722S_IOPAD(0x0108, PIN_INPUT_PULLUP, 0) /* (J27) MMC2_DAT3 */
+		>;
+	};
+
+	wifi_en_pins_default: wifi-en-default-pins {
+		pinctrl-single,pins = <
+			J722S_IOPAD(0x0010, PIN_OUTPUT, 7) /* (L27) OSPI0_D1.GPIO0_4 */
+		>;
+	};
+
+	wifi_wlirq_pins_default: wifi-wlirq-default-pins {
+		pinctrl-single,pins = <
+			J722S_IOPAD(0x0014, PIN_INPUT, 7) /* (L26) OSPI0_D2.GPIO0_5 */
+		>;
+	};
 };
 
 &cpsw3g {
@@ -277,6 +319,26 @@
 		>;
 		bootph-all;
 	};
+
+	wifi_32k_clk: mcu-clk-out-default-pins {
+		pinctrl-single,pins = <
+			J722S_MCU_IOPAD(0x0084, PIN_OUTPUT, 0) /* (F12) WKUP_CLKOUT0 */
+		>;
+	};
+
+	mcu_i2c0_pins_default: mcu-i2c0-default-pins {
+		pinctrl-single,pins = <
+			J722S_MCU_IOPAD(0x0044, PIN_INPUT_PULLUP, 0) /* (B13) MCU_I2C0_SCL */
+			J722S_MCU_IOPAD(0x0048, PIN_INPUT_PULLUP, 0) /* (E11) MCU_I2C0_SDA */
+		>;
+		bootph-all;
+	};
+
+	gbe_pmx_obsclk: gbe-pmx-obsclk-default-pins {
+		pinctrl-single,pins = <
+			J722S_MCU_IOPAD(0x0004, PIN_OUTPUT, 1) /* (A10) MCU_SPI0_CS1.MCU_OBSCLK0 */
+		>;
+	};
 };
 
 &wkup_uart0 {
@@ -287,9 +349,19 @@
 	status = "reserved";
 };
 
+&mcu_i2c0 {
+	symlink = "hat/mcu_i2c0";
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&mcu_i2c0_pins_default>;
+	clock-frequency = <100000>;
+	bootph-all;
+};
+
 &wkup_i2c0 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&wkup_i2c0_pins_default>;
+	symlink = "hat/wkup_i2c0";
 	clock-frequency = <100000>;
 	bootph-all;
 	status = "okay";
@@ -378,6 +450,15 @@
 	};
 };
 
+dsi0_csi1_i2c: &main_i2c0 {
+	symlink = "hat/dsi0_csi1_i2c";
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&main_i2c0_pins_default>;
+	clock-frequency = <400000>;
+	bootph-all;
+};
+
 &sdhci1 {
 	/* SD/MMC */
 	vmmc-supply = <&vdd_mmc1>;
@@ -390,4 +471,30 @@
 	bootph-all;
 	ti,fails-without-test-cd;
 	status = "okay";
+};
+
+&sdhci2 {
+	vmmc-supply = <&wlan_en>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&wifi_pins_default>, <&wifi_32k_clk>;
+	bus-width = <4>;
+	non-removable;
+	ti,fails-without-test-cd;
+	cap-power-off-card;
+	keep-power-in-suspend;
+	ti,driver-strength-ohm = <50>;
+	assigned-clocks = <&k3_clks 157 174>;
+	assigned-clock-parents = <&k3_clks 157 175>;
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "okay";
+
+	wlcore: wlcore@2 {
+		compatible = "ti,cc33xx";
+		reg = <2>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&wifi_wlirq_pins_default>;
+		interrupt-parent = <&main_gpio0>;
+		interrupts = <5 IRQ_TYPE_EDGE_RISING>;
+	};
 };
