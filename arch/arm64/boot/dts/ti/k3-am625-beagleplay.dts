@@ -12,6 +12,7 @@
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/input/input.h>
 #include "k3-am625.dtsi"
+#include "k3-am625-beagleplay-pinmux.dtsi"
 
 / {
 	compatible = "beagle,am625-beagleplay", "ti,am625";
@@ -610,7 +611,7 @@
 		reg = <1>;
 		reset-gpios = <&main_gpio1 5 GPIO_ACTIVE_LOW>;
 		reset-assert-us = <25>;
-		reset-deassert-us = <60000>; /* T2 */
+		reset-deassert-us = <35>;
 	};
 };
 
