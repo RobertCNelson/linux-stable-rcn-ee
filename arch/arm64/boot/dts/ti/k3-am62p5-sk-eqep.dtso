@@ -34,6 +34,11 @@
 	};
 };
 
+&ecap1 {
+	/* MCASP0_AXR1 pinmux conflict  */
+	status = "disabled";
+};
+
 &main_uart1 {
 	/* Disable FW debug logs */
 	status = "disabled";
