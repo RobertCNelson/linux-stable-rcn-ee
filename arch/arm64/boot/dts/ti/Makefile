@@ -303,9 +303,9 @@ k3-am642-phyboard-electra-gpio-fan-dtbs := \
 	k3-am642-phyboard-electra-rdk.dtb k3-am642-phyboard-electra-gpio-fan.dtbo
 k3-am642-phyboard-electra-pcie-usb2-dtbs := \
 	k3-am642-phyboard-electra-rdk.dtb k3-am642-phyboard-electra-pcie-usb2.dtbo
-k3-am642-evm-cpsw3g-pps.dtbs := \
+k3-am642-evm-cpsw3g-pps-dtbs := \
 	k3-am642-evm.dtb k3-am642-evm-sk-cpsw3g-pps.dtbo
-k3-am642-sk-cpsw3g-pps.dtbs := \
+k3-am642-sk-cpsw3g-pps-dtbs := \
 	k3-am642-sk.dtb k3-am642-evm-sk-cpsw3g-pps.dtbo
 k3-am642-tqma64xxl-mbax4xxl-sdcard-dtbs := \
 	k3-am642-tqma64xxl-mbax4xxl.dtb k3-am64-tqma64xxl-mbax4xxl-sdcard.dtbo
