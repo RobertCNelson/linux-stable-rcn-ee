@@ -256,9 +256,6 @@ out:
 
 static int am62l_udma_stop(struct udma_chan *uc)
 {
-	if (uc->ud->match_data->type == DMA_TYPE_BCDMA_V2 && uc->cyclic)
-		return 0;
-
 	uc->state = UDMA_CHAN_IS_TERMINATING;
 	reinit_completion(&uc->teardown_completed);
 
@@ -267,6 +264,7 @@ static int am62l_udma_stop(struct udma_chan *uc)
 			udma_push_to_ring(uc, -1);
 	}
 
+	udma_chanrt_write(uc, UDMA_CHAN_RT_PEER_REG(8), UDMA_CHAN_RT_PEER_REG8_FLUSH);
 	udma_chanrt_update_bits(uc, UDMA_CHAN_RT_CTL_REG,
 		UDMA_CHAN_RT_CTL_EN | UDMA_CHAN_RT_CTL_TDOWN,
 		UDMA_CHAN_RT_CTL_EN | UDMA_CHAN_RT_CTL_TDOWN);
@@ -345,7 +343,7 @@ static irqreturn_t am62l_udma_ring_irq_handler(int irq, void *data)
 	struct udma_dev *ud = uc->ud;
 	struct udma_desc *d;
 	dma_addr_t paddr = 0;
-	u32 intr_status;
+	u32 intr_status, reg;
 
 	switch (uc->config.dir) {
 	case DMA_DEV_TO_MEM:
@@ -359,8 +357,14 @@ static irqreturn_t am62l_udma_ring_irq_handler(int irq, void *data)
 		return -ENOENT;
 	}
 
-	if (intr_status & K3_RINGACC_RT_INT_STATUS_TR)
+	reg = udma_chanrt_read(uc, UDMA_CHAN_RT_CTL_REG);
+
+	if (intr_status & K3_RINGACC_RT_INT_STATUS_TR) {
+		/* check teardown status */
+		if ((reg & UDMA_CHAN_RT_CTL_TDOWN) && !(reg & UDMA_CHAN_RT_CTL_EN))
+			complete_all(&uc->teardown_completed);
 		return am62l_udma_udma_irq_handler(irq, data);
+	}
 
 	if (udma_pop_from_ring(uc, &paddr) || !paddr)
 		return IRQ_HANDLED;
