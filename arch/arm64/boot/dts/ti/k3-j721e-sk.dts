@@ -42,6 +42,14 @@
 		#size-cells = <2>;
 		ranges;
 
+		 /* global cma region */
+		linux,cma {
+			compatible = "shared-dma-pool";
+			reusable;
+			size = <0x00 0x20000000>;
+			linux,cma-default;
+		};
+
 		secure_ddr: optee@9e800000 {
 			reg = <0x00 0x9e800000 0x00 0x01800000>;
 			alignment = <0x1000>;
@@ -1040,6 +1048,7 @@
 		#phy-cells = <0>;
 		cdns,phy-type = <PHY_TYPE_USB3>;
 		resets = <&serdes_wiz3 1>, <&serdes_wiz3 2>;
+		bootph-all;
 	};
 };
 
@@ -1049,7 +1058,7 @@
 		resets = <&serdes_wiz4 1>;
 		cdns,phy-type = <PHY_TYPE_DP>;
 		cdns,num-lanes = <4>;
-		cdns,max-bit-rate = <5400>;
+		cdns,max-bit-rate = <2700>;
 		#phy-cells = <0>;
 	};
 };
