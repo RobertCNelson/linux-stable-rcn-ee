@@ -1,0 +1,125 @@
+// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
+/*
+ * Copyright (C) 2025 Texas Instruments Incorporated - https://www.ti.com/
+ */
+
+/dts-v1/;
+/plugin/;
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/interrupt-controller/irq.h>
+#include "k3-pinctrl.h"
+
+&dss {
+	status = "disabled";
+};
+
+&pmx0 {
+	gpmc0_pins_default: gpmc0-default-pins {
+		pinctrl-single,pins = <
+			AM62LX_IOPAD(0x0078, PIN_INPUT, 0) /* (L22) GPMC0_AD0 */
+			AM62LX_IOPAD(0x007c, PIN_INPUT, 0) /* (L23) GPMC0_AD1 */
+			AM62LX_IOPAD(0x0080, PIN_INPUT, 0) /* (K22) GPMC0_AD2 */
+			AM62LX_IOPAD(0x0084, PIN_INPUT, 0) /* (J23) GPMC0_AD3 */
+			AM62LX_IOPAD(0x0088, PIN_INPUT, 0) /* (K23) GPMC0_AD4 */
+			AM62LX_IOPAD(0x008c, PIN_INPUT, 0) /* (H22) GPMC0_AD5 */
+			AM62LX_IOPAD(0x0090, PIN_INPUT, 0) /* (H23) GPMC0_AD6 */
+			AM62LX_IOPAD(0x0094, PIN_INPUT, 0) /* (J22) GPMC0_AD7 */
+			AM62LX_IOPAD(0x00d4, PIN_INPUT, 0) /* (N23) GPMC0_WAIT0 */
+			AM62LX_IOPAD(0x00e4, PIN_OUTPUT, 0) /* (L20) GPMC0_CSn0 */
+			AM62LX_IOPAD(0x00c0, PIN_OUTPUT, 0) /* (N19) GPMC0_ADVn_ALE */
+			AM62LX_IOPAD(0x00c4, PIN_OUTPUT, 0) /* (N20) GPMC0_OEn_REn */
+			AM62LX_IOPAD(0x00c8, PIN_OUTPUT, 0) /* (M19) GPMC0_WEn */
+			AM62LX_IOPAD(0x00cc, PIN_OUTPUT, 0) /* (P23) GPMC0_BE0n_CLE */
+			AM62LX_IOPAD(0x00dc, PIN_OUTPUT, 0) /* (N21) GPMC0_WPn */
+		>;
+	};
+};
+
+&elm0 {
+	status = "okay";
+};
+
+&gpmc0 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&gpmc0_pins_default>;
+	#address-cells = <2>;
+	#size-cells = <1>;
+	ranges = <0 0 0x00 0x51000000 0x01000000>; /* CS0 space. Min partition = 16MB */
+
+	nand@0,0 {
+		compatible = "ti,am64-nand";
+		reg = <0 0 64>;		/* device IO registers */
+		interrupt-parent = <&gpmc0>;
+		interrupts = <0 IRQ_TYPE_NONE>, /* fifoevent */
+			     <1 IRQ_TYPE_NONE>;	/* termcount */
+		rb-gpios = <&gpmc0 0 GPIO_ACTIVE_HIGH>;	/* gpmc_wait0 */
+		ti,nand-xfer-type = "prefetch-polled";
+		ti,nand-ecc-opt = "bch8";	/* BCH8: Bootrom limitation */
+		ti,elm-id = <&elm0>;
+		nand-bus-width = <8>;
+		gpmc,device-width = <1>;
+		gpmc,sync-clk-ps = <0>;
+		gpmc,cs-on-ns = <0>;
+		gpmc,cs-rd-off-ns = <40>;
+		gpmc,cs-wr-off-ns = <40>;
+		gpmc,adv-on-ns = <0>;
+		gpmc,adv-rd-off-ns = <25>;
+		gpmc,adv-wr-off-ns = <25>;
+		gpmc,we-on-ns = <0>;
+		gpmc,we-off-ns = <20>;
+		gpmc,oe-on-ns = <3>;
+		gpmc,oe-off-ns = <30>;
+		gpmc,access-ns = <30>;
+		gpmc,rd-cycle-ns = <40>;
+		gpmc,wr-cycle-ns = <40>;
+		gpmc,bus-turnaround-ns = <0>;
+		gpmc,cycle2cycle-delay-ns = <0>;
+		gpmc,clk-activation-ns = <0>;
+		gpmc,wr-access-ns = <40>;
+		gpmc,wr-data-mux-bus-ns = <0>;
+
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			partition@0 {
+				label = "NAND.tiboot3";
+				reg = <0x00000000 0x00080000>;	/* 512KB */
+			};
+			partition@80000 {
+				label = "NAND.tispl";
+				reg = <0x80000 0x180000>; /* 1.5M */
+			};
+			 partition@200000 {
+				label = "NAND.u-boot";
+				reg = <0x00200000 0x00200000>;  /* 2M */
+			};
+			partition@400000 {
+				label = "NAND.tiboot3.backup";	/* 512KB */
+				reg = <0x00400000 0x00080000>;	/* BootROM looks at 4M */
+			};
+			partition@480000 {
+				label = "NAND.tispl.bin.backup";
+				reg = <0x00480000 0x180000>; /* 1.5M */
+			};
+			partition@600000 {
+				label = "NAND.u-boot.backup";
+				reg = <0x00600000 0x00200000>;  /* 2M */
+			};
+			partition@800000 {
+				label = "NAND.u-boot-env";
+				reg = <0x00800000 0x00040000>;  /* 256K */
+			};
+			partition@840000 {
+				label = "NAND.u-boot-env.backup";
+				reg = <0x00840000 0x00040000>;  /* 256K */
+			};
+			partition@880000 {
+				label = "NAND.file-system";
+				reg = <0x00880000 0x1f780000>;
+			};
+		};
+	};
+};

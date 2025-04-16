@@ -57,6 +57,7 @@ dtb-$(CONFIG_ARCH_K3) += k3-am62l3-evm.dtb
 dtb-$(CONFIG_ARCH_K3) += k3-am62l3-evm-lpmdemo.dtb
 dtb-$(CONFIG_ARCH_K3) += k3-am62l3-evm-dsi-rpi-7inch-panel.dtbo
 dtb-$(CONFIG_ARCH_K3) += k3-am62l3-evm-m2-cc3351.dtbo
+dtb-$(CONFIG_ARCH_K3) += k3-am62l3-evm-nand.dtbo
 dtb-$(CONFIG_ARCH_K3) += k3-am62l3-evm-pwm.dtbo
 
 # Boards with AM62Px SoC
@@ -389,6 +390,9 @@ k3-j784s4-evm-usxgmii-exp1-exp2-dtbs := k3-j784s4-evm.dtb \
 	k3-j784s4-evm-usxgmii-exp1-exp2.dtbo
 k3-am62l3-evm-dsi-rpi-7inch-panel-dtbs := k3-am62l3-evm.dtb \
 	k3-am62l3-evm-dsi-rpi-7inch-panel.dtbo
+k3-am62l3-evm-nand-dtbs := k3-am62l3-evm.dtb \
+	k3-am62l3-evm-nand.dtbo
+
 dtb- += k3-am625-beagleplay-csi2-ov5640.dtb \
 	k3-am625-beagleplay-csi2-tevi-ov5640.dtb \
 	k3-am625-beagleplay-lincolntech-lcd185-panel.dtb \
@@ -462,7 +466,8 @@ dtb- += k3-am625-beagleplay-csi2-ov5640.dtb \
 	k3-j784s4-evm-quad-port-eth-exp1.dtb \
 	k3-j784s4-evm-usb0-type-a.dtb \
 	k3-j784s4-evm-usxgmii-exp1-exp2.dtb \
-	k3-am62l3-evm-dsi-rpi-7inch-panel.dtb
+	k3-am62l3-evm-dsi-rpi-7inch-panel.dtb \
+	k3-am62l3-evm-nand.dtb
 
 # FPDLink Sensors
 dtb-$(CONFIG_ARCH_K3) += k3-fpdlink-imx728-rcm-0-0.dtbo
