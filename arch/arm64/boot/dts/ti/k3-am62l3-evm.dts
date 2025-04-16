@@ -95,6 +95,19 @@
 		regulator-boot-on;
 	};
 
+	vdd_mmc1: regulator-2 {
+		/* TPS22918DBVR */
+		bootph-all;
+		compatible = "regulator-fixed";
+		regulator-name = "vdd_mmc1";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-boot-on;
+		enable-active-high;
+		vin-supply = <&vcc_3v3_sys>;
+		gpio = <&exp1 3 GPIO_ACTIVE_HIGH>;
+	};
+
 	vcc_1v8: regulator-3 {
 		/* output of TPS6282518DMQ */
 		compatible = "regulator-fixed";
@@ -628,10 +641,12 @@
 
 &sdhci1 {
 	/* SD/MMC */
+	vmmc-supply = <&vdd_mmc1>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&main_mmc1_pins_default>;
 	status = "okay";
 	bootph-all;
+	disable-wp;
 };
 
 &ospi0 {
