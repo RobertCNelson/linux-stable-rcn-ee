@@ -408,7 +408,10 @@
 };
 
 &usb1 {
-	/* Compatible with original PocketBeagle, expansion boards assumed this was pre-setup as host */
+	/*
+	 * Default set here is compatible with original PocketBeagle,
+	 * Expansion boards assumed this was pre-setup as host.
+	 */
 	dr_mode = "host";
 	pinctrl-names = "default";
 	pinctrl-0 = <&usb1_pins_default>;
