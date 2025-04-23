@@ -50,6 +50,7 @@ dtb-$(CONFIG_ARCH_K3) += k3-am62a7-sk-ethernet-dc01.dtbo
 dtb-$(CONFIG_ARCH_K3) += k3-am62a7-sk-fusion.dtbo
 dtb-$(CONFIG_ARCH_K3) += k3-am62a7-sk-rpi-hdr-ehrpwm.dtbo
 dtb-$(CONFIG_ARCH_K3) += k3-am62a7-sk-fusion-2.dtbo
+dtb-$(CONFIG_ARCH_K3) += k3-am62a7-sk-edgeai.dtbo
 dtb-$(CONFIG_ARCH_K3) += k3-am62a7-sk-ub954-evm-ov2312.dtb
 
 # Boards with AM62Lx SoCs

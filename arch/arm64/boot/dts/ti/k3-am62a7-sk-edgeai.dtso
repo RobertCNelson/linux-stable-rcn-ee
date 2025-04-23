@@ -1,0 +1,36 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * DT overlay for AM62A edgeAI carveouts
+ * Copyright (C) 2023-2025 Texas Instruments Incorporated - https://www.ti.com/
+ */
+
+/dts-v1/;
+/plugin/;
+
+&{/reserved-memory} {
+	#address-cells = <2>;
+	#size-cells = <2>;
+	ranges;
+
+	edgeai_rtos_ipc_memory_region: edgeai-rtos-ipc-memory-region {
+		reg = <0x00 0xa0000000 0x00 0x01000000>;
+		no-map;
+	};
+
+	edgeai_memory_region: edgeai-dma-memory@a1000000 {
+		compatible = "shared-dma-pool";
+		reg = <0x00 0xa1000000 0x00 0x02000000>;
+		no-map;
+	};
+
+	edgeai_shared_region: edgeai_shared-memories {
+		compatible = "dma-heap-carveout";
+		reg = <0x00 0xa3000000 0x00 0x0b000000>;
+	};
+
+	edgeai_core_heaps: edgeai-core-heap-memory@ae000000 {
+		compatible = "shared-dma-pool";
+		reg = <0x00 0xae000000 0x00 0x12000000>;
+		no-map;
+	};
+};
