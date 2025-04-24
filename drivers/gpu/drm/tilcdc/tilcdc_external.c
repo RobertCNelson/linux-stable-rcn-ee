@@ -167,7 +167,8 @@ int tilcdc_get_external_components(struct device *dev,
 
 	node = of_graph_get_remote_node(dev->of_node, 0, 0);
 
-	if (!of_device_is_compatible(node, "nxp,tda998x")) {
+	if (!of_device_is_compatible(node, "nxp,tda998x")
+		&& !of_device_is_compatible(node, "ite,it66122")) {
 		of_node_put(node);
 		return 0;
 	}
