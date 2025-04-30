@@ -1280,6 +1280,15 @@
 			};
 		};
 
+		icssg0_uart: serial@28000 {
+			compatible = "ti,pruss-uart";
+			reg = <0x28000 0x40>;
+			clocks = <&k3_clks 81 19>;
+			interrupt-parent = <&icssg0_intc>;
+			interrupts = <6 6 6>;
+			status = "disabled";
+		};
+
 		icssg0_iep0: iep@2e000 {
 			compatible = "ti,am654-icss-iep";
 			reg = <0x2e000 0x1000>;
@@ -1457,6 +1466,15 @@
 					assigned-clock-parents = <&icssg1_coreclk_mux>;
 				};
 			};
+		};
+
+		icssg1_uart: serial@28000 {
+			compatible = "ti,pruss-uart";
+			reg = <0x28000 0x40>;
+			clocks = <&k3_clks 82 19>;
+			interrupt-parent = <&icssg1_intc>;
+			interrupts = <6 6 6>;
+			status = "disabled";
 		};
 
 		icssg1_iep0: iep@2e000 {
