@@ -26,6 +26,7 @@
 		serial0 = &mcu_uart0;
 		serial1 = &main_uart1;
 		serial2 = &main_uart0;
+		serial3 = &icssg0_uart;
 		i2c0 = &main_i2c0;
 		i2c1 = &main_i2c1;
 		mmc0 = &sdhci0;
@@ -398,6 +399,15 @@
 			AM64X_IOPAD(0x00bc, PIN_INPUT, 7) /* (U8) GPIO0_46 */
 		>;
 	};
+
+	icssg0_uart_pins_default: icssg0-uart-default-pins {
+		pinctrl-single,pins = <
+			AM64X_IOPAD(0x0184, PIN_INPUT, 2) /* (W6) PRG0_PRU0_GPO9.PRG0_UART0_CTSn */
+			AM64X_IOPAD(0x0188, PIN_OUTPUT, 2) /* (AA5) PRG0_PRU0_GPO10.PRG0_UART0_RTSn */
+			AM64X_IOPAD(0x01d4, PIN_INPUT, 2) /* (Y5) PRG0_PRU1_GPO9.PRG0_UART0_RXD */
+			AM64X_IOPAD(0x01d8, PIN_OUTPUT, 2) /* (V6) PRG0_PRU1_GPO10.PRG0_UART0_TXD */
+		>;
+	};
 };
 
 &main_uart0 {
@@ -759,5 +769,11 @@
 		/* pps [cpts genf1] in22 -> out37 [cpts hw8_push] */
 		K3_TS_OFFSET(37, 0x0001ffff, 22)
 		>;
+	status = "okay";
+};
+
+&icssg0_uart {
+	pinctrl-names = "default";
+	pinctrl-0 = <&icssg0_uart_pins_default>;
 	status = "okay";
 };
