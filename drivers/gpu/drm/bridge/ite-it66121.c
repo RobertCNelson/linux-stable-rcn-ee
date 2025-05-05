@@ -591,7 +591,7 @@ static bool it66121_is_hpd_detect(struct it66121_ctx *ctx)
 }
 
 static enum drm_mode_status it66121_mode_valid(struct drm_connector *connector,
-					       struct drm_display_mode *mode)
+					       const struct drm_display_mode *mode)
 {
 	struct it66121_ctx *ctx = connector_to_it66121(connector);
 	unsigned long max_clock;
