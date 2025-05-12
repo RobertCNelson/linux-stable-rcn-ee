@@ -2,7 +2,7 @@
 /*
  * Device Tree file for the WAKEUP domain peripherals shared by AM62P and J722S
  *
- * Copyright (C) 2023-2024 Texas Instruments Incorporated - https://www.ti.com/
+ * Copyright (C) 2023-2025 Texas Instruments Incorporated - https://www.ti.com/
  */
 
 &cbass_wakeup {
@@ -18,6 +18,11 @@
 			compatible = "ti,am654-chipid";
 			reg = <0x14 0x4>;
 			bootph-all;
+		};
+
+		opp_efuse_table: syscon@18 {
+			compatible = "ti,am62-opp-efuse-table", "syscon";
+			reg = <0x18 0x4>;
 		};
 
 		cpsw_mac_syscon: ethernet-mac-syscon@200 {
