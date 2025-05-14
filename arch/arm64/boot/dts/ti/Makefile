@@ -53,6 +53,9 @@ dtb-$(CONFIG_ARCH_K3) += k3-am62a7-sk-fusion-2.dtbo
 dtb-$(CONFIG_ARCH_K3) += k3-am62a7-sk-edgeai.dtbo
 dtb-$(CONFIG_ARCH_K3) += k3-am62a7-sk-ub954-evm-ov2312.dtb
 
+# Boards with AM62Dx SoC
+dtb-$(CONFIG_ARCH_K3) += k3-am62d2-evm.dtb
+
 # Boards with AM62Lx SoCs
 dtb-$(CONFIG_ARCH_K3) += k3-am62l3-evm.dtb
 dtb-$(CONFIG_ARCH_K3) += k3-am62l3-evm-lpmdemo.dtb
