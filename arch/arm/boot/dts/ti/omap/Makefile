@@ -158,6 +158,7 @@ dtb-$(CONFIG_SOC_DRA7XX) += \
 	am57xx-idk-lcd-osd101t2045.dtbo \
 	am57xx-idk-lcd-osd101t2587.dtbo \
 	dra7-evm.dtb \
+	am57xx-evm-ov10635.dtbo \
 	dra72-evm.dtb \
 	dra72-evm-revc.dtb \
 	dra71-evm.dtb \
