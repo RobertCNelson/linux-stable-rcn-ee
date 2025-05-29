@@ -32,11 +32,13 @@
 			AM62LX_IOPAD(0x00cc, PIN_OUTPUT, 0) /* (P23) GPMC0_BE0n_CLE */
 			AM62LX_IOPAD(0x00dc, PIN_OUTPUT, 0) /* (N21) GPMC0_WPn */
 		>;
+		bootph-all;
 	};
 };
 
 &elm0 {
 	status = "okay";
+	bootph-all;
 };
 
 &gpmc0 {
@@ -78,6 +80,7 @@
 		gpmc,clk-activation-ns = <0>;
 		gpmc,wr-access-ns = <40>;
 		gpmc,wr-data-mux-bus-ns = <0>;
+		bootph-all;
 
 		partitions {
 			compatible = "fixed-partitions";
