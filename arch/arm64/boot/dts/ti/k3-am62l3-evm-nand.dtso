@@ -104,7 +104,7 @@
 				reg = <0x00400000 0x00080000>;	/* BootROM looks at 4M */
 			};
 			partition@480000 {
-				label = "NAND.tispl.bin.backup";
+				label = "NAND.tispl.backup";
 				reg = <0x00480000 0x180000>; /* 1.5M */
 			};
 			partition@600000 {
