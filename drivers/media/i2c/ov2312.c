@@ -45,7 +45,7 @@ struct ov2312 {
 	u32 fps;
 
 	struct mutex lock; /* For streaming status */
-	bool streaming;
+	unsigned int enable_count;
 };
 
 static inline struct ov2312 *to_ov2312(struct v4l2_subdev *sd)
@@ -144,7 +144,7 @@ static int ov2312_set_fmt(struct v4l2_subdev *sd,
 	/* Update the stored format and return it. */
 	format = v4l2_subdev_state_get_format(state, fmt->pad, fmt->stream);
 
-	if (fmt->which == V4L2_SUBDEV_FORMAT_ACTIVE && ov2312->streaming) {
+	if (fmt->which == V4L2_SUBDEV_FORMAT_ACTIVE && ov2312->enable_count) {
 		ret = -EBUSY;
 		goto done;
 	}
@@ -535,20 +535,18 @@ static int ov2312_sd_enable_streams(struct v4l2_subdev *sd,
 
 	mutex_lock(&ov2312->lock);
 
-	if (ov2312->streaming) {
-		mutex_unlock(&ov2312->lock);
-		return 0;
+	if (!ov2312->enable_count) {
+		ret = pm_runtime_resume_and_get(ov2312->dev);
+		if (ret < 0)
+			goto err_unlock;
+
+		ret = ov2312_start_stream(ov2312);
+		if (ret < 0)
+			goto err_runtime_put;
 	}
 
-	ret = pm_runtime_resume_and_get(ov2312->dev);
-	if (ret < 0)
-		goto err_unlock;
+	ov2312->enable_count++;
 
-	ret = ov2312_start_stream(ov2312);
-	if (ret < 0)
-		goto err_runtime_put;
-
-	ov2312->streaming = true;
 	mutex_unlock(&ov2312->lock);
 
 	return 0;
@@ -572,21 +570,19 @@ static int ov2312_sd_disable_streams(struct v4l2_subdev *sd,
 
 	mutex_lock(&ov2312->lock);
 
-	if (!ov2312->streaming) {
-		mutex_unlock(&ov2312->lock);
-		return 0;
-	}
-
-	ret = ov2312_stop_stream(ov2312);
+	if (ov2312->enable_count == 1) {
+		ret = ov2312_stop_stream(ov2312);
 		if (ret < 0)
 			goto err_runtime_put;
+	}
 
-	ov2312->streaming = false;
+	ov2312->enable_count--;
 	mutex_unlock(&ov2312->lock);
 
 	return 0;
 
 err_runtime_put:
+	mutex_unlock(&ov2312->lock);
 	pm_runtime_put(ov2312->dev);
 	return ret;
 }
