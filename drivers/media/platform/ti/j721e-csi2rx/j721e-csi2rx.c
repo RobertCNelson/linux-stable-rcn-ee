@@ -1100,6 +1100,7 @@ static void ti_csi2rx_stop_streaming(struct vb2_queue *vq)
 	struct ti_csi2rx_dev *csi = ctx->csi;
 	int ret;
 
+	mutex_lock(&csi->mutex);
 	/* assert pixel reset to prevent stale data */
 	if (csi->enable_count == 1) {
 		writel(0, csi->shim + SHIM_DMACNTX(ctx->idx));
@@ -1115,6 +1116,8 @@ static void ti_csi2rx_stop_streaming(struct vb2_queue *vq)
 
 	if (ret)
 		dev_err(csi->dev, "Failed to stop subdev stream\n");
+
+	mutex_unlock(&csi->mutex);
 
 	ti_csi2rx_cleanup_buffers(ctx, VB2_BUF_STATE_ERROR);
 	pm_runtime_put(csi->dev);
@@ -1277,19 +1280,15 @@ static int ti_csi2rx_sd_disable_streams(struct v4l2_subdev *sd,
 						       TI_CSI2RX_PAD_SINK,
 						       &streams_mask);
 
-	mutex_lock(&csi->mutex);
-	if (csi->enable_count == 0) {
-		ret = -EINVAL;
-		goto out;
-	}
+	if (csi->enable_count == 0)
+		return -EINVAL;
 
 	ret = v4l2_subdev_disable_streams(csi->source, remote_pad->index,
 					  sink_streams);
 	if (!ret)
 		--csi->enable_count;
-out:
-	mutex_unlock(&csi->mutex);
-	return ret;
+
+	return 0;
 }
 
 static const struct v4l2_subdev_pad_ops ti_csi2rx_subdev_pad_ops = {
