@@ -2,7 +2,7 @@
 /*
  * TI SCI Generic Power Domain Driver
  *
- * Copyright (C) 2015-2017 Texas Instruments Incorporated - http://www.ti.com/
+ * Copyright (C) 2015-2025 Texas Instruments Incorporated - http://www.ti.com/
  *	J Keerthy <j-keerthy@ti.com>
  *	Dave Gerlach <d-gerlach@ti.com>
  */
@@ -165,8 +165,47 @@ static int ti_sci_pd_suspend(struct device *dev)
 
 	return 0;
 }
+
+static int ti_sci_pd_suspend_late(struct device *dev)
+{
+	struct generic_pm_domain *genpd = pd_to_genpd(dev->pm_domain);
+	struct ti_sci_pm_domain *pd = genpd_to_ti_sci_pd(genpd);
+	const struct ti_sci_handle *ti_sci = pd->parent->ti_sci;
+	int ret;
+
+	ret = pm_generic_suspend_late(dev);
+	if (ret) {
+		dev_err(dev, "%s: Failed to suspend. Abort entering low power mode.\n", __func__);
+		if (ti_sci->ops.pm_ops.lpm_abort(ti_sci))
+			dev_err(dev, "%s: Failed to abort.\n", __func__);
+		return ret;
+	}
+
+	return 0;
+}
+
+static int ti_sci_pd_suspend_noirq(struct device *dev)
+{
+	struct generic_pm_domain *genpd = pd_to_genpd(dev->pm_domain);
+	struct ti_sci_pm_domain *pd = genpd_to_ti_sci_pd(genpd);
+	const struct ti_sci_handle *ti_sci = pd->parent->ti_sci;
+	int ret;
+
+	ret = pm_generic_suspend_noirq(dev);
+	if (ret) {
+		dev_err(dev, "%s: Failed to suspend. Abort entering low power mode.\n", __func__);
+		if (ti_sci->ops.pm_ops.lpm_abort(ti_sci))
+			dev_err(dev, "%s: Failed to abort.\n", __func__);
+		return ret;
+	}
+
+	return 0;
+}
+
 #else
 #define ti_sci_pd_suspend		NULL
+#define ti_sci_pd_suspend_late		NULL
+#define ti_sci_pd_suspend_noirq		NULL
 #endif
 
 /*
@@ -286,6 +325,11 @@ static int ti_sci_pm_domain_probe(struct platform_device *pdev)
 				if (pd_provider->ti_sci->ops.pm_ops.set_device_constraint &&
 				    pd_provider->ti_sci->ops.pm_ops.set_latency_constraint)
 					pd->pd.domain.ops.suspend = ti_sci_pd_suspend;
+
+				if (pd_provider->ti_sci->ops.pm_ops.lpm_abort) {
+					pd->pd.domain.ops.suspend_late = ti_sci_pd_suspend_late;
+					pd->pd.domain.ops.suspend_noirq = ti_sci_pd_suspend_noirq;
+				}
 
 				pm_genpd_init(&pd->pd, NULL, true);
 
