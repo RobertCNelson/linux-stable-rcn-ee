@@ -107,7 +107,6 @@
 			interrupts = <GIC_SPI 108 IRQ_TYPE_LEVEL_HIGH>;
 			clocks = <&scmi_clk 324>;
 			assigned-clocks = <&scmi_clk 324>;
-			assigned-clock-rates = <48000000>;
 			clock-names = "fck";
 			status = "disabled";
 		};
