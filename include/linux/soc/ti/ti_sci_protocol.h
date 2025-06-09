@@ -214,6 +214,7 @@ struct ti_sci_clk_ops {
  * @set_latency_constraint: Set LPM resume latency constraint
  *		- latency: maximum acceptable latency to wake up from low power mode
  *		- state: The desired state of latency constraint: set or clear.
+ * @lpm_abort: Abort entry to LPM
  */
 struct ti_sci_pm_ops {
 	int (*lpm_wake_reason)(const struct ti_sci_handle *handle,
@@ -222,6 +223,7 @@ struct ti_sci_pm_ops {
 				     u32 id, u8 state);
 	int (*set_latency_constraint)(const struct ti_sci_handle *handle,
 				      u16 latency, u8 state);
+	int (*lpm_abort)(const struct ti_sci_handle *handle);
 };
 
 /**

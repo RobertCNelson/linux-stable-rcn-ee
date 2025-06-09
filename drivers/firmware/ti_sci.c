@@ -2,7 +2,7 @@
 /*
  * Texas Instruments System Control Interface Protocol Driver
  *
- * Copyright (C) 2015-2024 Texas Instruments Incorporated - https://www.ti.com/
+ * Copyright (C) 2015-2025 Texas Instruments Incorporated - https://www.ti.com/
  *	Nishanth Menon
  */
 
@@ -2022,6 +2022,58 @@ fail:
 	return ret;
 }
 
+/**
+ * ti_sci_cmd_lpm_abort() - Abort entry to LPM
+ * @handle:     pointer to TI SCI handle
+ *
+ * Return: 0 if all went well, else returns appropriate error value.
+ */
+static int ti_sci_cmd_lpm_abort(const struct ti_sci_handle *handle)
+{
+	struct ti_sci_info *info;
+	struct ti_sci_msg_hdr *req;
+	struct ti_sci_msg_hdr *resp;
+	struct ti_sci_xfer *xfer;
+	struct device *dev;
+	int ret = 0;
+
+	if (IS_ERR(handle))
+		return PTR_ERR(handle);
+	if (!handle)
+		return -EINVAL;
+
+	info = handle_to_ti_sci_info(handle);
+	dev = info->dev;
+
+	xfer = ti_sci_get_one_xfer(info, TI_SCI_MSG_LPM_ABORT,
+				   TI_SCI_FLAG_REQ_ACK_ON_PROCESSED,
+				   sizeof(*req), sizeof(*resp));
+	if (IS_ERR(xfer)) {
+		ret = PTR_ERR(xfer);
+		dev_err(dev, "Message alloc failed(%d)\n", ret);
+		return ret;
+	}
+	req = (struct ti_sci_msg_hdr *)xfer->xfer_buf;
+
+	ret = ti_sci_do_xfer(info, xfer);
+	if (ret) {
+		dev_err(dev, "Mbox send fail %d\n", ret);
+		goto fail;
+	}
+
+	resp = (struct ti_sci_msg_hdr *)xfer->xfer_buf;
+
+	if (!ti_sci_is_response_ack(resp))
+		ret = -ENODEV;
+	else
+		ret = 0;
+
+fail:
+	ti_sci_put_one_xfer(&info->minfo, xfer);
+
+	return ret;
+}
+
 static int ti_sci_cmd_core_reboot(const struct ti_sci_handle *handle)
 {
 	struct ti_sci_info *info;
@@ -3209,6 +3261,7 @@ static void ti_sci_setup_ops(struct ti_sci_info *info)
 		pmops->lpm_wake_reason = ti_sci_msg_cmd_lpm_wake_reason;
 		pmops->set_device_constraint = ti_sci_cmd_set_device_constraint;
 		pmops->set_latency_constraint = ti_sci_cmd_set_latency_constraint;
+		pmops->lpm_abort = ti_sci_cmd_lpm_abort;
 	}
 
 	rm_core_ops->get_range = ti_sci_cmd_get_resource_range;
@@ -3703,9 +3756,13 @@ static int __maybe_unused ti_sci_suspend(struct device *dev)
 	}
 
 	ret = ti_sci_prepare_system_suspend(info);
-	if (ret)
+	if (ret) {
+		dev_err(dev, "%s: Failed to prepare sleep. Abort entering low power mode.\n",
+				__func__);
+		if (ti_sci_cmd_lpm_abort(&info->handle))
+			dev_err(dev, "%s: Failed to abort.\n", __func__);
 		return ret;
-
+	}
 	return 0;
 }
 
@@ -3715,8 +3772,12 @@ static int __maybe_unused ti_sci_suspend_noirq(struct device *dev)
 	int ret = 0;
 
 	ret = ti_sci_cmd_set_io_isolation(&info->handle, TISCI_MSG_VALUE_IO_ENABLE);
-	if (ret)
+	if (ret) {
+		dev_err(dev, "%s: Failed to suspend. Abort entering low power mode.\n", __func__);
+		if (ti_sci_cmd_lpm_abort(&info->handle))
+			dev_err(dev, "%s: Failed to abort.\n", __func__);
 		return ret;
+	}
 
 	return 0;
 }
