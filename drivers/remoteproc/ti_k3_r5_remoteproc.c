@@ -2,7 +2,7 @@
 /*
  * TI K3 R5F (MCU) Remote Processor driver
  *
- * Copyright (C) 2017-2022 Texas Instruments Incorporated - https://www.ti.com/
+ * Copyright (C) 2017-2025 Texas Instruments Incorporated - https://www.ti.com/
  *	Suman Anna <s-anna@ti.com>
  */
 
@@ -642,6 +642,7 @@ static int k3_r5_suspend_late(struct device *dev)
 {
 	struct k3_r5_cluster *cluster = dev_get_drvdata(dev);
 	struct k3_r5_core *core;
+	int ret = 0;
 
 	list_for_each_entry(core, &cluster->cores, elem) {
 		struct k3_r5_rproc *kproc;
@@ -653,8 +654,11 @@ static int k3_r5_suspend_late(struct device *dev)
 		/* Check if pm notifier call is set. if it is, suspend/resume is
 		 * supported
 		 */
-		if (kproc->pm_notifier.notifier_call)
-			k3_r5_suspend(rproc);
+		if (kproc->pm_notifier.notifier_call) {
+			ret = k3_r5_suspend(rproc);
+			if (ret)
+				return ret;
+		}
 	}
 
 	return 0;
