@@ -589,6 +589,7 @@
 	mboxes = <&mailbox0_cluster2 &mbox_mcu_r5_0>;
 	memory-region = <&mcu_r5fss0_core0_dma_memory_region>,
 			<&mcu_r5fss0_core0_memory_region>;
+	firmware-name = "am62d-mcu-r5f0_0-fw";
 };
 
 &c7x_0 {
@@ -597,6 +598,7 @@
 	mboxes = <&mailbox0_cluster1 &mbox_c7x_0>;
 	memory-region = <&c7x_0_dma_memory_region>,
 			<&c7x_0_memory_region>;
+	firmware-name = "am62d-c71_0-fw";
 };
 
 &cpsw3g {
