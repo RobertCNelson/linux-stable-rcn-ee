@@ -2497,6 +2497,7 @@ struct m_can_classdev *m_can_class_allocate_dev(struct device *dev,
 	if (ret)
 		goto err_free_candev;
 
+	spin_lock_init(&class_dev->tx_handling_spinlock);
 	return class_dev;
 
 err_free_candev:
@@ -2584,9 +2585,9 @@ EXPORT_SYMBOL_GPL(m_can_class_register);
 
 void m_can_class_unregister(struct m_can_classdev *cdev)
 {
+	unregister_candev(cdev->net);
 	if (cdev->is_peripheral)
 		can_rx_offload_del(&cdev->offload);
-	unregister_candev(cdev->net);
 }
 EXPORT_SYMBOL_GPL(m_can_class_unregister);
 
