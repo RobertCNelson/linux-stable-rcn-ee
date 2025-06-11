@@ -56,6 +56,7 @@
 &main_i2c1 {
 	gpio@23 {
 		fet_sel {
+			/* P01 - VOUT0_FET_SEL0 */
 			gpio-hog;
 			gpios = <1 GPIO_ACTIVE_HIGH>;
 			output-high;
@@ -69,18 +70,21 @@
 };
 
 &epwm0 {
+	/* P18 on J2 & P7 on J3 */
 	pinctrl-names = "default";
 	pinctrl-0 = <&main_epwm0_pins_default>;
 	status = "okay";
 };
 
 &epwm1 {
+	/* P10 on J2 & P5 on J2 */
 	pinctrl-names = "default";
 	pinctrl-0 = <&main_epwm1_pins_default>;
 	status = "okay";
 };
 
 &epwm2 {
+	/* P4 on J2 & P1 on J2 */
 	pinctrl-names = "default";
 	pinctrl-0 = <&main_epwm2_pins_default>;
 	status = "okay";
@@ -88,7 +92,7 @@
 
 &ecap0 {
 	/* ECAP0 in APWM mode */
-	/* Pin 24 on J2 */
+	/* P24 on J2 */
 	pinctrl-names = "default";
 	pinctrl-0 = <&main_ecap0_pins_default>;
 	status = "okay";
@@ -96,7 +100,7 @@
 
 &ecap1 {
 	/* ECAP1 in APWM mode */
-	/* Pin 26 on J2 */
+	/* P26 on J2 */
 	pinctrl-names = "default";
 	pinctrl-0 = <&main_ecap1_pins_default>;
 	status = "okay";
@@ -104,7 +108,7 @@
 
 &ecap2 {
 	/* ECAP2 in APWM mode */
-	/* Pin 9 on J3 */
+	/* P9 on J3 */
 	pinctrl-names = "default";
 	pinctrl-0 = <&main_ecap2_pins_default>;
 	status = "okay";
