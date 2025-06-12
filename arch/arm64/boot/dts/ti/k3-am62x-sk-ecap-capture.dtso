@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * DT Overlay for enabling ECAP in capture mode on AM625-SK
+ * DT Overlay for enabling ECAP in capture mode for AM625-SK, AM62 LP-SK, and AM62A7-SK
  *
  * Copyright (C) 2023 Texas Instruments Incorporated - https://www.ti.com/
  */
@@ -21,6 +21,7 @@
 
 &ecap2 {
 	/* ECAP in capture mode */
+	/* P11 on J3 */
 	compatible = "ti,am62-ecap-capture";
 	interrupt-parent = <&gic500>;
 	interrupts = <GIC_SPI 115 IRQ_TYPE_EDGE_RISING>;
