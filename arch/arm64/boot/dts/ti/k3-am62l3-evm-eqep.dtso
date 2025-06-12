@@ -1,0 +1,61 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * DT Overlay for enabling EQEP on AM62L3 EVM
+ *
+ * Copyright (C) 2023 Texas Instruments Incorporated - https://www.ti.com/
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include "k3-pinctrl.h"
+
+&pmx0 {
+	main_eqep0_pins_default: main-eqep0-pins-default {
+		pinctrl-single,pins = <
+			AM62LX_IOPAD(0x00cc, PIN_INPUT, 4) /* (P23) GPMC0_BE0n_CLE.EQEP0_A */
+			AM62LX_IOPAD(0x00d0, PIN_INPUT, 4) /* (P22) GPMC0_BE1n.EQEP0_B */
+			AM62LX_IOPAD(0x00d8, PIN_INPUT, 4) /* (N22) GPMC0_WAIT1.EQEP0_I */
+			AM62LX_IOPAD(0x00d4, PIN_INPUT, 4) /* (N23) GPMC0_WAIT0.EQEP0_S */
+		>;
+	};
+
+	main_eqep1_pins_default: main-eqep1-pins-default {
+		pinctrl-single,pins = <
+			AM62LX_IOPAD(0x00dc, PIN_INPUT, 4) /* (N21) GPMC0_WPn.EQEP1_A */
+			AM62LX_IOPAD(0x00e0, PIN_INPUT, 4) /* (M21) GPMC0_DIR.EQEP1_B */
+			AM62LX_IOPAD(0x00e4, PIN_INPUT, 4) /* (L20) GPMC0_CSn0.EQEP1_S */
+		>;
+	};
+};
+
+&dss {
+	status = "disabled";
+};
+
+&main_i2c1 {
+	gpio@23 {
+		fet_sel {
+			/* P01 - VOUT0_FET_SEL0 */
+			gpio-hog;
+			gpios = <1 GPIO_ACTIVE_HIGH>;
+			output-high;
+			line-name = "VOUT0_FET_SEL0";
+		};
+	};
+};
+
+&eqep0 {
+	status = "okay";
+	/* A/B on pins 19/14 of J2 */
+	pinctrl-names = "default";
+	pinctrl-0 = <&main_eqep0_pins_default>;
+};
+
+&eqep1 {
+	status = "okay";
+	/* A/B on pins 9/7 of J2 */
+	pinctrl-names = "default";
+	pinctrl-0 = <&main_eqep1_pins_default>;
+};
