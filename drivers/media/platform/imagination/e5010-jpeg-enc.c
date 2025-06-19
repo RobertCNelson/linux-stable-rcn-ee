@@ -454,6 +454,7 @@ static int e5010_enum_framesizes(struct file *file, void *priv, struct v4l2_frms
 
 	fsize->type = V4L2_FRMSIZE_TYPE_STEPWISE;
 	fsize->stepwise = fmt->frmsize;
+	fsize->stepwise.step_width = JPEG_STEP_WIDTH;
 	fsize->reserved[0] = 0;
 	fsize->reserved[1] = 0;
 

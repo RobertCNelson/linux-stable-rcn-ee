@@ -23,6 +23,7 @@
 #define DEFAULT_HEIGHT			480
 #define E5010_MODULE_NAME		"e5010"
 #define JPEG_MAX_BYTES_PER_PIXEL	2
+#define JPEG_STEP_WIDTH			16
 
 /* JPEG marker definitions */
 #define START_OF_IMAGE			0xFFD8
