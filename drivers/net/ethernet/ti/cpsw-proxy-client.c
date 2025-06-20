@@ -1871,8 +1871,15 @@ static netdev_tx_t vport_ndo_xmit(struct sk_buff *skb, struct net_device *ndev)
 			 PS_DATA_SIZE);
 	cppi5_desc_set_pktids(&first_desc->hdr, 0, 0x3FFF);
 	cppi5_hdesc_set_pkttype(first_desc, 0x7);
-	/* target port has to be 0 */
-	cppi5_desc_set_tags_ids(&first_desc->hdr, 0, vport->port_type);
+
+	/* For Virtual Switch Ports, ALE will determine the destination.
+	 * For Virtual MAC Ports, a directed packet (ALE Bypass) should
+	 * be sent to the physical MAC Port.
+	 */
+	if (vport->port_type == VIRT_SWITCH_PORT)
+		cppi5_desc_set_tags_ids(&first_desc->hdr, 0, 0);
+	else
+		cppi5_desc_set_tags_ids(&first_desc->hdr, 0, vport->port_id);
 
 	k3_udma_glue_tx_dma_to_cppi5_addr(tx_chn->tx_chan, &buf_dma);
 	cppi5_hdesc_attach_buf(first_desc, buf_dma, pkt_len, buf_dma, pkt_len);
