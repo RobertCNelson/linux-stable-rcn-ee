@@ -36,6 +36,7 @@ dtb-$(CONFIG_ARCH_K3) += k3-am62-lp-sk-lincolntech-lcd185-panel.dtbo
 dtb-$(CONFIG_ARCH_K3) += k3-am62-lp-sk-microtips-mf101hie-panel.dtbo
 dtb-$(CONFIG_ARCH_K3) += k3-am62-lp-sk-nand.dtbo
 dtb-$(CONFIG_ARCH_K3) += k3-am625-sk-mcspi-loopback.dtbo
+dtb-$(CONFIG_ARCH_K3) += k3-am6254xxl-sk.dtb
 
 # Boards with AM62Ax SoC
 k3-am62a7-sk-ub954-evm-ov2312-dtbs := k3-am62a7-sk.dtb \
@@ -522,6 +523,7 @@ DTC_FLAGS_k3-am625-phyboard-lyra-rdk += -@
 DTC_FLAGS_k3-am62a7-phyboard-lyra-rdk += -@
 DTC_FLAGS_k3-am625-sk += -@
 DTC_FLAGS_k3-am62l3-evm += -@
+DTC_FLAGS_k3-am6254xxl-sk += -@
 DTC_FLAGS_k3-am62-lp-sk += -@
 DTC_FLAGS_k3-am654-base-board += -@
 DTC_FLAGS_k3-am62x-sk-csi2-v3link-fusion += -@
