@@ -319,7 +319,7 @@
 	};
 
 	sdhci1: mmc@fa00000 {
-		compatible = "ti,am62-sdhci";
+		compatible = "ti,j721e-sdhci-4bit";
 		reg = <0x00 0x0fa00000 0x00 0x1000>, <0x00 0x0fa08000 0x00 0x400>;
 		interrupts = <GIC_SPI 237 IRQ_TYPE_LEVEL_HIGH>;
 		power-domains = <&scmi_pds 26>;
