@@ -24,6 +24,7 @@ properties:
   compatible:
     enum:
       - ti,j7-rti-wdt
+      - ti,am62l-rti-wdt
 
   reg:
     maxItems: 1
