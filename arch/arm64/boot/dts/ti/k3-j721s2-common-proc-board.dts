@@ -94,6 +94,29 @@
 			 <3300000 0x1>;
 	};
 
+	dp1_pwr_3v3: regulator-dp1-prw {
+		compatible = "regulator-fixed";
+		regulator-name = "dp1-pwr";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&exp4 1 GPIO_ACTIVE_HIGH>; /* P1 - DP1_PWR_SW_EN */
+		enable-active-high;
+		regulator-always-on;
+	};
+
+	dp1: connector-dp1 {
+		compatible = "dp-connector";
+		label = "DP1";
+		type = "full-size";
+		dp-pwr-supply = <&dp1_pwr_3v3>;
+
+		port {
+			dp1_connector_in: endpoint {
+				remote-endpoint = <&dp1_out>;
+			};
+		};
+	};
+
 	transceiver1: can-phy1 {
 		compatible = "ti,tcan1043";
 		#phy-cells = <0>;
@@ -713,30 +736,75 @@
 
 &dss {
 	/*
+	 * DSS on J721S2-EVM supports DP on VP0 and DSI on VP2.
 	 * These clock assignments are chosen to enable the following outputs:
-	 *
 	 * VP0 - DisplayPort SST
-	 * VP1 - DPI0
 	 * VP2 - DSI
-	 * VP3 - DPI1
 	 */
 	status = "okay";
 	assigned-clocks = <&k3_clks 158 2>,
-			  <&k3_clks 158 5>,
-			  <&k3_clks 158 14>,
-			  <&k3_clks 158 18>;
+			  <&k3_clks 158 14>;
 	assigned-clock-parents = <&k3_clks 158 3>,
-				 <&k3_clks 158 7>,
-				 <&k3_clks 158 16>,
-				 <&k3_clks 158 22>;
+				 <&k3_clks 158 16>;
 };
 
 &dss_ports {
-	port {
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	port@0 {
+		reg = <0>;
 		dpi0_out: endpoint {
 			remote-endpoint = <&dp0_in>;
 		};
 	};
+
+	port@2 {
+		reg = <2>;
+		dpi2_out: endpoint {
+			remote-endpoint = <&dsi0_in>;
+		};
+	};
+};
+
+&dsi0_ports {
+	port@0 {
+		reg = <0>;
+		dsi0_out: endpoint {
+			remote-endpoint = <&dp1_in>;
+		};
+	};
+
+	port@1 {
+		reg = <1>;
+		dsi0_in: endpoint {
+			remote-endpoint = <&dpi2_out>;
+		};
+	};
+};
+
+&dsi_edp_bridge_ports {
+	port@0 {
+		reg = <0>;
+		dp1_in: endpoint {
+			remote-endpoint = <&dsi0_out>;
+		};
+	};
+
+	port@1 {
+		reg = <1>;
+		dp1_out: endpoint {
+			remote-endpoint = <&dp1_connector_in>;
+		};
+	};
+};
+
+&dphy_tx0 {
+	status = "okay";
+};
+
+&dsi0 {
+	status = "okay";
 };
 
 &mhdp {
