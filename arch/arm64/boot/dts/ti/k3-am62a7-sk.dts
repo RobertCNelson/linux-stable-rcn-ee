@@ -103,6 +103,12 @@
 			alignment = <0x1000>;
 			no-map;
 		};
+
+		rtos_ipc_memory_region: ipc-memories@a0000000 {
+			compatible = "shared-dma-pool";
+			reg = <0x00 0xa0000000 0x00 0x01000000>;
+			no-map;
+		};
 	};
 
 	opp-table {

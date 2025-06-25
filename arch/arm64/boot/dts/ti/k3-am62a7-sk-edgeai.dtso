@@ -12,11 +12,6 @@
 	#size-cells = <2>;
 	ranges;
 
-	edgeai_rtos_ipc_memory_region: edgeai-rtos-ipc-memory-region {
-		reg = <0x00 0xa0000000 0x00 0x01000000>;
-		no-map;
-	};
-
 	edgeai_memory_region: edgeai-dma-memory@a1000000 {
 		compatible = "shared-dma-pool";
 		reg = <0x00 0xa1000000 0x00 0x02000000>;
