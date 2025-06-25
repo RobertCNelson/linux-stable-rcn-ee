@@ -1,0 +1,41 @@
+// SPDX-License-Identifier: GPL-2.0
+/**
+ * DT Overlay to enable standby mode entry in AM62 family of devices.
+ *
+ * Copyright (C) 2025 Texas Instruments Incorporated - http://www.ti.com/
+ */
+
+/dts-v1/;
+/plugin/;
+
+&{/} {
+	idle-states {
+		entry-method = "psci";
+
+		CPU_SLEEP_0: stby {
+			compatible = "arm,idle-state";
+			idle-state-name = "standby";
+			arm,psci-suspend-param = <0x00000001>;
+			entry-latency-us = <100>;
+			exit-latency-us = <50>;
+			min-residency-us = <1000>;
+		};
+	};
+};
+
+
+&cpu0 {
+	cpu-idle-states = <&CPU_SLEEP_0>;
+};
+
+&cpu1 {
+	cpu-idle-states = <&CPU_SLEEP_0>;
+};
+
+&cpu2 {
+	cpu-idle-states = <&CPU_SLEEP_0>;
+};
+
+&cpu3 {
+	cpu-idle-states = <&CPU_SLEEP_0>;
+};
