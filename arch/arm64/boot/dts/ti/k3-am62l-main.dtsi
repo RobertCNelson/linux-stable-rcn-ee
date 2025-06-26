@@ -814,15 +814,15 @@
 		clocks = <&scmi_clk 9>;
 		clock-names = "fck";
 		power-domains = <&scmi_pds 3>;
-		dmas = <&main_pktdma 0xc600 0>,
-			   <&main_pktdma 0xc601 0>,
-			   <&main_pktdma 0xc602 0>,
-			   <&main_pktdma 0xc603 0>,
-			   <&main_pktdma 0xc604 0>,
-			   <&main_pktdma 0xc605 0>,
-			   <&main_pktdma 0xc606 0>,
-			   <&main_pktdma 0xc607 0>,
-			   <&main_pktdma 0x4600 0>;
+		dmas = <&main_pktdma 0xc600 15>,
+			   <&main_pktdma 0xc601 15>,
+			   <&main_pktdma 0xc602 15>,
+			   <&main_pktdma 0xc603 15>,
+			   <&main_pktdma 0xc604 15>,
+			   <&main_pktdma 0xc605 15>,
+			   <&main_pktdma 0xc606 15>,
+			   <&main_pktdma 0xc607 15>,
+			   <&main_pktdma 0x4600 15>;
 		dma-names = "tx0", "tx1", "tx2", "tx3", "tx4", "tx5", "tx6",
 					"tx7", "rx";
 
