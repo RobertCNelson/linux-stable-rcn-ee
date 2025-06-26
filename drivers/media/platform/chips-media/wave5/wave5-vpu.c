@@ -10,8 +10,10 @@
 #include <linux/clk.h>
 #include <linux/firmware.h>
 #include <linux/interrupt.h>
-#include <linux/pm_runtime.h>
 #include <linux/reset.h>
+#include <linux/pm_runtime.h>
+#include <linux/pm_opp.h>
+#include <linux/devfreq.h>
 #include "wave5-vpu.h"
 #include "wave5-regdefine.h"
 #include "wave5-vpuconfig.h"
@@ -196,6 +198,46 @@ static const struct dev_pm_ops wave5_pm_ops = {
 	SET_RUNTIME_PM_OPS(wave5_pm_suspend, wave5_pm_resume, NULL)
 };
 
+static int vpu_devfreq_target(struct device *dev, unsigned long *freq, u32 flags)
+{
+	struct vpu_device *vpu = dev_get_drvdata(dev);
+	unsigned long target_freq = *freq;
+	struct dev_pm_opp *opp;
+	unsigned long acq_freq;
+	int ret;
+
+	if (!vpu->opp_table_detected) {
+		dev_err(vpu->dev, "No OPP table in device tree\n");
+		return -EINVAL;
+	}
+
+	opp = dev_pm_opp_find_freq_ceil(vpu->dev, &target_freq);
+	if (IS_ERR(opp)) {
+		opp = dev_pm_opp_find_freq_floor(vpu->dev, &target_freq);
+		if (IS_ERR(opp)) {
+			dev_err(vpu->dev, "Failed to get floor value\n");
+			return -EINVAL;
+		}
+	}
+
+	dev_pm_opp_put(opp);
+	acq_freq = dev_pm_opp_get_freq(opp);
+	ret = dev_pm_opp_set_rate(vpu->dev, acq_freq);
+	if (ret) {
+		dev_err(vpu->dev, "Error setting the clock\n");
+		return ret;
+	}
+
+	return ret;
+}
+
+static struct devfreq_dev_profile vpu_devfreq_profile = {
+	.target = vpu_devfreq_target,
+	.freq_table = NULL,
+	.max_state = 0,
+	.polling_ms = 0,
+};
+
 static int wave5_vpu_probe(struct platform_device *pdev)
 {
 	int ret;
@@ -292,6 +334,23 @@ static int wave5_vpu_probe(struct platform_device *pdev)
 		}
 	}
 
+	dev->opp_table_detected = TRUE;
+	ret = dev_pm_opp_of_add_table(&pdev->dev);
+	if (ret == -ENODEV) {
+		dev->opp_table_detected = FALSE;
+		dev_err(&pdev->dev, "OPP table not found in device tree\n");
+	} else if (ret < 0) {
+		dev_err(&pdev->dev, "Invalid OPP table in device tree\n");
+		goto err_vdi_release;
+	} else {
+		dev->vpu_devfreq = devm_devfreq_add_device(&pdev->dev, &vpu_devfreq_profile, "userspace", NULL);
+		if (IS_ERR(dev->vpu_devfreq)) {
+			dev_pm_opp_of_remove_table(&pdev->dev);
+			return PTR_ERR(dev->vpu_devfreq);
+		}
+	}
+
+
 	INIT_LIST_HEAD(&dev->instances);
 	ret = v4l2_device_register(&pdev->dev, &dev->v4l2_dev);
 	if (ret) {
@@ -358,6 +417,11 @@ static void wave5_vpu_remove(struct platform_device *pdev)
 	if (dev->irq < 0) {
 		kthread_destroy_worker(dev->worker);
 		hrtimer_cancel(&dev->hrtimer);
+	}
+
+	if (dev->opp_table_detected) {
+		devm_devfreq_remove_device(&pdev->dev, dev->vpu_devfreq);
+		dev_pm_opp_of_remove_table(&pdev->dev);
 	}
 
 	pm_runtime_put_sync(&pdev->dev);
