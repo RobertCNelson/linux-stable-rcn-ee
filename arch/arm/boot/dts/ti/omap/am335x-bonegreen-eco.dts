@@ -13,6 +13,11 @@
 	model = "Seeed Studio BeagleBone Green Eco";
 	compatible = "seeed,am335x-bone-green-eco", "ti,am33xx";
 
+	chosen {
+		base_dtb = "am335x-bonegreen-eco.dts";
+		base_dtb_timestamp = __TIMESTAMP__;
+	};
+
 	cpus {
 		cpu@0 {
 			cpu0-supply = <&buck1>;
@@ -166,4 +171,8 @@
 			AM33XX_IOPAD(AM335X_PIN_NNMI, PIN_INPUT_PULLUP | MUX_MODE0)
 		>;
 	};
+};
+
+&tscadc {
+	status = "okay";
 };
