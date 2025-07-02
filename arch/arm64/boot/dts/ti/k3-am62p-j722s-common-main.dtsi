@@ -799,6 +799,13 @@
 		#hwlock-cells = <1>;
 	};
 
+	timesync_router: mux-controller@a40000 {
+		compatible = "reg-mux";
+		reg = <0x0 0xa40000 0x0 0x800>;
+		#mux-control-cells = <1>;
+		status = "disabled";
+	};
+
 	mailbox0_cluster0: mailbox@29000000 {
 		compatible = "ti,am64-mailbox";
 		reg = <0x00 0x29000000 0x00 0x200>;
