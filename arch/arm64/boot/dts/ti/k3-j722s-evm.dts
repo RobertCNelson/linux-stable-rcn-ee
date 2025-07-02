@@ -12,6 +12,7 @@
 #include <dt-bindings/phy/phy.h>
 #include "k3-j722s.dtsi"
 #include "k3-serdes.h"
+#include "k3-timesync-router.h"
 
 / {
 	compatible = "ti,j722s-evm", "ti,j722s";
@@ -476,6 +477,11 @@
 	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&rgmii1_pins_default>;
+
+	cpts@3d000 {
+		/* MAP HW3_TS_PUSH to GENF1 */
+		ti,pps = <2 1>;
+	};
 };
 
 &cpsw3g_mdio {
@@ -1318,4 +1324,11 @@
 
 &main_rti3 {
 	assigned-clock-parents = <&k3_clks 128 4>;
+};
+
+&timesync_router {
+	mux-reg-masks-state = <
+		K3_TS_OFFSET(12, 0x0001ffff, 17)
+		>;
+	status = "okay";
 };
