@@ -147,6 +147,7 @@ lock_list_lru_of_memcg(struct list_lru *lru, int nid, struct mem_cgroup *memcg,
 
 	return l;
 }
+EXPORT_SYMBOL_GPL(list_lru_add);
 
 static inline void unlock_list_lru(struct list_lru_one *l, bool irq_off)
 {
@@ -217,6 +218,7 @@ bool list_lru_del(struct list_lru *lru, struct list_head *item, int nid,
 	unlock_list_lru(l, false);
 	return false;
 }
+EXPORT_SYMBOL_GPL(list_lru_del);
 
 bool list_lru_del_obj(struct list_lru *lru, struct list_head *item)
 {
