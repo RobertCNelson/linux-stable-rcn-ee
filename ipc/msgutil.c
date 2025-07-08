@@ -40,6 +40,7 @@ struct msg_msgseg {
 	struct msg_msgseg *next;
 	/* the next part of the message follows immediately */
 };
+EXPORT_SYMBOL_GPL(init_ipc_ns);
 
 #define DATALEN_MSG	((size_t)PAGE_SIZE-sizeof(struct msg_msg))
 #define DATALEN_SEG	((size_t)PAGE_SIZE-sizeof(struct msg_msgseg))
