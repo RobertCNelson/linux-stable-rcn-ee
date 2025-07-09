@@ -195,7 +195,7 @@ static const struct mfd_cell tps65214_cells[] = {
 
 static const struct mfd_cell tps65215_cells[] = {
 	MFD_CELL_RES("tps65215-regulator", tps65215_regulator_resources),
-	MFD_CELL_NAME("tps65215-gpio"),
+	MFD_CELL_NAME("tps65219-gpio"),
 };
 
 static const struct mfd_cell tps65219_cells[] = {
