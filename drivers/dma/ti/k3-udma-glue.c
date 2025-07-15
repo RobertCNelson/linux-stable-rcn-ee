@@ -507,6 +507,9 @@ int k3_udma_glue_enable_tx_chn(struct k3_udma_glue_tx_channel *tx_chn)
 	if (tx_chn->common.udmax->match_data->type == DMA_TYPE_PKTDMA_V2) {
 		xudma_tchanrt_write(tx_chn->udma_tchanx, UDMA_CHAN_RT_CTL_REG,
 				UDMA_CHAN_RT_CTL_AUTOPAIR | UDMA_CHAN_RT_CTL_EN);
+
+		xudma_tchanrt_write(tx_chn->udma_tchanx, UDMA_CHAN_RT_PEER_RT_EN_REG,
+				    UDMA_PEER_RT_EN_ENABLE);
 	} else {
 		ret = xudma_navss_psil_pair(tx_chn->common.udmax,
 					    tx_chn->common.src_thread,
