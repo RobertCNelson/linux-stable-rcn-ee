@@ -916,16 +916,14 @@ static int sa_cipher_cra_init(struct crypto_skcipher *tfm)
 	if (ret)
 		return ret;
 	ret = sa_init_ctx_info(&ctx->dec, data);
-	if (ret) {
-		sa_free_ctx_info(&ctx->enc, data);
-		return ret;
-	}
+	if (ret)
+		goto ctx_dec_err;
 
 	child = crypto_alloc_skcipher(name, 0, CRYPTO_ALG_NEED_FALLBACK);
-
 	if (IS_ERR(child)) {
 		dev_err(sa_k3_dev, "Error allocating fallback algo %s\n", name);
-		return PTR_ERR(child);
+		ret = PTR_ERR(child);
+		goto alloc_err;
 	}
 
 	ctx->fallback.skcipher = child;
@@ -936,6 +934,11 @@ static int sa_cipher_cra_init(struct crypto_skcipher *tfm)
 		__func__, tfm, ctx->enc.sc_id, &ctx->enc.sc_phys,
 		ctx->dec.sc_id, &ctx->dec.sc_phys);
 	return 0;
+alloc_err:
+	sa_free_ctx_info(&ctx->dec, data);
+ctx_dec_err:
+	sa_free_ctx_info(&ctx->enc, data);
+	return ret;
 }
 
 static int sa_cipher_setkey(struct crypto_skcipher *tfm, const u8 *key,
