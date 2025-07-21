@@ -146,6 +146,8 @@ struct sa_tfm_ctx;
 
 /* SA2UL can only handle maximum data size of 64KB */
 #define SA_MAX_DATA_SZ		U16_MAX
+/* SA2UL can only handle maximum data size of 64KB */
+#define SA_MAX_ASSOC_SZ		16
 
 /*
  * SA2UL can provide unpredictable results with packet sizes that fall

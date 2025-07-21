@@ -53,12 +53,17 @@
 #define SC_ENC_AUX3_OFFSET (SC_ENC_AUX2_OFFSET + SC_ENC_AUX2_SIZE)
 #define SC_ENC_AUX3_SIZE 16
 
-#define SA_CMDL_UPD_ENC         0x0001
-#define SA_CMDL_UPD_AUTH        0x0002
-#define SA_CMDL_UPD_ENC_IV      0x0004
+#define SA_CMDL_UPD_ENC         BIT(1)
+#define SA_CMDL_UPD_AUTH        BIT(2)
+#define SA_CMDL_UPD_ENC_IV      BIT(3)
+#define SA_CMDL_UPD_IS_GCM      BIT(4)
 
-#define SA_CMDL_PAYLOAD_LENGTH_MASK	0xFFFF
+#define SA_CMDL_PAYLOAD_LENGTH_MASK	0x0000FFFF
+#define SA_CMDL_LENGTH_MASK		0x00FF0000
 #define SA_CMDL_SOP_BYPASS_LEN_MASK	0xFF000000
+#define SA_CMDL_OPTION_CTRL1_MASK	0x00FF0000
+#define SA_CMDL_OPTION_CTRL2_MASK	0x0000FF00
+#define SA_CMDL_OPTION_CTRL3_MASK	0x000000FF
 
 #define SA_HASH_PROCESSING	0
 #define SA_CRYPTO_PROCESSING	0
@@ -118,6 +123,7 @@ struct sa_cmdl_cfg {
 	u8 auth_eng_id;
 	u8 iv_size;
 	bool enc;
+	bool is_gcm;
 };
 
 /**
@@ -238,6 +244,8 @@ struct sa_req {
 	u8 *auth_iv;
 	u32 type;
 	u32 *cmdl;
+	u8 aad_length;
+	u8 aad[SA_MAX_ASSOC_SZ];
 	struct crypto_async_request *base;
 	struct sa_tfm_ctx *ctx;
 	bool enc;
@@ -697,8 +705,39 @@ static int sa_format_cmdl_gen(struct sa_cmdl_cfg *cfg, u8 *cmdl,
 		/* Encryption command label */
 		cmdl[enc_offset + SA_CMDL_OFFSET_NESC] = enc_next_eng;
 
-		/* Encryption modes requiring IV */
-		if (cfg->iv_size) {
+		if (cfg->is_gcm) {
+			/*
+			 * GCM requires the following things so we need to
+			 * send them through option bytes as they keep
+			 * changing per request.
+			 *
+			 * IV(12B), CTR(4B) : Goes in AUX3 (16B)
+			 * AAD(16B) : Goes in AUX2 (16B)
+			 * AAD Length(8B), Payload Length (8B): Goes in AUX1[0:127]
+			 */
+
+			/* Program IV in AUX3 */
+			upd_info->flags |= SA_CMDL_UPD_ENC_IV;
+
+			/*
+			 * Calculate the 32 bit based index in cmdl where
+			 * IV is supposed t be populated
+			 */
+			upd_info->enc_iv.index = (SA_CMDL_HEADER_SIZE_BYTES) >> 2;
+			upd_info->enc_iv.size = cfg->iv_size;
+
+			/* Set the max length of cmdl */
+			cmdl[enc_offset + SA_CMDL_OFFSET_LABEL_LEN] =
+				SA_CMDL_HEADER_SIZE_BYTES + cfg->iv_size;
+
+			/* The length and offset are specified in unit of 8B*/
+			cmdl[enc_offset + SA_CMDL_OFFSET_OPTION_CTRL1] =
+				(SC_ENC_AUX3_OFFSET | ((cfg->iv_size) >> 3));
+
+			upd_info->flags |= SA_CMDL_UPD_IS_GCM;
+			total = SA_CMDL_HEADER_SIZE_BYTES + cfg->iv_size;
+
+		} else if (cfg->iv_size) {
 			upd_info->flags |= SA_CMDL_UPD_ENC_IV;
 			upd_info->enc_iv.index =
 				(enc_offset + SA_CMDL_HEADER_SIZE_BYTES) >> 2;
@@ -736,8 +775,8 @@ static int sa_format_cmdl_gen(struct sa_cmdl_cfg *cfg, u8 *cmdl,
 }
 
 /* Update Command label */
-static inline void sa_update_cmdl(struct sa_req *req, u32 *cmdl,
-				  struct sa_cmdl_upd_info *upd_info)
+static inline int sa_update_cmdl(struct sa_req *req, u32 *cmdl,
+				 struct sa_cmdl_upd_info *upd_info, u32 total)
 {
 	if (likely(upd_info->flags & SA_CMDL_UPD_ENC)) {
 		cmdl[upd_info->enc_size.index] &= ~SA_CMDL_PAYLOAD_LENGTH_MASK;
@@ -753,6 +792,66 @@ static inline void sa_update_cmdl(struct sa_req *req, u32 *cmdl,
 		sa_copy_to_cmdl((__be32 *)&cmdl[upd_info->enc_iv.index],
 				(u32 *)req->enc_iv, upd_info->enc_iv.size);
 
+	if (upd_info->flags & SA_CMDL_UPD_IS_GCM) {
+		WARN_ON(req->aad_length > 16);
+
+		/* We have 4 fields to update (IV, AAD, Payload length,
+		 * AAD Length)
+		 *
+		 * To accommodate it in 3 option bytes, we need to
+		 * update the encryption size and the aad length as part of
+		 * single option byte field only which helps with them
+		 * sharing the same field AUX1.
+		 */
+		cmdl[1] &= ~SA_CMDL_OPTION_CTRL2_MASK;
+		cmdl[1] |= FIELD_PREP(SA_CMDL_OPTION_CTRL2_MASK,
+				((SC_ENC_AUX1_OFFSET + 16) | 16 >> 3));
+
+		/* Update the AAD length (bits) in AUX1[65:127]
+		 *
+		 * The max AAD length can be just 16 bytes = 48 bits as
+		 * AUX2 field has limited capacity
+		 *
+		 * The upper 32 bits are not being written.
+		 */
+		cmdl[(roundup(total, 8) >> 2) + 1] = (req->aad_length << 3);
+
+		/* 8B of AAD length */
+		total += 8;
+
+		/* Update the encryption size (bits) in AUX1[64:0]
+		 *
+		 * Since the upper 32 bits won't be used as the max payload
+		 * that SA2UL can process without fragmentation is 65536 bytes,
+		 *
+		 * The upper 32 bits are not being written.
+		 */
+		cmdl[(roundup(total, 8) >> 2) + 1] = (req->enc_size << 3) & 0xFFFF;
+
+		/* 8B of payload length */
+		total += 8;
+
+		if (req->aad_length > 0) {
+			upd_info->aad.index = roundup(total, 8) >> 2;
+			upd_info->aad.size = req->aad_length;
+
+			/* Update AAD */
+			cmdl[1] &= ~SA_CMDL_OPTION_CTRL3_MASK;
+			cmdl[1] |= FIELD_PREP(SA_CMDL_OPTION_CTRL3_MASK,
+					(SC_ENC_AUX2_OFFSET |
+					 roundup(upd_info->aad.size, 8) >> 3));
+
+			sa_copy_to_cmdl((__be32 *)&cmdl[upd_info->aad.index],
+					(u32 *)req->aad, upd_info->aad.size);
+
+			/* The option bytes have 8B granularity */
+			total += roundup(upd_info->aad.size, 8);
+		}
+
+		cmdl[0] &= ~SA_CMDL_LENGTH_MASK;
+		cmdl[0] |= FIELD_PREP(SA_CMDL_LENGTH_MASK, total);
+	}
+
 	if (likely(upd_info->flags & SA_CMDL_UPD_AUTH)) {
 		cmdl[upd_info->auth_size.index] &= ~SA_CMDL_PAYLOAD_LENGTH_MASK;
 		cmdl[upd_info->auth_size.index] |= req->auth_size;
@@ -762,6 +861,8 @@ static inline void sa_update_cmdl(struct sa_req *req, u32 *cmdl,
 			FIELD_PREP(SA_CMDL_SOP_BYPASS_LEN_MASK,
 				   req->auth_offset);
 	}
+
+	return roundup(total, 8);
 }
 
 /* Format SWINFO words to be sent to SA */
@@ -1231,7 +1332,9 @@ static int sa_run(struct sa_req *req)
 
 	memcpy(cmdl, sa_ctx->cmdl, sa_ctx->cmdl_size);
 
-	sa_update_cmdl(req, cmdl, &sa_ctx->cmdl_upd_info);
+	sa_ctx->cmdl_size = sa_update_cmdl(req, cmdl,
+					   &sa_ctx->cmdl_upd_info,
+					   sa_ctx->cmdl_size);
 
 	if (req->type != CRYPTO_ALG_TYPE_AHASH) {
 		if (req->enc)
