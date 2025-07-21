@@ -32,6 +32,7 @@
 #include <crypto/scatterwalk.h>
 #include <crypto/sha1.h>
 #include <crypto/sha2.h>
+#include <crypto/gcm.h>
 
 #include "sa2ul.h"
 
@@ -85,12 +86,15 @@
 /* size of SCCTL structure in bytes */
 #define SA_SCCTL_SZ 16
 
+#define SA_GCM_IV_SIZE 16
+
 /* Max Authentication tag size */
 #define SA_MAX_AUTH_TAG_SZ 64
 
 enum sa_algo_id {
 	SA_ALG_CBC_AES = 0,
 	SA_ALG_EBC_AES,
+	SA_ALG_GCM_AES,
 	SA_ALG_CBC_DES3,
 	SA_ALG_ECB_DES3,
 	SA_ALG_SHA1,
@@ -349,6 +353,36 @@ static u8 mci_ecb_dec_array[3][27] = {
 	{	0x31, 0x00, 0x00, 0x88, 0x8a, 0x04, 0xb7, 0x90, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00	},
+};
+
+/**
+ * Mode control engine instructions for AES-GCM encryption
+ */
+static u8 mci_gcm_aes_enc_array[3][SC_ENC_MCI_SIZE] = {
+	{	0x61, 0x00, 0x44, 0x80, 0xa9, 0xfe, 0x83, 0x99, 0x7e, 0x58,
+		0x2e, 0x0a, 0x90, 0x71, 0x41, 0x83, 0x9d, 0x63, 0xaa, 0x0b,
+		0x7e, 0x9a, 0x78, 0x3a, 0xa3, 0x8b, 0x1e	},
+	{	0x61, 0x00, 0x44, 0x84, 0xa9, 0xfe, 0x83, 0x99, 0x7e, 0x58,
+		0x2e, 0x4a, 0x90, 0x71, 0x41, 0x83, 0x9d, 0x63, 0xaa, 0x0b,
+		0x7e, 0x9a, 0x78, 0x3a, 0xa3, 0x8b, 0x1e	},
+	{	0x61, 0x00, 0x44, 0x88, 0xa9, 0xfe, 0x83, 0x99, 0x7e, 0x58,
+		0x2e, 0x8a, 0x90, 0x71, 0x41, 0x83, 0x9d, 0x63, 0xaa, 0x0b,
+		0x7e, 0x9a, 0x78, 0x3a, 0xa3, 0x8b, 0x1e	},
+};
+
+/**
+ * Mode control engine instructions for AES-GCM decryption
+ */
+static u8 mci_gcm_aes_dec_array[3][SC_ENC_MCI_SIZE] = {
+	{	0x61, 0x00, 0x44, 0x80, 0xa9, 0xfe, 0x83, 0x99, 0x7e, 0x58,
+		0x2e, 0x0a, 0x14, 0x19, 0x07, 0x83, 0x9d, 0x63, 0xaa, 0x0b,
+		0x7e, 0x9a, 0x78, 0x3a, 0xa3, 0x8b, 0x1e	},
+	{	0x61, 0x00, 0x44, 0x84, 0xa9, 0xfe, 0x83, 0x99, 0x7e, 0x58,
+		0x2e, 0x4a, 0x14, 0x19, 0x07, 0x83, 0x9d, 0x63, 0xaa, 0x0b,
+		0x7e, 0x9a, 0x78, 0x3a, 0xa3, 0x8b, 0x1e	},
+	{	0x61, 0x00, 0x44, 0x88, 0xa9, 0xfe, 0x83, 0x99, 0x7e, 0x58,
+		0x2e, 0x8a, 0x14, 0x19, 0x07, 0x83, 0x9d, 0x63, 0xaa, 0x0b,
+		0x7e, 0x9a, 0x78, 0x3a, 0xa3, 0x8b, 0x1e	}
 };
 
 /*
@@ -1185,6 +1219,87 @@ static int sa_aes_ecb_setkey(struct crypto_skcipher *tfm, const u8 *key,
 	return sa_cipher_setkey(tfm, key, keylen, &ad);
 }
 
+/* AEAD algorithm configuration interface function */
+static int sa_gcm_setkey(struct crypto_aead *authenc,
+			 const u8 *key, unsigned int keylen)
+{
+	struct sa_tfm_ctx *ctx = crypto_aead_ctx(authenc);
+	struct algo_data ad;
+	struct sa_cmdl_cfg cfg;
+	int cmdl_len;
+	int ret;
+
+	ret = aes_check_keylen(keylen);
+	if (ret)
+		return ret;
+
+	/* Convert the key size (16/24/32) to the key size index (0/1/2) */
+	int key_idx = (keylen >> 3) - 2;
+
+	if (key_idx >= 3) {
+		pr_err("%s: Invalid key length\n", __func__);
+		return -EINVAL;
+	}
+
+	ad.ctx = ctx;
+	ad.enc_eng.eng_id = SA_ENG_ID_EM1;
+	ad.enc_eng.sc_size = SA_CTX_ENC_TYPE_SZ;
+	ad.mci_enc = mci_gcm_aes_enc_array[key_idx];
+	ad.mci_dec = mci_gcm_aes_dec_array[key_idx];
+	ad.ealg_id = SA_EALG_ID_AES_GCM;
+	ad.iv_out_size = 16;
+
+	memset(&cfg, 0, sizeof(cfg));
+	cfg.enc = true;
+	cfg.enc_eng_id = ad.enc_eng.eng_id;
+	cfg.iv_size = SA_GCM_IV_SIZE;
+	cfg.is_gcm = true;
+
+	/* Setup Encryption Security Context & Command label template */
+	if (sa_init_sc(&ctx->enc, ctx->dev_data->match_data, key,
+		       keylen, NULL, 0,
+		       &ad, 1, &ctx->enc.epib[1])) {
+		pr_err("%s: sa_init_sc for enc failed\n", __func__);
+		return -EINVAL;
+	}
+
+	cmdl_len = sa_format_cmdl_gen(&cfg,
+				      (u8 *)ctx->enc.cmdl,
+				      &ctx->enc.cmdl_upd_info);
+	if (cmdl_len <= 0 || (cmdl_len > SA_MAX_CMDL_WORDS * sizeof(u32))) {
+		pr_err("%s: sa_format_cmdl_gen for enc failed\n", __func__);
+		return -EINVAL;
+	}
+
+	ctx->enc.cmdl_size = cmdl_len;
+
+	/* Setup Decryption Security Context & Command label template */
+	if (sa_init_sc(&ctx->dec, ctx->dev_data->match_data, key,
+		       keylen, NULL, 0,
+		       &ad, 0, &ctx->dec.epib[1])) {
+		pr_err("%s: sa_init_sc for dec failed\n", __func__);
+		return -EINVAL;
+	}
+
+	cfg.enc = false;
+	cmdl_len = sa_format_cmdl_gen(&cfg, (u8 *)ctx->dec.cmdl,
+				      &ctx->dec.cmdl_upd_info);
+
+	if (cmdl_len <= 0 || (cmdl_len > SA_MAX_CMDL_WORDS * sizeof(u32))) {
+		pr_err("%s: sa_format_cmdl_gen for dec failed\n", __func__);
+		return -EINVAL;
+	}
+
+	ctx->dec.cmdl_size = cmdl_len;
+
+	crypto_aead_clear_flags(ctx->fallback.aead, CRYPTO_TFM_REQ_MASK);
+	crypto_aead_set_flags(ctx->fallback.aead,
+			      crypto_aead_get_flags(authenc) &
+			      CRYPTO_TFM_REQ_MASK);
+
+	return crypto_aead_setkey(ctx->fallback.aead, key, keylen);
+}
+
 static int sa_3des_cbc_setkey(struct crypto_skcipher *tfm, const u8 *key,
 			      unsigned int keylen)
 {
@@ -2001,6 +2116,55 @@ static int sa_cra_init_aead(struct crypto_aead *tfm, const char *hash,
 	return ret;
 }
 
+static int sa_cra_init_gcm(struct crypto_aead *tfm)
+{
+	const char *helper_name = "ecb(aes)";
+	const char *fallback = crypto_tfm_alg_name(crypto_aead_tfm(tfm));
+	struct sa_tfm_ctx *ctx = crypto_aead_ctx(tfm);
+	struct sa_crypto_data *data = dev_get_drvdata(sa_k3_dev);
+	int ret;
+
+	memzero_explicit(ctx, sizeof(*ctx));
+	ctx->dev_data = data;
+
+	ctx->skcipher = crypto_alloc_sync_skcipher(helper_name, 0, CRYPTO_ALG_NEED_FALLBACK);
+	if (IS_ERR(ctx->skcipher)) {
+		dev_err(sa_k3_dev, "base driver %s couldn't be loaded\n", helper_name);
+		return PTR_ERR(ctx->skcipher);
+	}
+
+	ctx->fallback.aead = crypto_alloc_aead(fallback, 0,
+					       CRYPTO_ALG_NEED_FALLBACK);
+
+	if (IS_ERR(ctx->fallback.aead)) {
+		dev_err(sa_k3_dev, "fallback driver %s couldn't be loaded\n",
+			fallback);
+		return PTR_ERR(ctx->fallback.aead);
+	}
+
+	crypto_aead_set_reqsize(tfm, sizeof(struct aead_request) +
+				crypto_aead_reqsize(ctx->fallback.aead));
+
+	ret = sa_init_ctx_info(&ctx->enc, data);
+	if (ret) {
+		pr_err("%s: %d: sa_init_ctx_info failed with ret = %d\n", __func__, __LINE__, ret);
+		return ret;
+	}
+
+	ret = sa_init_ctx_info(&ctx->dec, data);
+	if (ret) {
+		pr_err("%s: %d: sa_init_ctx_info failed with ret = %d\n", __func__, __LINE__, ret);
+		sa_free_ctx_info(&ctx->enc, data);
+		return ret;
+	}
+
+	dev_dbg(sa_k3_dev, "%s(0x%p) sc-ids(0x%x(0x%pad), 0x%x(0x%pad))\n",
+		__func__, tfm, ctx->enc.sc_id, &ctx->enc.sc_phys,
+		ctx->dec.sc_id, &ctx->dec.sc_phys);
+
+	return ret;
+}
+
 static int sa_cra_init_aead_sha1(struct crypto_aead *tfm)
 {
 	return sa_cra_init_aead(tfm, "sha1",
@@ -2191,6 +2355,92 @@ static int sa_aead_encrypt(struct aead_request *req)
 static int sa_aead_decrypt(struct aead_request *req)
 {
 	return sa_aead_run(req, req->iv, 0);
+}
+
+static int sa_gcm_run(struct aead_request *req, int enc)
+{
+	struct crypto_aead *tfm = crypto_aead_reqtfm(req);
+	struct sa_tfm_ctx *ctx = crypto_aead_ctx(tfm);
+	struct sa_req sa_req = { 0 };
+	size_t auth_size, enc_size;
+	u8 final_iv[SA_GCM_IV_SIZE];
+
+	enc_size = req->cryptlen;
+	auth_size = req->assoclen + req->cryptlen;
+
+	if (!enc) {
+		enc_size -= crypto_aead_authsize(tfm);
+		auth_size -= crypto_aead_authsize(tfm);
+	}
+
+	if (req->assoclen > SA_MAX_ASSOC_SZ || !enc_size ||
+	    (auth_size > SA_MAX_DATA_SZ ||
+	    (auth_size >= SA_UNSAFE_DATA_SZ_MIN &&
+	     auth_size <= SA_UNSAFE_DATA_SZ_MAX))) {
+		struct aead_request *subreq = aead_request_ctx(req);
+		int ret;
+
+		aead_request_set_tfm(subreq, ctx->fallback.aead);
+		aead_request_set_callback(subreq, req->base.flags,
+					  req->base.complete, req->base.data);
+		aead_request_set_crypt(subreq, req->src, req->dst,
+				       req->cryptlen, req->iv);
+		aead_request_set_ad(subreq, req->assoclen);
+
+		ret = enc ? crypto_aead_encrypt(subreq) :
+			crypto_aead_decrypt(subreq);
+		return ret;
+	}
+
+	/*
+	 * SA2UL requires the IV field to be 16 bytes long ( IV, Counter )
+	 * and the last byte of the counter should be initialized to 01
+	 */
+	memset(final_iv, 0, sizeof(final_iv));
+	memcpy(final_iv, req->iv, GCM_AES_IV_SIZE);
+
+	/* Set the counter as 0x01 */
+	final_iv[15] = 0x01;
+
+	sg_copy_to_buffer(req->src, sg_nents_for_len(req->src, req->assoclen),
+			  sa_req.aad, req->assoclen);
+
+	sa_req.enc_offset = req->assoclen;
+	sa_req.enc_size = enc_size;
+	sa_req.size = auth_size;
+	sa_req.enc_iv = final_iv;
+	sa_req.type = CRYPTO_ALG_TYPE_AEAD;
+	sa_req.enc = enc;
+	sa_req.callback = sa_aead_dma_in_callback;
+	sa_req.base = &req->base;
+	sa_req.ctx = ctx;
+	sa_req.src = req->src;
+	sa_req.dst = req->dst;
+	sa_req.aad_length = req->assoclen;
+
+	return sa_run(&sa_req);
+}
+
+static int sa_gcm_encrypt(struct aead_request *req)
+{
+	return sa_gcm_run(req, 1);
+}
+
+static int sa_gcm_decrypt(struct aead_request *req)
+{
+	return sa_gcm_run(req, 0);
+}
+
+static void sa_exit_tfm_gcm(struct crypto_aead *tfm)
+{
+	struct sa_tfm_ctx *ctx = crypto_aead_ctx(tfm);
+	struct sa_crypto_data *data = dev_get_drvdata(sa_k3_dev);
+
+	crypto_free_sync_skcipher(ctx->skcipher);
+	crypto_free_aead(ctx->fallback.aead);
+
+	sa_free_ctx_info(&ctx->enc, data);
+	sa_free_ctx_info(&ctx->dec, data);
 }
 
 static struct sa_alg_tmpl sa_algs[] = {
@@ -2516,6 +2766,30 @@ static struct sa_alg_tmpl sa_algs[] = {
 			.import			= sa_sha_import,
 		},
 	},
+	[SA_ALG_GCM_AES] = {
+		.type = CRYPTO_ALG_TYPE_AEAD,
+		.alg.aead = {
+			.base.cra_name		= "gcm(aes)",
+			.base.cra_driver_name	= "gcm-aes-sa2ul",
+			.base.cra_priority	= 30000,
+			.base.cra_flags		= CRYPTO_ALG_TYPE_AEAD |
+						  CRYPTO_ALG_KERN_DRIVER_ONLY |
+						  CRYPTO_ALG_ASYNC |
+						  CRYPTO_ALG_NEED_FALLBACK,
+			.base.cra_blocksize	= 1,
+			.base.cra_ctxsize	= sizeof(struct sa_tfm_ctx),
+			.base.cra_module	= THIS_MODULE,
+			.ivsize			= GCM_AES_IV_SIZE,
+			.maxauthsize		= AES_BLOCK_SIZE,
+			.init			= sa_cra_init_gcm,
+			.exit			= sa_exit_tfm_gcm,
+			.setauthsize		= sa_aead_setauthsize,
+			.setkey			= sa_gcm_setkey,
+			.encrypt		= sa_gcm_encrypt,
+			.decrypt		= sa_gcm_decrypt,
+		}
+	},
+
 };
 
 /* Register the algorithms in crypto framework */
@@ -2690,7 +2964,8 @@ static struct sa_match_data am654_match_data = {
 			   BIT(SA_ALG_AUTHENC_SHA256_AES) |
 			   BIT(SA_ALG_HMAC_SHA1) |
 			   BIT(SA_ALG_HMAC_SHA256)  |
-			   BIT(SA_ALG_HMAC_SHA512),
+			   BIT(SA_ALG_HMAC_SHA512) |
+			   BIT(SA_ALG_GCM_AES)
 };
 
 static struct sa_match_data am64_match_data = {
