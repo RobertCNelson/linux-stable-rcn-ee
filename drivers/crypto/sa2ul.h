@@ -177,7 +177,7 @@ struct sa_crypto_data {
 	void __iomem *base;
 	const struct sa_match_data *match_data;
 	struct platform_device	*pdev;
-	struct dma_pool		*sc_pool;
+	mempool_t		*sc_pool;
 	struct device *dev;
 	spinlock_t	scid_lock; /* lock for SC-ID allocation */
 	/* Security context data */

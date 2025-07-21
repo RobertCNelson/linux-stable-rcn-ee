@@ -15,6 +15,7 @@
 #include <linux/dmapool.h>
 #include <linux/fips.h>
 #include <linux/kernel.h>
+#include <linux/mempool.h>
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/of_platform.h>
@@ -768,6 +769,9 @@ int sa_init_sc(struct sa_ctx_info *ctx, const struct sa_match_data *match_data,
 	       const u8 *auth_key, u16 auth_key_sz,
 	       struct algo_data *ad, u8 enc, u32 *swinfo)
 {
+	struct sa_crypto_data *data = dev_get_drvdata(sa_k3_dev);
+	struct device *dev = &data->pdev->dev;
+
 	int enc_sc_offset = 0;
 	int auth_sc_offset = 0;
 	u8 *sc_buf = ctx->sc;
@@ -828,6 +832,12 @@ int sa_init_sc(struct sa_ctx_info *ctx, const struct sa_match_data *match_data,
 	/* swizzle the security context */
 	sa_swiz_128(sc_buf, SA_CTX_MAX_SZ);
 
+	ctx->sc_phys = dma_map_single(dev, ctx->sc, SA_CTX_MAX_SZ, DMA_BIDIRECTIONAL);
+	if (dma_mapping_error(dev, ctx->sc_phys)) {
+		mempool_free(ctx->sc, data->sc_pool);
+		return -ENOMEM;
+	}
+
 	sa_set_swinfo(first_engine, ctx->sc_id, ctx->sc_phys, 1, 0,
 		      SA_SW_INFO_FLAG_EVICT, ad->hash_size, swinfo);
 
@@ -840,6 +850,7 @@ int sa_init_sc(struct sa_ctx_info *ctx, const struct sa_match_data *match_data,
 static void sa_free_ctx_info(struct sa_ctx_info *ctx,
 			     struct sa_crypto_data *data)
 {
+	struct device *dev = &data->pdev->dev;
 	unsigned long bn;
 
 	bn = ctx->sc_id - data->sc_id_start;
@@ -850,7 +861,8 @@ static void sa_free_ctx_info(struct sa_ctx_info *ctx,
 
 	if (ctx->sc) {
 		memzero_explicit(ctx->sc, SA_CTX_MAX_SZ);
-		dma_pool_free(data->sc_pool, ctx->sc, ctx->sc_phys);
+		dma_unmap_single(dev, ctx->sc_phys, SA_CTX_MAX_SZ, DMA_BIDIRECTIONAL);
+		mempool_free(ctx->sc, data->sc_pool);
 		ctx->sc = NULL;
 	}
 }
@@ -869,7 +881,7 @@ static int sa_init_ctx_info(struct sa_ctx_info *ctx,
 
 	ctx->sc_id = (u16)(data->sc_id_start + bn);
 
-	ctx->sc = dma_pool_alloc(data->sc_pool, GFP_KERNEL, &ctx->sc_phys);
+	ctx->sc = mempool_alloc(data->sc_pool, GFP_KERNEL);
 	if (!ctx->sc) {
 		dev_err(&data->pdev->dev, "Failed to allocate SC memory\n");
 		err = -ENOMEM;
@@ -2451,8 +2463,7 @@ static int sa_dma_init(struct sa_crypto_data *dev_data)
 	struct device *dev = &dev_data->pdev->dev;
 
 	/* Setup dma pool for security context buffers */
-	dev_data->sc_pool = dma_pool_create("keystone-sc", dev,
-					    SA_CTX_MAX_SZ, 64, 0);
+	dev_data->sc_pool = mempool_create_kmalloc_pool(64, SA_CTX_MAX_SZ);
 	if (!dev_data->sc_pool) {
 		dev_err(dev, "Failed to create dma pool");
 		return -ENOMEM;
@@ -2522,7 +2533,7 @@ err_dma_tx:
 err_dma_rx2:
 	dma_release_channel(dev_data->dma_rx1);
 err_dma_coerce:
-	dma_pool_destroy(dev_data->sc_pool);
+	mempool_destroy(dev_data->sc_pool);
 
 	return ret;
 }
@@ -2532,7 +2543,7 @@ static void sa_dma_cleanup(struct sa_crypto_data *dev_data)
 	dma_release_channel(dev_data->dma_rx2);
 	dma_release_channel(dev_data->dma_rx1);
 	dma_release_channel(dev_data->dma_tx);
-	dma_pool_destroy(dev_data->sc_pool);
+	mempool_destroy(dev_data->sc_pool);
 }
 
 static int sa_link_child(struct device *dev, void *data)
