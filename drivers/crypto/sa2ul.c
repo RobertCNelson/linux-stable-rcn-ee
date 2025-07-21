@@ -1937,7 +1937,7 @@ static void sa_aead_dma_in_callback(void *data)
 	authsize = crypto_aead_authsize(tfm);
 
 	mdptr = (u32 *)dmaengine_desc_get_metadata_ptr(rxd->tx_in, &pl, &ml);
-	for (i = 0; i < (authsize / 4); i++)
+	for (i = 0; i < (crypto_aead_maxauthsize(tfm) / 4); i++)
 		mdptr[i + 4] = swab32(mdptr[i + 4]);
 
 	if (rxd->enc) {
