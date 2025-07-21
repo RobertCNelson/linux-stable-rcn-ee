@@ -18,6 +18,7 @@
 #include <linux/of.h>
 #include <linux/pci.h>
 #include <linux/platform_device.h>
+#include <linux/pm_domain.h>
 #include <linux/pm_runtime.h>
 #include <linux/regmap.h>
 
@@ -166,10 +167,9 @@ static const struct cdns_pcie_ops j721e_pcie_ops = {
 	.link_up = j721e_pcie_link_up,
 };
 
-static int j721e_pcie_set_mode(struct j721e_pcie *pcie, struct regmap *syscon,
-			       unsigned int offset)
+static int j721e_pcie_set_mode(struct j721e_pcie *pcie, struct device *dev,
+			       struct regmap *syscon, unsigned int offset)
 {
-	struct device *dev = pcie->cdns_pcie->dev;
 	u32 mask = J721E_MODE_RC;
 	u32 mode = pcie->mode;
 	u32 val = 0;
@@ -185,10 +185,9 @@ static int j721e_pcie_set_mode(struct j721e_pcie *pcie, struct regmap *syscon,
 	return ret;
 }
 
-static int j721e_pcie_set_link_speed(struct j721e_pcie *pcie,
+static int j721e_pcie_set_link_speed(struct j721e_pcie *pcie, struct device *dev,
 				     struct regmap *syscon, unsigned int offset)
 {
-	struct device *dev = pcie->cdns_pcie->dev;
 	struct device_node *np = dev->of_node;
 	int link_speed;
 	u32 val = 0;
@@ -207,9 +206,9 @@ static int j721e_pcie_set_link_speed(struct j721e_pcie *pcie,
 }
 
 static int j721e_pcie_set_lane_count(struct j721e_pcie *pcie,
+				     struct device *dev,
 				     struct regmap *syscon, unsigned int offset)
 {
-	struct device *dev = pcie->cdns_pcie->dev;
 	u32 lanes = pcie->num_lanes;
 	u32 mask = BIT(8);
 	u32 val = 0;
@@ -227,9 +226,9 @@ static int j721e_pcie_set_lane_count(struct j721e_pcie *pcie,
 }
 
 static int j721e_enable_acspcie_refclk(struct j721e_pcie *pcie,
+				       struct device *dev,
 				       struct regmap *syscon)
 {
-	struct device *dev = pcie->cdns_pcie->dev;
 	struct device_node *node = dev->of_node;
 	u32 mask = ACSPCIE_PAD_DISABLE_MASK;
 	struct of_phandle_args args;
@@ -256,9 +255,8 @@ static int j721e_enable_acspcie_refclk(struct j721e_pcie *pcie,
 	return 0;
 }
 
-static int j721e_pcie_ctrl_init(struct j721e_pcie *pcie)
+static int j721e_pcie_ctrl_init(struct j721e_pcie *pcie, struct device *dev)
 {
-	struct device *dev = pcie->cdns_pcie->dev;
 	struct device_node *node = dev->of_node;
 	struct of_phandle_args args;
 	unsigned int offset = 0;
@@ -277,19 +275,19 @@ static int j721e_pcie_ctrl_init(struct j721e_pcie *pcie)
 	if (!ret)
 		offset = args.args[0];
 
-	ret = j721e_pcie_set_mode(pcie, syscon, offset);
+	ret = j721e_pcie_set_mode(pcie, dev, syscon, offset);
 	if (ret < 0) {
 		dev_err(dev, "Failed to set pci mode\n");
 		return ret;
 	}
 
-	ret = j721e_pcie_set_link_speed(pcie, syscon, offset);
+	ret = j721e_pcie_set_link_speed(pcie, dev, syscon, offset);
 	if (ret < 0) {
 		dev_err(dev, "Failed to set link speed\n");
 		return ret;
 	}
 
-	ret = j721e_pcie_set_lane_count(pcie, syscon, offset);
+	ret = j721e_pcie_set_lane_count(pcie, dev, syscon, offset);
 	if (ret < 0) {
 		dev_err(dev, "Failed to set num-lanes\n");
 		return ret;
@@ -301,7 +299,7 @@ static int j721e_pcie_ctrl_init(struct j721e_pcie *pcie)
 	if (!syscon)
 		return 0;
 
-	return j721e_enable_acspcie_refclk(pcie, syscon);
+	return j721e_enable_acspcie_refclk(pcie, dev, syscon);
 }
 
 static int cdns_ti_pcie_config_read(struct pci_bus *bus, unsigned int devfn,
@@ -462,6 +460,47 @@ static int j721e_pcie_probe(struct platform_device *pdev)
 	if (!pcie)
 		return -ENOMEM;
 
+	pcie->mode = mode;
+
+	ret = of_property_read_u32(node, "num-lanes", &num_lanes);
+	if (ret || num_lanes > data->max_lanes) {
+		dev_warn(dev, "num-lanes property not provided or invalid, setting num-lanes to 1\n");
+		num_lanes = 1;
+	}
+
+	pcie->num_lanes = num_lanes;
+	pcie->max_lanes = data->max_lanes;
+
+	/*
+	 * The PCIe Controller's registers have different "reset-value" depending
+	 * on the "strap" settings programmed into the Controller's Glue Layer.
+	 * This is because the same set of registers are used for representing the
+	 * Physical Function configuration space in Endpoint mode and for
+	 * representing the Root-Port configuration space in Root-Complex mode.
+	 *
+	 * The registers latch onto a "reset-value" based on the "strap" settings
+	 * sampled after the Controller is powered on. Therefore, for the
+	 * "reset-value" to be accurate, it is necessary to program the "strap"
+	 * settings when the Controller is powered off, and power on the Controller
+	 * after the "strap" settings have been programmed.
+	 *
+	 * The "strap" settings are programmed by "j721e_pcie_ctrl_init()".
+	 * Therefore, power off the Controller before invoking "j721e_pcie_ctrl_init()",
+	 * program the "strap" settings, and then power on the Controller. This ensures
+	 * that the reset values are accurate and reflect the "strap" settings.
+	 */
+	dev_pm_domain_detach(dev, true);
+
+	ret = j721e_pcie_ctrl_init(pcie, dev);
+	if (ret < 0)
+		return ret;
+
+	ret = dev_pm_domain_attach(dev, true);
+	if (ret < 0) {
+		dev_err(dev, "failed to power on PCIe Controller\n");
+		return ret;
+	}
+
 	switch (mode) {
 	case PCI_MODE_RC:
 		if (!IS_ENABLED(CONFIG_PCIE_CADENCE_HOST))
@@ -503,7 +542,6 @@ static int j721e_pcie_probe(struct platform_device *pdev)
 		return 0;
 	}
 
-	pcie->mode = mode;
 	pcie->linkdown_irq_regfield = data->linkdown_irq_regfield;
 
 	base = devm_platform_ioremap_resource_byname(pdev, "intd_cfg");
@@ -516,15 +554,6 @@ static int j721e_pcie_probe(struct platform_device *pdev)
 		return PTR_ERR(base);
 	pcie->user_cfg_base = base;
 
-	ret = of_property_read_u32(node, "num-lanes", &num_lanes);
-	if (ret || num_lanes > data->max_lanes) {
-		dev_warn(dev, "num-lanes property not provided or invalid, setting num-lanes to 1\n");
-		num_lanes = 1;
-	}
-
-	pcie->num_lanes = num_lanes;
-	pcie->max_lanes = data->max_lanes;
-
 	if (dma_set_mask_and_coherent(dev, DMA_BIT_MASK(48)))
 		return -EINVAL;
 
@@ -535,12 +564,6 @@ static int j721e_pcie_probe(struct platform_device *pdev)
 	dev_set_drvdata(dev, pcie);
 	pm_runtime_enable(dev);
 	ret = pm_runtime_get_sync(dev);
-	if (ret < 0) {
-		dev_err_probe(dev, ret, "pm_runtime_get_sync failed\n");
-		goto err_get_sync;
-	}
-
-	ret = j721e_pcie_ctrl_init(pcie);
 	if (ret < 0) {
 		dev_err_probe(dev, ret, "pm_runtime_get_sync failed\n");
 		goto err_get_sync;
@@ -660,7 +683,7 @@ static int j721e_pcie_resume_noirq(struct device *dev)
 	struct cdns_pcie *cdns_pcie = pcie->cdns_pcie;
 	int ret;
 
-	ret = j721e_pcie_ctrl_init(pcie);
+	ret = j721e_pcie_ctrl_init(pcie, dev);
 	if (ret < 0)
 		return ret;
 
