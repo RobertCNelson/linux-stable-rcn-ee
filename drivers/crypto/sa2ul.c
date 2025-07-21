@@ -1342,7 +1342,6 @@ static int sa_run(struct sa_req *req)
 				   sizeof(u32))), cmdl, sizeof(sa_ctx->epib),
 			   sa_ctx->epib);
 
-	ml = sa_ctx->cmdl_size + (SA_PSDATA_CTX_WORDS * sizeof(u32));
 	dmaengine_desc_set_metadata_len(tx_out, req->mdata_size);
 
 	dmaengine_submit(tx_out);
