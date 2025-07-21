@@ -34,10 +34,23 @@
 
 #include "sa2ul.h"
 
-/* Byte offset for key in encryption security context */
-#define SC_ENC_KEY_OFFSET (1 + 27 + 4)
-/* Byte offset for Aux-1 in encryption security context */
-#define SC_ENC_AUX1_OFFSET (1 + 27 + 4 + 32)
+#define SC_ENC_MODESEL_OFFSET (0)
+#define SC_ENC_MODESEL_SIZE (1)
+
+#define SC_ENC_MCI_OFFSET (SC_ENC_MODESEL_SIZE)
+#define SC_ENC_MCI_SIZE (27)
+
+#define SC_ENC_KEY_OFFSET (SC_ENC_MCI_OFFSET + SC_ENC_MCI_SIZE + 4)
+#define SC_ENC_KEY_SIZE 32
+
+#define SC_ENC_AUX1_OFFSET (SC_ENC_KEY_OFFSET + SC_ENC_KEY_SIZE)
+#define SC_ENC_AUX1_SIZE 32
+
+#define SC_ENC_AUX2_OFFSET (SC_ENC_AUX1_OFFSET + SC_ENC_AUX1_SIZE)
+#define SC_ENC_AUX2_SIZE 16
+
+#define SC_ENC_AUX3_OFFSET (SC_ENC_AUX2_OFFSET + SC_ENC_AUX2_SIZE)
+#define SC_ENC_AUX3_SIZE 16
 
 #define SA_CMDL_UPD_ENC         0x0001
 #define SA_CMDL_UPD_AUTH        0x0002
@@ -46,7 +59,6 @@
 #define SA_CMDL_PAYLOAD_LENGTH_MASK	0xFFFF
 #define SA_CMDL_SOP_BYPASS_LEN_MASK	0xFF000000
 
-#define MODE_CONTROL_BYTES	27
 #define SA_HASH_PROCESSING	0
 #define SA_CRYPTO_PROCESSING	0
 #define SA_UPLOAD_HASH_TO_TLR	BIT(6)
@@ -238,7 +250,7 @@ struct sa_req {
  * Mode Control Instructions for various Key lengths 128, 192, 256
  * For CBC (Cipher Block Chaining) mode for encryption
  */
-static u8 mci_cbc_enc_array[3][MODE_CONTROL_BYTES] = {
+static u8 mci_cbc_enc_array[3][SC_ENC_MCI_SIZE] = {
 	{	0x61, 0x00, 0x00, 0x18, 0x88, 0x0a, 0xaa, 0x4b, 0x7e, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00	},
@@ -254,7 +266,7 @@ static u8 mci_cbc_enc_array[3][MODE_CONTROL_BYTES] = {
  * Mode Control Instructions for various Key lengths 128, 192, 256
  * For CBC (Cipher Block Chaining) mode for decryption
  */
-static u8 mci_cbc_dec_array[3][MODE_CONTROL_BYTES] = {
+static u8 mci_cbc_dec_array[3][SC_ENC_MCI_SIZE] = {
 	{	0x71, 0x00, 0x00, 0x80, 0x8a, 0xca, 0x98, 0xf4, 0x40, 0xc0,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00	},
@@ -270,7 +282,7 @@ static u8 mci_cbc_dec_array[3][MODE_CONTROL_BYTES] = {
  * Mode Control Instructions for various Key lengths 128, 192, 256
  * For CBC (Cipher Block Chaining) mode for encryption
  */
-static u8 mci_cbc_enc_no_iv_array[3][MODE_CONTROL_BYTES] = {
+static u8 mci_cbc_enc_no_iv_array[3][SC_ENC_MCI_SIZE] = {
 	{	0x21, 0x00, 0x00, 0x18, 0x88, 0x0a, 0xaa, 0x4b, 0x7e, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00	},
@@ -286,7 +298,7 @@ static u8 mci_cbc_enc_no_iv_array[3][MODE_CONTROL_BYTES] = {
  * Mode Control Instructions for various Key lengths 128, 192, 256
  * For CBC (Cipher Block Chaining) mode for decryption
  */
-static u8 mci_cbc_dec_no_iv_array[3][MODE_CONTROL_BYTES] = {
+static u8 mci_cbc_dec_no_iv_array[3][SC_ENC_MCI_SIZE] = {
 	{	0x31, 0x00, 0x00, 0x80, 0x8a, 0xca, 0x98, 0xf4, 0x40, 0xc0,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00	},
@@ -335,25 +347,25 @@ static u8 mci_ecb_dec_array[3][27] = {
  * For CBC (Cipher Block Chaining) mode and ECB mode
  * encryption and for decryption respectively
  */
-static u8 mci_cbc_3des_enc_array[MODE_CONTROL_BYTES] = {
+static u8 mci_cbc_3des_enc_array[SC_ENC_MCI_SIZE] = {
 	0x60, 0x00, 0x00, 0x18, 0x88, 0x52, 0xaa, 0x4b, 0x7e, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00,
 };
 
-static u8 mci_cbc_3des_dec_array[MODE_CONTROL_BYTES] = {
+static u8 mci_cbc_3des_dec_array[SC_ENC_MCI_SIZE] = {
 	0x70, 0x00, 0x00, 0x85, 0x0a, 0xca, 0x98, 0xf4, 0x40, 0xc0, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00,
 };
 
-static u8 mci_ecb_3des_enc_array[MODE_CONTROL_BYTES] = {
+static u8 mci_ecb_3des_enc_array[SC_ENC_MCI_SIZE] = {
 	0x20, 0x00, 0x00, 0x85, 0x0a, 0x04, 0xb7, 0x90, 0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00,
 };
 
-static u8 mci_ecb_3des_dec_array[MODE_CONTROL_BYTES] = {
+static u8 mci_ecb_3des_dec_array[SC_ENC_MCI_SIZE] = {
 	0x30, 0x00, 0x00, 0x85, 0x0a, 0x04, 0xb7, 0x90, 0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00,
@@ -551,7 +563,7 @@ static int sa_set_sc_enc(struct algo_data *ad, const u8 *key, u16 key_sz,
 	const u8 *mci = NULL;
 
 	/* Set Encryption mode selector to crypto processing */
-	sc_buf[0] = SA_CRYPTO_PROCESSING;
+	sc_buf[SC_ENC_MODESEL_OFFSET] = SA_CRYPTO_PROCESSING;
 
 	if (enc)
 		mci = ad->mci_enc;
@@ -559,7 +571,7 @@ static int sa_set_sc_enc(struct algo_data *ad, const u8 *key, u16 key_sz,
 		mci = ad->mci_dec;
 	/* Set the mode control instructions in security context */
 	if (mci)
-		memcpy(&sc_buf[1], mci, MODE_CONTROL_BYTES);
+		memcpy(&sc_buf[SC_ENC_MCI_OFFSET], mci, SC_ENC_MCI_SIZE);
 
 	/* For AES-CBC decryption get the inverse key */
 	if (ad->inv_key && !enc) {
@@ -665,7 +677,7 @@ static int sa_format_cmdl_gen(struct sa_cmdl_cfg *cfg, u8 *cmdl,
 				SA_CMDL_HEADER_SIZE_BYTES + cfg->iv_size;
 
 			cmdl[enc_offset + SA_CMDL_OFFSET_OPTION_CTRL1] =
-				(SA_CTX_ENC_AUX2_OFFSET | (cfg->iv_size >> 3));
+				(SC_ENC_AUX2_OFFSET | (cfg->iv_size >> 3));
 			total += SA_CMDL_HEADER_SIZE_BYTES + cfg->iv_size;
 		} else {
 			cmdl[enc_offset + SA_CMDL_OFFSET_LABEL_LEN] =

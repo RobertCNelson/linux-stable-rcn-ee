@@ -46,7 +46,6 @@ struct sa_tfm_ctx;
 
 /* Number of 32 bit words in PS data  */
 #define SA_DMA_NUM_PS_WORDS     16
-#define MCI_SZ			27
 
 /*
  * Maximum number of simultaeneous security contexts
@@ -59,12 +58,6 @@ struct sa_tfm_ctx;
  */
 #define SA_CTX_SIZE_TO_DMA_SIZE(ctx_sz) \
 		((ctx_sz) ? ((ctx_sz) / 32 - 1) : 0)
-
-#define SA_CTX_ENC_KEY_OFFSET   32
-#define SA_CTX_ENC_AUX1_OFFSET  64
-#define SA_CTX_ENC_AUX2_OFFSET  96
-#define SA_CTX_ENC_AUX3_OFFSET  112
-#define SA_CTX_ENC_AUX4_OFFSET  128
 
 /* Next Engine Select code in CP_ACE */
 #define SA_ENG_ID_EM1   2       /* Enc/Dec engine with AES/DEC core */
@@ -138,12 +131,6 @@ struct sa_tfm_ctx;
  * in the security context
  */
 #define SA_CTX_SCCTL_OWNER_OFFSET 0
-
-#define SA_CTX_ENC_KEY_OFFSET   32
-#define SA_CTX_ENC_AUX1_OFFSET  64
-#define SA_CTX_ENC_AUX2_OFFSET  96
-#define SA_CTX_ENC_AUX3_OFFSET  112
-#define SA_CTX_ENC_AUX4_OFFSET  128
 
 #define SA_SCCTL_FE_AUTH_ENC	0x6D
 
