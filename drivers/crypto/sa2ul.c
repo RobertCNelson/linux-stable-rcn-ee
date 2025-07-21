@@ -561,7 +561,10 @@ static inline int sa_aes_inv_key(u8 *inv_key, const u8 *key, u16 key_sz)
 static int sa_set_sc_enc(struct algo_data *ad, const u8 *key, u16 key_sz,
 			 u8 enc, u8 *sc_buf)
 {
+	SYNC_SKCIPHER_REQUEST_ON_STACK(req, ad->ctx->skcipher);
 	const u8 *mci = NULL;
+	int ret = 0;
+	struct scatterlist sg;
 
 	/* Set Encryption mode selector to crypto processing */
 	sc_buf[SC_ENC_MODESEL_OFFSET] = SA_CRYPTO_PROCESSING;
@@ -581,6 +584,33 @@ static int sa_set_sc_enc(struct algo_data *ad, const u8 *key, u16 key_sz,
 	/* For all other cases: key is used */
 	} else {
 		memcpy(&sc_buf[SC_ENC_KEY_OFFSET], key, key_sz);
+	}
+
+	if (ad->ealg_id == SA_EALG_ID_AES_GCM) {
+		/*
+		 * Program AES_ECB(key, 0) = Hash KEY for GCM
+		 *
+		 * Update the bits 128:255 on sc_buf[SC_ENC_AUX1_OFFSET],
+		 * since the buffer is little endian 255:128 would lie in
+		 * the starting of AUX1 itself
+		 */
+		sg_init_one(&sg, &sc_buf[SC_ENC_AUX1_OFFSET], AES_BLOCK_SIZE);
+
+		ret = crypto_sync_skcipher_setkey(ad->ctx->skcipher, key, key_sz);
+		if (ret) {
+			dev_err(sa_k3_dev, "%s: %d: crypto_skcipher_setkey failed, ret=%d\n",
+				__func__, __LINE__, ret);
+			return ret;
+		}
+		skcipher_request_set_sync_tfm(req, ad->ctx->skcipher);
+		skcipher_request_set_crypt(req, &sg, &sg, AES_BLOCK_SIZE, NULL);
+
+		ret = crypto_skcipher_encrypt(req);
+		if (ret) {
+			dev_err(sa_k3_dev, "%s: %d: crypto_skcipher_encrypt failed, ret=%d\n",
+				__func__, __LINE__, ret);
+			return ret;
+		}
 	}
 
 	return 0;

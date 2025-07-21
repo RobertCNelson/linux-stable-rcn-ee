@@ -292,6 +292,7 @@ struct sa_tfm_ctx {
 	struct sa_ctx_info auth;
 	int iv_idx;
 	struct crypto_shash	*shash;
+	struct crypto_sync_skcipher	*skcipher;
 	/* for fallback */
 	union {
 		struct crypto_skcipher		*skcipher;
@@ -329,7 +330,7 @@ enum sa_ealg_id {
 	SA_EALG_ID_DES_CBC,         /* DES CBC mode */
 	SA_EALG_ID_3DES_CBC,        /* 3DES CBC mode */
 	SA_EALG_ID_CCM,             /* Counter with CBC-MAC mode */
-	SA_EALG_ID_GCM,             /* Galois Counter mode */
+	SA_EALG_ID_AES_GCM,             /* Galois Counter mode */
 	SA_EALG_ID_AES_ECB,
 	SA_EALG_ID_LAST
 };
