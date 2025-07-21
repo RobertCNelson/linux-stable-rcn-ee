@@ -31,21 +31,8 @@ struct sa_tfm_ctx;
 #define SA_EEC_CPPI_PORT_IN_EN		0x00000200
 #define SA_EEC_CPPI_PORT_OUT_EN		0x00000800
 
-/*
- * Encoding used to identify the typo of crypto operation
- * performed on the packet when the packet is returned
- * by SA
- */
-#define SA_REQ_SUBTYPE_ENC	0x0001
-#define SA_REQ_SUBTYPE_DEC	0x0002
-#define SA_REQ_SUBTYPE_SHIFT	16
-#define SA_REQ_SUBTYPE_MASK	0xffff
-
 /* Number of 32 bit words in EPIB  */
 #define SA_DMA_NUM_EPIB_WORDS   4
-
-/* Number of 32 bit words in PS data  */
-#define SA_DMA_NUM_PS_WORDS     16
 
 /*
  * Maximum number of simultaeneous security contexts
@@ -245,16 +232,8 @@ struct sa_cmdl_upd_info {
 	u32				aux_key[SA_MAX_AUX_DATA_WORDS];
 };
 
-/*
- * Number of 32bit words appended after the command label
- * in PSDATA to identify the crypto request context.
- * word-0: Request type
- * word-1: pointer to request
- */
-#define SA_PSDATA_CTX_WORDS 4
-
 /* Maximum size of Command label in 32 words */
-#define SA_MAX_CMDL_WORDS (SA_DMA_NUM_PS_WORDS - SA_PSDATA_CTX_WORDS)
+#define SA_MAX_CMDL_WORDS 24
 
 /**
  * struct sa_ctx_info: SA context information
@@ -311,7 +290,6 @@ struct sa_tfm_ctx {
  */
 struct sa_sha_req_ctx {
 	struct sa_crypto_data	*dev_data;
-	u32			cmdl[SA_MAX_CMDL_WORDS + SA_PSDATA_CTX_WORDS];
 	struct ahash_request	fallback_req;
 };
 
