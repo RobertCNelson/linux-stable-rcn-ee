@@ -849,6 +849,7 @@ static void sa_free_ctx_info(struct sa_ctx_info *ctx,
 	spin_unlock(&data->scid_lock);
 
 	if (ctx->sc) {
+		memzero_explicit(ctx->sc, SA_CTX_MAX_SZ);
 		dma_pool_free(data->sc_pool, ctx->sc, ctx->sc_phys);
 		ctx->sc = NULL;
 	}
