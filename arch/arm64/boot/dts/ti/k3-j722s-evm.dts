@@ -297,6 +297,7 @@
 
 &main_pmx0 {
 
+	/delete-property/ interrupts;
 	main_mcan0_pins_default: main-mcan0-default-pins {
 		pinctrl-single,pins = <
 			J722S_IOPAD(0x1dc, PIN_INPUT, 0) /* (C22) MCAN0_RX */
