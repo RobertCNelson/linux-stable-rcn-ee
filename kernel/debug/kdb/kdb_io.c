@@ -572,6 +572,7 @@ static void kdb_msg_write(const char *msg, int msg_len)
 		cp++;
 	}
 
+	/* mirror output on atomic consoles */
 	for_each_console(c) {
 		if (!(c->flags & CON_ENABLED))
 			continue;
