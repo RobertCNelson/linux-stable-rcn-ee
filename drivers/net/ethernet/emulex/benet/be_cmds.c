@@ -875,9 +875,10 @@ static int be_cmd_lock(struct be_adapter *adapter)
 /* Must be used only in process context */
 static void be_cmd_unlock(struct be_adapter *adapter)
 {
-	if (use_mcc(adapter))
-		return spin_unlock_bh(&adapter->mcc_lock);
-	else
+	if (use_mcc(adapter)) {
+		spin_unlock_bh(&adapter->mcc_lock);
+		return;
+	} else
 		return mutex_unlock(&adapter->mbox_lock);
 }
 

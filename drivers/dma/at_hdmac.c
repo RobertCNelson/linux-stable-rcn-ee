@@ -483,8 +483,10 @@ static void atc_advance_work(struct at_dma_chan *atchan)
 	dev_vdbg(chan2dev(&atchan->chan_common), "advance_work\n");
 
 	spin_lock_irqsave(&atchan->lock, flags);
-	if (atc_chan_is_enabled(atchan) || list_empty(&atchan->active_list))
-		return spin_unlock_irqrestore(&atchan->lock, flags);
+	if (atc_chan_is_enabled(atchan) || list_empty(&atchan->active_list)) {
+		spin_unlock_irqrestore(&atchan->lock, flags);
+		return;
+	}
 
 	desc = atc_first_active(atchan);
 	/* Remove the transfer node from the active list. */
@@ -1477,8 +1479,10 @@ static void atc_issue_pending(struct dma_chan *chan)
 	dev_vdbg(chan2dev(chan), "issue_pending\n");
 
 	spin_lock_irqsave(&atchan->lock, flags);
-	if (atc_chan_is_enabled(atchan) || list_empty(&atchan->queue))
-		return spin_unlock_irqrestore(&atchan->lock, flags);
+	if (atc_chan_is_enabled(atchan) || list_empty(&atchan->queue)) {
+		spin_unlock_irqrestore(&atchan->lock, flags);
+		return;
+	}
 
 	desc = atc_first_queued(atchan);
 	list_move_tail(&desc->desc_node, &atchan->active_list);
