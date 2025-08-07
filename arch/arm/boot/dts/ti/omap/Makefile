@@ -1,4 +1,9 @@
 # SPDX-License-Identifier: GPL-2.0
+
+ifeq ($(CONFIG_OF_OVERLAY),y)
+DTC_FLAGS += -@
+endif
+
 dtb-$(CONFIG_ARCH_OMAP2) += \
 	omap2420-h4.dtb \
 	omap2420-n800.dtb \
@@ -89,6 +94,20 @@ dtb-$(CONFIG_SOC_AM33XX) += \
 	am335x-base0033.dtb \
 	am335x-bone.dtb \
 	am335x-boneblack.dtb \
+	am335x-boneblack-revd.dtb \
+	am335x-boneblack-uboot.dtb \
+	BONE-ADC.dtbo \
+	BBORG_FAN-A000.dtbo \
+	BBORG_COMMS-00A2.dtbo \
+	BB-UART4-00A0.dtbo \
+	BB-UART2-00A0.dtbo \
+	BB-UART1-00A0.dtbo \
+	BB-BONE-eMMC1-01-00A0.dtbo \
+	BB-BBGW-WL1835-00A0.dtbo \
+	BB-BBGG-WL1835-00A0.dtbo \
+	BB-BBBW-WL1835-00A0.dtbo \
+	BB-ADC-00A0.dtbo \
+	AM335X-PRU-UIO-00A0.dtbo \
 	am335x-boneblack-wireless.dtb \
 	am335x-boneblue.dtb \
 	am335x-bonegreen.dtb \
@@ -137,7 +156,6 @@ am571x-idk-overlays-dtbs := am571x-idk.dtb \
 am572x-idk-overlays-dtbs := am572x-idk.dtb \
 	am572x-idk-touchscreen.dtbo am57xx-idk-lcd-osd101t2045.dtbo
 
-# Build time test only, enabled by CONFIG_OF_ALL_DTBS
 dtb- += \
 	am571x-idk-overlays.dtb \
 	am572x-idk-overlays.dtb
