@@ -15,6 +15,7 @@
 #include <linux/sys_soc.h>
 
 #define CTRLMMR_WKUP_JTAGID_REG		0
+#define CTRLMMR_WKUP_GP_SW1_REG		4
 /*
  * Bits:
  *  31-28 VARIANT	Device variant
@@ -24,6 +25,8 @@
  */
 #define CTRLMMR_WKUP_JTAGID_VARIANT_SHIFT	(28)
 #define CTRLMMR_WKUP_JTAGID_VARIANT_MASK	GENMASK(31, 28)
+
+#define GP_SW1_VARIANT_MOD_OPR			16
 
 #define CTRLMMR_WKUP_JTAGID_PARTNO_SHIFT	(12)
 #define CTRLMMR_WKUP_JTAGID_PARTNO_MASK		GENMASK(27, 12)
@@ -62,9 +65,44 @@ static const struct k3_soc_id {
 	{ JTAG_ID_PARTNO_AM62LX, "AM62LX" },
 };
 
+static const struct regmap_config k3_chipinfo_regmap_cfg = {
+	.reg_bits = 32,
+	.val_bits = 32,
+	.reg_stride = 4,
+};
+
 static const char * const j721e_rev_string_map[] = {
 	"1.0", "1.1", "2.0",
 };
+
+static const char * const am62p_gpsw_rev_string_map[] = {
+	"1.0", "1.1", "1.2",
+};
+
+static int
+k3_chipinfo_get_gpsw_variant(struct platform_device *pdev, unsigned int partno)
+{
+	struct device *dev = &pdev->dev;
+	struct regmap *regmap;
+	void __iomem *base;
+	u32 gpsw_val;
+	int ret;
+
+	base = devm_platform_ioremap_resource(pdev, 1);
+	if (IS_ERR(base))
+		return PTR_ERR(base);
+
+	regmap = devm_regmap_init_mmio(dev, base, &k3_chipinfo_regmap_cfg);
+	if (IS_ERR(regmap))
+		return PTR_ERR(regmap);
+
+	ret = regmap_read(regmap, CTRLMMR_WKUP_GP_SW1_REG, &gpsw_val);
+
+	if (ret < 0)
+		return ret;
+
+	return gpsw_val % GP_SW1_VARIANT_MOD_OPR;
+}
 
 static int
 k3_chipinfo_partno_to_names(unsigned int partno,
@@ -82,15 +120,25 @@ k3_chipinfo_partno_to_names(unsigned int partno,
 }
 
 static int
-k3_chipinfo_variant_to_sr(unsigned int partno, unsigned int variant,
-			  struct soc_device_attribute *soc_dev_attr)
+k3_chipinfo_variant_to_sr(struct platform_device *pdev, unsigned int partno,
+			  unsigned int variant, struct soc_device_attribute *soc_dev_attr)
 {
+	int gpsw_variant;
+
 	switch (partno) {
 	case JTAG_ID_PARTNO_J721E:
 		if (variant >= ARRAY_SIZE(j721e_rev_string_map))
 			goto err_unknown_variant;
 		soc_dev_attr->revision = kasprintf(GFP_KERNEL, "SR%s",
 						   j721e_rev_string_map[variant]);
+		break;
+	case JTAG_ID_PARTNO_AM62PX:
+		/* Always parse AM62P variant from GP_SW1 */
+		gpsw_variant = k3_chipinfo_get_gpsw_variant(pdev, partno);
+		if (gpsw_variant >= ARRAY_SIZE(am62p_gpsw_rev_string_map) || IS_ERR(&gpsw_variant))
+			goto err_unknown_variant;
+		soc_dev_attr->revision = kasprintf(GFP_KERNEL, "SR%s",
+						   am62p_gpsw_rev_string_map[gpsw_variant]);
 		break;
 	default:
 		variant++;
@@ -106,12 +154,6 @@ k3_chipinfo_variant_to_sr(unsigned int partno, unsigned int variant,
 err_unknown_variant:
 	return -ENODEV;
 }
-
-static const struct regmap_config k3_chipinfo_regmap_cfg = {
-	.reg_bits = 32,
-	.val_bits = 32,
-	.reg_stride = 4,
-};
 
 static int k3_chipinfo_probe(struct platform_device *pdev)
 {
@@ -163,7 +205,7 @@ static int k3_chipinfo_probe(struct platform_device *pdev)
 		goto err;
 	}
 
-	ret = k3_chipinfo_variant_to_sr(partno_id, variant, soc_dev_attr);
+	ret = k3_chipinfo_variant_to_sr(pdev, partno_id, variant, soc_dev_attr);
 	if (ret) {
 		dev_err(dev, "Unknown SoC SR[0x%08X]: %d\n", jtag_id, ret);
 		goto err;
