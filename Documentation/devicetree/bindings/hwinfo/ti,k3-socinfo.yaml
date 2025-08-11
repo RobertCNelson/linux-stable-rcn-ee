@@ -24,7 +24,7 @@ properties:
       - const: ti,am654-chipid
 
   reg:
-    maxItems: 1
+    minItems: 1
 
 required:
   - compatible
@@ -36,5 +36,6 @@ examples:
   - |
     chipid@43000014 {
         compatible = "ti,am654-chipid";
-        reg = <0x43000014 0x4>;
+        reg = <0x43000014 0x4>,
+              <0x43000230 0x10>;
     };
