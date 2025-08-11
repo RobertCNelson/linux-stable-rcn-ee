@@ -18,7 +18,8 @@
 
 		chipid: chipid@14 {
 			compatible = "ti,am654-chipid";
-			reg = <0x14 0x4>;
+			reg = <0x14 0x4>,
+			      <0x230 0x10>;
 			bootph-all;
 		};
 
