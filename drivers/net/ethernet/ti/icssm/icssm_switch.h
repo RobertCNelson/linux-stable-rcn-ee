@@ -146,6 +146,11 @@
 /* 4 bytes ? */
 #define STP_INVALID_STATE_OFFSET	(STATISTICS_OFFSET + STAT_SIZE + 33)
 
+/* Shared RAM Offsets for Switch */
+/* NSP (Network Storm Prevention) timer re-uses NT timer */
+#define PRUETH_NSP_CREDIT_SHIFT       8
+#define PRUETH_NSP_ENABLE            BIT(0)
+
 /* DRAM Offsets for EMAC
  * Present on Both DRAM0 and DRAM1
  */

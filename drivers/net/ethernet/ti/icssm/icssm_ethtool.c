@@ -8,6 +8,7 @@
 #include <linux/if_bridge.h>
 #include <linux/if_vlan.h>
 #include "icssm_prueth.h"
+#include "icssm_vlan_mcast_filter_mmap.h"
 #include "../icssg/icss_iep.h"
 
 /* set PRU firmware statistics */
@@ -18,6 +19,11 @@ void icssm_emac_set_stats(struct prueth_emac *emac,
 
 	dram = emac->prueth->mem[emac->dram].va;
 	memcpy_toio(dram + STATISTICS_OFFSET, pstats, STAT_SIZE);
+
+	writel(pstats->vlan_dropped, dram +
+			ICSS_EMAC_FW_VLAN_FILTER_DROP_CNT_OFFSET);
+	writel(pstats->multicast_dropped, dram +
+			ICSS_EMAC_FW_MULTICAST_FILTER_DROP_CNT_OFFSET);
 }
 
 /* get statistics maintained by the PRU firmware into @pstats */
@@ -28,6 +34,11 @@ void icssm_emac_get_stats(struct prueth_emac *emac,
 
 	dram = emac->prueth->mem[emac->dram].va;
 	memcpy_fromio(pstats, dram + STATISTICS_OFFSET, STAT_SIZE);
+
+	pstats->vlan_dropped =
+		readl(dram + ICSS_EMAC_FW_VLAN_FILTER_DROP_CNT_OFFSET);
+	pstats->multicast_dropped =
+		readl(dram + ICSS_EMAC_FW_MULTICAST_FILTER_DROP_CNT_OFFSET);
 }
 
 /**
@@ -162,13 +173,40 @@ static void icssm_emac_get_ethtool_stats(struct net_device *ndev,
 	}
 }
 
+static int icssm_emac_get_regs_len(struct net_device *ndev)
+{
+	struct prueth_emac *emac = netdev_priv(ndev);
+	struct prueth *prueth = emac->prueth;
+
+	/* VLAN Table at the end of the memory map, after MultiCast
+	 * filter region. So VLAN table base +
+	 * size will give the entire size of reg dump in case of
+	 * Dual-EMAC firmware.
+	 */
+	if (PRUETH_IS_EMAC(prueth)) {
+		return ICSS_EMAC_FW_VLAN_FLTR_TBL_BASE_ADDR +
+		       ICSS_EMAC_FW_VLAN_FILTER_TABLE_SIZE_BYTES;
+	}
+
+	return 0;
+}
+
 static void icssm_emac_get_regs(struct net_device *ndev,
 				struct ethtool_regs *regs, void *p)
 {
 	struct prueth_emac *emac = netdev_priv(ndev);
 	struct prueth *prueth = emac->prueth;
+	void __iomem *ram;
+	u8 *reg = p;
 
 	regs->version = PRUETH_REG_DUMP_GET_VER(prueth);
+
+	/* Dump firmware's VLAN and MC tables */
+	if (PRUETH_IS_EMAC(prueth)) {
+		ram = prueth->mem[emac->dram].va;
+		memcpy_fromio(reg, ram, icssm_emac_get_regs_len(ndev));
+		return;
+	}
 }
 
 static const struct ethtool_rmon_hist_range icssm_emac_rmon_ranges[] = {
@@ -252,6 +290,7 @@ const struct ethtool_ops emac_ethtool_ops = {
 	.get_sset_count = icssm_emac_get_sset_count,
 	.get_strings = icssm_emac_get_strings,
 	.get_ethtool_stats = icssm_emac_get_ethtool_stats,
+	.get_regs_len = icssm_emac_get_regs_len,
 	.get_regs = icssm_emac_get_regs,
 	.get_rmon_stats = icssm_emac_get_rmon_stats,
 	.get_eth_mac_stats = icssm_emac_get_eth_mac_stats,

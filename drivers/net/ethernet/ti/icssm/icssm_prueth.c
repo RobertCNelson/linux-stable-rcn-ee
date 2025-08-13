@@ -29,6 +29,7 @@
 #include <net/pkt_cls.h>
 
 #include "icssm_prueth.h"
+#include "icssm_vlan_mcast_filter_mmap.h"
 #include "../icssg/icssg_mii_rt.h"
 #include "../icssg/icss_iep.h"
 
@@ -37,6 +38,26 @@
 #define TX_START_DELAY		0x40
 #define TX_CLK_DELAY_100M	0x6
 #define HR_TIMER_TX_DELAY_US	100
+
+static struct prueth_fw_offsets fw_offsets_v2_1;
+
+static void icssm_prueth_set_fw_offsets(struct prueth *prueth)
+{
+	/* Set VLAN/Multicast filter control and table offsets */
+	if (PRUETH_IS_EMAC(prueth)) {
+		prueth->fw_offsets->vlan_ctrl_byte  =
+			ICSS_EMAC_FW_VLAN_FILTER_CTRL_BITMAP_OFFSET;
+		prueth->fw_offsets->vlan_filter_tbl =
+			ICSS_EMAC_FW_VLAN_FLTR_TBL_BASE_ADDR;
+
+		prueth->fw_offsets->mc_ctrl_byte  =
+			ICSS_EMAC_FW_MULTICAST_FILTER_CTRL_OFFSET;
+		prueth->fw_offsets->mc_filter_mask =
+			ICSS_EMAC_FW_MULTICAST_FILTER_MASK_OFFSET;
+		prueth->fw_offsets->mc_filter_tbl =
+			ICSS_EMAC_FW_MULTICAST_FILTER_TABLE;
+	}
+}
 
 static void icssm_prueth_write_reg(struct prueth *prueth,
 				   enum prueth_mem region,
@@ -342,18 +363,25 @@ static void icssm_prueth_hostinit(struct prueth *prueth)
  */
 static void icssm_prueth_init_ethernet_mode(struct prueth *prueth)
 {
+	icssm_prueth_set_fw_offsets(prueth);
 	icssm_prueth_hostinit(prueth);
 }
 
 static void icssm_prueth_port_enable(struct prueth_emac *emac, bool enable)
 {
 	struct prueth *prueth = emac->prueth;
-	void __iomem *port_ctrl;
+	void __iomem *port_ctrl, *vlan_ctrl;
+	u32 vlan_ctrl_offset;
 	void __iomem *ram;
+
+	vlan_ctrl_offset = prueth->fw_offsets->vlan_ctrl_byte;
 
 	ram = prueth->mem[emac->dram].va;
 	port_ctrl = ram + PORT_CONTROL_ADDR;
 	writeb(!!enable, port_ctrl);
+
+	vlan_ctrl = ram + vlan_ctrl_offset;
+	writeb(!!enable, vlan_ctrl);
 }
 
 static int icssm_prueth_emac_config(struct prueth_emac *emac)
@@ -1443,6 +1471,174 @@ static void icssm_emac_ndo_get_stats64(struct net_device *ndev,
 	stats->rx_length_errors = ndev->stats.rx_length_errors;
 }
 
+/* enable/disable MC filter */
+static void icssm_emac_mc_filter_ctrl(struct prueth_emac *emac, bool enable)
+{
+	struct prueth *prueth = emac->prueth;
+	void __iomem *mc_filter_ctrl;
+	void __iomem *ram;
+	u32 mc_ctrl_byte;
+	u32 reg;
+
+	ram = prueth->mem[emac->dram].va;
+	mc_ctrl_byte = prueth->fw_offsets->mc_ctrl_byte;
+	mc_filter_ctrl = ram + mc_ctrl_byte;
+
+	if (enable)
+		reg = ICSS_EMAC_FW_MULTICAST_FILTER_CTRL_ENABLED;
+	else
+		reg = ICSS_EMAC_FW_MULTICAST_FILTER_CTRL_DISABLED;
+
+	writeb(reg, mc_filter_ctrl);
+}
+
+/* reset MC filter bins */
+static void icssm_emac_mc_filter_reset(struct prueth_emac *emac)
+{
+	struct prueth *prueth = emac->prueth;
+	void __iomem *mc_filter_tbl;
+	u32 mc_filter_tbl_base;
+	void __iomem *ram;
+
+	ram = prueth->mem[emac->dram].va;
+	mc_filter_tbl_base = prueth->fw_offsets->mc_filter_tbl;
+
+	mc_filter_tbl = ram + mc_filter_tbl_base;
+	memset_io(mc_filter_tbl, 0, ICSS_EMAC_FW_MULTICAST_TABLE_SIZE_BYTES);
+}
+
+/* set MC filter hashmask */
+static void icssm_emac_mc_filter_hashmask
+		(struct prueth_emac *emac,
+		 u8 mask[ICSS_EMAC_FW_MULTICAST_FILTER_MASK_SIZE_BYTES])
+{
+	struct prueth *prueth = emac->prueth;
+	void __iomem *mc_filter_mask;
+	u32 mc_filter_mask_base;
+	void __iomem *ram;
+
+	ram = prueth->mem[emac->dram].va;
+	mc_filter_mask_base = prueth->fw_offsets->mc_filter_mask;
+
+	mc_filter_mask = ram + mc_filter_mask_base;
+	memcpy_toio(mc_filter_mask, mask,
+		    ICSS_EMAC_FW_MULTICAST_FILTER_MASK_SIZE_BYTES);
+}
+
+static void icssm_emac_mc_filter_bin_update(struct prueth_emac *emac, u8 hash,
+					    u8 val)
+{
+	struct prueth *prueth = emac->prueth;
+	void __iomem *mc_filter_tbl;
+	u32 mc_filter_tbl_base;
+	void __iomem *ram;
+
+	ram = prueth->mem[emac->dram].va;
+	mc_filter_tbl_base = prueth->fw_offsets->mc_filter_tbl;
+
+	mc_filter_tbl = ram + mc_filter_tbl_base;
+	writeb(val, mc_filter_tbl + hash);
+}
+
+void icssm_emac_mc_filter_bin_allow(struct prueth_emac *emac, u8 hash)
+{
+	icssm_emac_mc_filter_bin_update
+		(emac, hash,
+		 ICSS_EMAC_FW_MULTICAST_FILTER_HOST_RCV_ALLOWED);
+}
+
+void icssm_emac_mc_filter_bin_disallow(struct prueth_emac *emac, u8 hash)
+{
+	icssm_emac_mc_filter_bin_update
+		(emac, hash,
+		 ICSS_EMAC_FW_MULTICAST_FILTER_HOST_RCV_NOT_ALLOWED);
+}
+
+u8 icssm_emac_get_mc_hash(u8 *mac, u8 *mask)
+{
+	u8 hash;
+	int j;
+
+	for (j = 0, hash = 0; j < ETH_ALEN; j++)
+		hash ^= (mac[j] & mask[j]);
+
+	return hash;
+}
+
+/**
+ * icssm_emac_ndo_set_rx_mode - EMAC set receive mode function
+ * @ndev: The EMAC network adapter
+ *
+ * Called when system wants to set the receive mode of the device.
+ *
+ */
+static void icssm_emac_ndo_set_rx_mode(struct net_device *ndev)
+{
+	struct prueth_emac *emac = netdev_priv(ndev);
+	bool promisc = ndev->flags & IFF_PROMISC;
+	struct netdev_hw_addr *ha;
+	struct prueth *prueth;
+	unsigned long flags;
+	void __iomem *sram;
+	u32 mask, reg;
+	u8 hash;
+
+	prueth = emac->prueth;
+	sram = prueth->mem[PRUETH_MEM_SHARED_RAM].va;
+	reg = readl(sram + EMAC_PROMISCUOUS_MODE_OFFSET);
+
+	/* for LRE, it is a shared table. So lock the access */
+	spin_lock_irqsave(&emac->addr_lock, flags);
+
+	/* Disable and reset multicast filter, allows allmulti */
+	icssm_emac_mc_filter_ctrl(emac, false);
+	icssm_emac_mc_filter_reset(emac);
+	icssm_emac_mc_filter_hashmask(emac, emac->mc_filter_mask);
+
+	if (PRUETH_IS_EMAC(prueth)) {
+		switch (emac->port_id) {
+		case PRUETH_PORT_MII0:
+			mask = EMAC_P1_PROMISCUOUS_BIT;
+			break;
+		case PRUETH_PORT_MII1:
+			mask = EMAC_P2_PROMISCUOUS_BIT;
+			break;
+		default:
+			netdev_err(ndev, "%s: invalid port\n", __func__);
+			goto unlock;
+		}
+
+		if (promisc) {
+			/* Enable promiscuous mode */
+			reg |= mask;
+		} else {
+			/* Disable promiscuous mode */
+			reg &= ~mask;
+		}
+
+		writel(reg, sram + EMAC_PROMISCUOUS_MODE_OFFSET);
+
+		if (promisc)
+			goto unlock;
+	}
+
+	if (ndev->flags & IFF_ALLMULTI && !PRUETH_IS_SWITCH(prueth))
+		goto unlock;
+
+	icssm_emac_mc_filter_ctrl(emac, true);	/* all multicast blocked */
+
+	if (netdev_mc_empty(ndev))
+		goto unlock;
+
+	netdev_for_each_mc_addr(ha, ndev) {
+		hash = icssm_emac_get_mc_hash(ha->addr, emac->mc_filter_mask);
+		icssm_emac_mc_filter_bin_allow(emac, hash);
+	}
+
+unlock:
+	spin_unlock_irqrestore(&emac->addr_lock, flags);
+}
+
 static int icssm_emac_hwtstamp_config_set(struct net_device *ndev,
 					  struct kernel_hwtstamp_config *cfg,
 					  struct netlink_ext_ack *extack)
@@ -1499,14 +1695,116 @@ static int icssm_emac_hwtstamp_config_get(struct net_device *ndev,
 	return 0;
 }
 
+int icssm_emac_add_del_vid(struct prueth_emac *emac,
+			   bool add, __be16 proto, u16 vid)
+{
+	struct prueth *prueth = emac->prueth;
+	u32 vlan_filter_tbl;
+	unsigned long flags;
+	void __iomem *ram;
+	u8 bit_index, val;
+	u16 byte_index;
+
+	vlan_filter_tbl = prueth->fw_offsets->vlan_filter_tbl;
+	ram = prueth->mem[emac->dram].va;
+
+	if (proto != htons(ETH_P_8021Q))
+		return -EINVAL;
+
+	if (vid >= ICSS_EMAC_FW_VLAN_FILTER_VID_MAX)
+		return -EINVAL;
+
+	/* By default, VLAN ID 0 (priority tagged packets) is routed to
+	 * host, so nothing to be done if vid = 0
+	 */
+	if (!vid)
+		return 0;
+
+	/* for LRE, it is a shared table. So lock the access */
+	spin_lock_irqsave(&emac->addr_lock, flags);
+
+	/* VLAN filter table is 512 bytes (4096 bit) bitmap.
+	 * Each bit controls enabling or disabling corresponding
+	 * VID. Therefore byte index that controls a given VID is
+	 * can calculated as vid / 8 and the bit within that byte
+	 * that controls VID is given by vid % 8. Allow untagged
+	 * frames to host by default.
+	 */
+	byte_index = vid / BITS_PER_BYTE;
+	bit_index = vid % BITS_PER_BYTE;
+	val = readb(ram + vlan_filter_tbl + byte_index);
+	if (add)
+		val |= BIT(bit_index);
+	else
+		val &= ~BIT(bit_index);
+	writeb(val, ram + vlan_filter_tbl + byte_index);
+
+	spin_unlock_irqrestore(&emac->addr_lock, flags);
+
+	netdev_dbg(emac->ndev, "%s VID bit at byte index %d and bit %d\n",
+		   add ? "Setting" : "Clearing", byte_index, bit_index);
+
+	return 0;
+}
+
+static int icssm_emac_ndo_vlan_rx_add_vid(struct net_device *dev,
+					  __be16 proto, u16 vid)
+{
+	struct prueth_emac *emac = netdev_priv(dev);
+
+	return icssm_emac_add_del_vid(emac, true, proto, vid);
+}
+
+static int icssm_emac_ndo_vlan_rx_kill_vid(struct net_device *dev,
+					   __be16 proto, u16 vid)
+{
+	struct prueth_emac *emac = netdev_priv(dev);
+
+	return icssm_emac_add_del_vid(emac, false, proto, vid);
+}
+
+static int icssm_emac_get_port_parent_id(struct net_device *dev,
+					 struct netdev_phys_item_id *ppid)
+{
+	struct prueth_emac *emac = netdev_priv(dev);
+	struct prueth *prueth = emac->prueth;
+
+	ppid->id_len = sizeof(prueth->base_mac);
+	memcpy(&ppid->id, &prueth->base_mac, ppid->id_len);
+
+	return 0;
+}
+
+static int icssm_emac_ndo_get_phys_port_name(struct net_device *ndev,
+					     char *name, size_t len)
+{
+	struct prueth_emac *emac = netdev_priv(ndev);
+	int err;
+
+	err = snprintf(name, len, "p%d", emac->port_id);
+
+	if (err >= len)
+		return -EINVAL;
+
+	return 0;
+}
+
 static const struct net_device_ops emac_netdev_ops = {
 	.ndo_open = icssm_emac_ndo_open,
 	.ndo_stop = icssm_emac_ndo_stop,
 	.ndo_start_xmit = icssm_emac_ndo_start_xmit,
+	.ndo_set_mac_address = eth_mac_addr,
+	.ndo_validate_addr = eth_validate_addr,
 	.ndo_tx_timeout = icssm_emac_ndo_tx_timeout,
 	.ndo_get_stats64 = icssm_emac_ndo_get_stats64,
+	.ndo_set_rx_mode = icssm_emac_ndo_set_rx_mode,
 	.ndo_hwtstamp_get = icssm_emac_hwtstamp_config_get,
 	.ndo_hwtstamp_set = icssm_emac_hwtstamp_config_set,
+	.ndo_vlan_rx_add_vid = icssm_emac_ndo_vlan_rx_add_vid,
+	.ndo_vlan_rx_kill_vid = icssm_emac_ndo_vlan_rx_kill_vid,
+	.ndo_setup_tc = icssm_emac_ndo_setup_tc,
+	.ndo_get_port_parent_id = icssm_emac_get_port_parent_id,
+	.ndo_get_phys_port_name = icssm_emac_ndo_get_phys_port_name,
 };
 
 /* get emac_port corresponding to eth_node name */
@@ -1583,6 +1881,7 @@ static int icssm_prueth_netdev_init(struct prueth *prueth,
 	emac->prueth = prueth;
 	emac->ndev = ndev;
 	emac->port_id = port;
+	memset(&emac->mc_filter_mask[0], 0xff, ETH_ALEN); /* default mask */
 
 	/* by default eth_type is EMAC */
 	switch (port) {
@@ -1624,7 +1923,9 @@ static int icssm_prueth_netdev_init(struct prueth *prueth,
 		dev_err(prueth->dev, "could not get ptp tx irq. Skipping PTP support\n");
 	}
 
+	spin_lock_init(&emac->lock);
 	spin_lock_init(&emac->ptp_skb_lock);
+	spin_lock_init(&emac->addr_lock);
 
 	/* get mac address from DT and set private and netdev addr */
 	ret = of_get_ethdev_address(eth_node, ndev);
@@ -1652,6 +1953,10 @@ static int icssm_prueth_netdev_init(struct prueth *prueth,
 
 	phy_remove_link_mode(emac->phydev, ETHTOOL_LINK_MODE_Pause_BIT);
 	phy_remove_link_mode(emac->phydev, ETHTOOL_LINK_MODE_Asym_Pause_BIT);
+
+	ndev->features |= NETIF_F_HW_VLAN_CTAG_FILTER | NETIF_F_HW_TC;
+
+	ndev->hw_features |= NETIF_F_HW_VLAN_CTAG_FILTER;
 
 	ndev->netdev_ops = &emac_netdev_ops;
 	ndev->ethtool_ops = &emac_ethtool_ops;
@@ -1712,6 +2017,7 @@ static int icssm_prueth_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, prueth);
 	prueth->dev = dev;
 	prueth->fw_data = device_get_match_data(dev);
+	prueth->fw_offsets = &fw_offsets_v2_1;
 
 	eth_ports_node = of_get_child_by_name(np, "ethernet-ports");
 	if (!eth_ports_node)
@@ -1907,6 +2213,8 @@ static int icssm_prueth_probe(struct platform_device *pdev)
 		prueth->registered_netdevs[PRUETH_MAC1] =
 			prueth->emac[PRUETH_MAC1]->ndev;
 	}
+
+	eth_random_addr(prueth->base_mac);
 
 	dev_info(dev, "TI PRU ethernet driver initialized: %s EMAC mode\n",
 		 (!eth0_node || !eth1_node) ? "single" : "dual");
