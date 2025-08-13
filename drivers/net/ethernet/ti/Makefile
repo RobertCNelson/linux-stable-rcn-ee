@@ -52,3 +52,5 @@ icssg-y := icssg/icssg_common.o \
 	   icssg/icssg_ethtool.o
 
 obj-$(CONFIG_TI_ICSS_IEP) += icssg/icss_iep.o
+
+obj-$(CONFIG_TI_PRUETH_ECAP) += icssm/icssm_prueth_ecap.o

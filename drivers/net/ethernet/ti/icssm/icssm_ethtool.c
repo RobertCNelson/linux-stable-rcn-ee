@@ -8,6 +8,7 @@
 #include <linux/if_bridge.h>
 #include <linux/if_vlan.h>
 #include "icssm_prueth.h"
+#include "icssm_prueth_ecap.h"
 #include "icssm_vlan_mcast_filter_mmap.h"
 #include "../icssg/icss_iep.h"
 
@@ -281,6 +282,40 @@ static int icssm_emac_get_ts_info(struct net_device *ndev,
 	return 0;
 }
 
+static int icssm_emac_get_coalesce(struct net_device *ndev,
+				   struct ethtool_coalesce *coal,
+				   struct kernel_ethtool_coalesce *kernel_coal,
+				   struct netlink_ext_ack *extack)
+{
+	struct prueth_emac *emac = netdev_priv(ndev);
+	struct prueth *prueth = emac->prueth;
+	struct prueth_ecap *ecap;
+
+	ecap = prueth->ecap;
+	if (IS_ERR(ecap))
+		return -EOPNOTSUPP;
+
+	return ecap->get_coalesce(emac, &coal->use_adaptive_rx_coalesce,
+				  &coal->rx_coalesce_usecs);
+}
+
+static int icssm_emac_set_coalesce(struct net_device *ndev,
+				   struct ethtool_coalesce *coal,
+				   struct kernel_ethtool_coalesce *kernel_coal,
+				   struct netlink_ext_ack *extack)
+{
+	struct prueth_emac *emac = netdev_priv(ndev);
+	struct prueth *prueth = emac->prueth;
+	struct prueth_ecap *ecap;
+
+	ecap = prueth->ecap;
+	if (IS_ERR(ecap))
+		return -EOPNOTSUPP;
+
+	return ecap->set_coalesce(emac, coal->use_adaptive_rx_coalesce,
+				  coal->rx_coalesce_usecs);
+}
+
 /* Ethtool support for EMAC adapter */
 const struct ethtool_ops emac_ethtool_ops = {
 	.get_drvinfo = icssm_emac_get_drvinfo,
@@ -295,5 +330,8 @@ const struct ethtool_ops emac_ethtool_ops = {
 	.get_rmon_stats = icssm_emac_get_rmon_stats,
 	.get_eth_mac_stats = icssm_emac_get_eth_mac_stats,
 	.get_ts_info = icssm_emac_get_ts_info,
+	.supported_coalesce_params = ETHTOOL_COALESCE_RX_USECS,
+	.get_coalesce = icssm_emac_get_coalesce,
+	.set_coalesce = icssm_emac_set_coalesce,
 };
 EXPORT_SYMBOL_GPL(emac_ethtool_ops);

@@ -12,6 +12,7 @@
 #include <linux/types.h>
 #include <linux/pruss_driver.h>
 #include <linux/remoteproc/pruss.h>
+#include <linux/netdevice.h>
 
 #include "icssm_switch.h"
 #include "icssm_prueth_ptp.h"
@@ -404,6 +405,7 @@ struct prueth {
 	struct regmap *mii_rt;
 	struct icss_iep *iep;
 
+	struct prueth_ecap *ecap;
 	const struct prueth_private_data *fw_data;
 	struct prueth_fw_offsets *fw_offsets;
 
@@ -413,6 +415,7 @@ struct prueth {
 
 	unsigned int eth_type;
 	size_t ocmc_ram_size;
+	struct mutex mlock; /* serialize access */
 	u8 emac_configured;
 	u8 base_mac[ETH_ALEN];
 };

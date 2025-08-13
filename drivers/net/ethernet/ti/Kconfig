@@ -244,6 +244,18 @@ config TI_ICSS_IEP
 	  To compile this driver as a module, choose M here. The module
 	  will be called icss_iep.
 
+config TI_PRUETH_ECAP
+	tristate "TI PRUETH ECAP driver"
+	depends on TI_PRUSS
+	default TI_PRUSS
+	help
+	  This enables support for the PRU-ICSS Enhanced Capture (eCAP) driver
+	  used for rx interrupt pacing support in PRU Driver/firmwares
+	  (Dual EMAC, HSR, PRP).
+
+	  To compile this driver as a module, choose M here. The module
+	  will be called prueth_ecap.
+
 config TI_PRUETH
 	tristate "TI PRU Ethernet EMAC driver"
 	depends on PRU_REMOTEPROC
