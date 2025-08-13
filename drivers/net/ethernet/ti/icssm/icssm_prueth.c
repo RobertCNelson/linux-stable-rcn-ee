@@ -969,6 +969,8 @@ static int icssm_emac_ndo_open(struct net_device *ndev)
 		}
 	}
 
+	icssm_emac_set_stats(emac, &emac->stats);
+
 	ret = icssm_emac_set_boot_pru(emac, ndev);
 	if (ret)
 		goto iep_exit;
@@ -1028,6 +1030,8 @@ static int icssm_emac_ndo_stop(struct net_device *ndev)
 
 	/* stop the PRU */
 	rproc_shutdown(emac->pru);
+
+	icssm_emac_get_stats(emac, &emac->stats);
 
 	/* free rx interrupts */
 	free_irq(emac->rx_irq, ndev);
@@ -1126,10 +1130,39 @@ fail_tx:
 	return ret;
 }
 
+/**
+ * icssm_emac_ndo_get_stats64 - EMAC get statistics function
+ * @ndev: The EMAC network adapter
+ * @stats: rtnl_link_stats structure
+ *
+ * Called when system wants to get statistics from the device.
+ *
+ */
+static void icssm_emac_ndo_get_stats64(struct net_device *ndev,
+				       struct rtnl_link_stats64 *stats)
+{
+	struct prueth_emac *emac = netdev_priv(ndev);
+	struct port_statistics pstats;
+
+	icssm_emac_get_stats(emac, &pstats);
+
+	stats->rx_packets = ndev->stats.rx_packets;
+	stats->rx_bytes = ndev->stats.rx_bytes;
+	stats->tx_packets = ndev->stats.tx_packets;
+	stats->tx_bytes = ndev->stats.tx_bytes;
+	stats->tx_errors = ndev->stats.tx_errors;
+	stats->tx_dropped = ndev->stats.tx_dropped;
+	stats->multicast = pstats.rx_mcast;
+
+	stats->rx_over_errors = ndev->stats.rx_over_errors;
+	stats->rx_length_errors = ndev->stats.rx_length_errors;
+}
+
 static const struct net_device_ops emac_netdev_ops = {
 	.ndo_open = icssm_emac_ndo_open,
 	.ndo_stop = icssm_emac_ndo_stop,
 	.ndo_start_xmit = icssm_emac_ndo_start_xmit,
+	.ndo_get_stats64 = icssm_emac_ndo_get_stats64,
 };
 
 /* get emac_port corresponding to eth_node name */
@@ -1269,6 +1302,7 @@ static int icssm_prueth_netdev_init(struct prueth *prueth,
 	phy_remove_link_mode(emac->phydev, ETHTOOL_LINK_MODE_Asym_Pause_BIT);
 
 	ndev->netdev_ops = &emac_netdev_ops;
+	ndev->ethtool_ops = &emac_ethtool_ops;
 
 	netif_napi_add(ndev, &emac->napi, icssm_emac_napi_poll);
 

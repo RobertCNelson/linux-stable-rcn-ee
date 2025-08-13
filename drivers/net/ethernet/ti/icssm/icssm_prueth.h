@@ -28,6 +28,12 @@
 #define EMAC_MAX_FRM_SUPPORT (ETH_HLEN + VLAN_HLEN + ETH_DATA_LEN + \
 			      ICSSM_LRE_TAG_SIZE)
 
+#define PRUETH_REG_DUMP_VER		1
+
+/* Encoding: 32-16: Reserved, 16-8: Reg dump version, 8-0: Ethertype */
+#define PRUETH_REG_DUMP_GET_VER(x)	((PRUETH_REG_DUMP_VER << 8) | \
+					 ((x)->eth_type))
+
 /* PRU Ethernet Type - Ethernet functionality (protocol
  * implemented) provided by the PRU firmware being loaded.
  */
@@ -108,6 +114,124 @@ struct prueth_packet_info {
 	bool flood;
 	bool timestamp;
 };
+
+#define ICSSM_NUM_STANDARD_STATS       18
+#define ICSSM_NUM_STATS      40
+
+/**
+ * struct port_statistics - Statistics structure for capturing statistics
+ *			    on PRUs
+ * @tx_bcast: Number of broadcast packets sent
+ * @tx_mcast:Number of multicast packets sent
+ * @tx_ucast:Number of unicast packets sent
+ *
+ * @tx_octets:Number of undersized frames rcvd
+ *
+ * @rx_bcast:Number of broadcast packets rcvd
+ * @rx_mcast:Number of multicast packets rcvd
+ * @rx_ucast:Number of unicast packets rcvd
+ *
+ * @rx_octets:Number of Rx packets
+ *
+ * @tx64byte:Number of 64 byte packets sent
+ * @tx65_127byte:Number of 65-127 byte packets sent
+ * @tx128_255byte:Number of 128-255 byte packets sent
+ * @tx256_511byte:Number of 256-511 byte packets sent
+ * @tx512_1023byte:Number of 512-1023 byte packets sent
+ * @tx1024byte:Number of 1024 and larger size packets sent
+ *
+ * @rx64byte:Number of 64 byte packets rcvd
+ * @rx65_127byte:Number of 65-127 byte packets rcvd
+ * @rx128_255byte:Number of 128-255 byte packets rcvd
+ * @rx256_511byte:Number of 256-511 byte packets rcvd
+ * @rx512_1023byte:Number of 512-1023 byte packets rcvd
+ * @rx1024byte:Number of 1024 and larger size packets rcvd
+ *
+ * @late_coll:Number of late collisions(Half Duplex)
+ * @single_coll:Number of single collisions (Half Duplex)
+ * @multi_coll:Number of multiple collisions (Half Duplex)
+ * @excess_coll:Number of excess collisions(Half Duplex)
+ *
+ * @rx_misalignment_frames:Number of non multiple of 8 byte frames rcvd
+ * @stormprev_counter_bc: Storm prevention count for broadcast frames
+ * @stormprev_counter_mc: Storm prevention count for multicast frames
+ * @stormprev_counter_uc: Storm prevention count for unicast frames
+ * @mac_rxerror:Number of MAC receive errors
+ * @sfd_error:Number of invalid SFD
+ * @def_tx:Number of transmissions deferred
+ * @mac_txerror:Number of MAC transmit errors
+ * @rx_oversized_frames:Number of oversized frames rcvd
+ * @rx_undersized_frames:Number of undersized frames rcvd
+ * @rx_crc_frames:Number of CRC error frames rcvd
+ * @dropped_packets:Number of packets dropped due to link down on opposite port
+ *
+ * @tx_hwq_overflow:Hardware Tx Queue (on PRU) over flow count
+ * @tx_hwq_underflow:Hardware Tx Queue (on PRU) under flow count
+ *
+ * @cs_error: Number of carrier sense errors
+ * @sqe_test_error: Number of MAC receive errors
+ *
+ * Above fields are aligned so that it's consistent
+ * with the memory layout in PRU DRAM, this is to facilitate easy
+ * memcpy. Don't change the order of the fields.
+ *
+ * @vlan_dropped: Number of VLAN tagged packets dropped
+ * @multicast_dropped: Number of multicast packets dropped
+ */
+struct port_statistics {
+	u32 tx_bcast;
+	u32 tx_mcast;
+	u32 tx_ucast;
+
+	u32 tx_octets;
+
+	u32 rx_bcast;
+	u32 rx_mcast;
+	u32 rx_ucast;
+
+	u32 rx_octets;
+
+	u32 tx64byte;
+	u32 tx65_127byte;
+	u32 tx128_255byte;
+	u32 tx256_511byte;
+	u32 tx512_1023byte;
+	u32 tx1024byte;
+
+	u32 rx64byte;
+	u32 rx65_127byte;
+	u32 rx128_255byte;
+	u32 rx256_511byte;
+	u32 rx512_1023byte;
+	u32 rx1024byte;
+
+	u32 late_coll;
+	u32 single_coll;
+	u32 multi_coll;
+	u32 excess_coll;
+
+	u32 rx_misalignment_frames;
+	u32 stormprev_counter_bc;
+	u32 stormprev_counter_mc;
+	u32 stormprev_counter_uc;
+	u32 mac_rxerror;
+	u32 sfd_error;
+	u32 def_tx;
+	u32 mac_txerror;
+	u32 rx_oversized_frames;
+	u32 rx_undersized_frames;
+	u32 rx_crc_frames;
+	u32 dropped_packets;
+
+	u32 tx_hwq_overflow;
+	u32 tx_hwq_underflow;
+
+	u32 cs_error;
+	u32 sqe_test_error;
+
+	u32 vlan_dropped;
+	u32 multicast_dropped;
+} __packed;
 
 /* In switch mode there are 3 real ports i.e. 3 mac addrs.
  * however Linux sees only the host side port. The other 2 ports
@@ -201,6 +325,8 @@ struct prueth_emac {
 	struct phy_device *phydev;
 	struct prueth_queue_desc __iomem *rx_queue_descs;
 	struct prueth_queue_desc __iomem *tx_queue_descs;
+	struct port_statistics stats; /* stats holder when i/f is down */
+	u32 emac_stats[ICSSM_NUM_STATS];
 
 	int link;
 	int speed;
@@ -246,10 +372,17 @@ struct prueth {
 	u8 emac_configured;
 };
 
+extern const struct ethtool_ops emac_ethtool_ops;
+
 void icssm_parse_packet_info(struct prueth *prueth, u32 buffer_descriptor,
 			     struct prueth_packet_info *pkt_info);
 int icssm_emac_rx_packet(struct prueth_emac *emac, u16 *bd_rd_ptr,
 			 struct prueth_packet_info *pkt_info,
 			 const struct prueth_queue_info *rxqueue);
 
+void icssm_emac_update_hardware_stats(struct prueth_emac *emac);
+void icssm_emac_set_stats(struct prueth_emac *emac,
+			  struct port_statistics *pstats);
+void icssm_emac_get_stats(struct prueth_emac *emac,
+			  struct port_statistics *pstats);
 #endif /* __NET_TI_PRUETH_H */
