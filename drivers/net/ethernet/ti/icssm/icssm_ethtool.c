@@ -8,6 +8,7 @@
 #include <linux/if_bridge.h>
 #include <linux/if_vlan.h>
 #include "icssm_prueth.h"
+#include "../icssg/icss_iep.h"
 
 /* set PRU firmware statistics */
 void icssm_emac_set_stats(struct prueth_emac *emac,
@@ -221,6 +222,27 @@ icssm_emac_get_eth_mac_stats(struct net_device *ndev,
 	mac_stats->MultipleCollisionFrames = pstats.multi_coll;
 }
 
+static int icssm_emac_get_ts_info(struct net_device *ndev,
+				  struct kernel_ethtool_ts_info *info)
+{
+	struct prueth_emac *emac = netdev_priv(ndev);
+
+	if ((PRUETH_IS_EMAC(emac->prueth) && !emac->emac_ptp_tx_irq))
+		return ethtool_op_get_ts_info(ndev, info);
+
+	info->so_timestamping =
+		SOF_TIMESTAMPING_TX_HARDWARE |
+		SOF_TIMESTAMPING_RX_HARDWARE |
+		SOF_TIMESTAMPING_RAW_HARDWARE;
+
+	info->phc_index = icss_iep_get_ptp_clock_idx(emac->prueth->iep);
+	info->tx_types = BIT(HWTSTAMP_TX_OFF) | BIT(HWTSTAMP_TX_ON);
+	info->rx_filters = BIT(HWTSTAMP_FILTER_NONE) |
+				BIT(HWTSTAMP_FILTER_PTP_V2_EVENT);
+
+	return 0;
+}
+
 /* Ethtool support for EMAC adapter */
 const struct ethtool_ops emac_ethtool_ops = {
 	.get_drvinfo = icssm_emac_get_drvinfo,
@@ -233,5 +255,6 @@ const struct ethtool_ops emac_ethtool_ops = {
 	.get_regs = icssm_emac_get_regs,
 	.get_rmon_stats = icssm_emac_get_rmon_stats,
 	.get_eth_mac_stats = icssm_emac_get_eth_mac_stats,
+	.get_ts_info = icssm_emac_get_ts_info,
 };
 EXPORT_SYMBOL_GPL(emac_ethtool_ops);

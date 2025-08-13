@@ -348,6 +348,12 @@ struct prueth_emac {
 	 */
 	spinlock_t lock;
 
+	struct sk_buff *ptp_skb[PRUETH_PTP_TS_EVENTS];
+	spinlock_t ptp_skb_lock; /* spin lock used to protect PTP */
+	int emac_ptp_tx_irq;
+	bool ptp_tx_enable;
+	bool ptp_rx_enable;
+
 	struct hrtimer tx_hrtimer;
 };
 
@@ -379,6 +385,9 @@ void icssm_parse_packet_info(struct prueth *prueth, u32 buffer_descriptor,
 int icssm_emac_rx_packet(struct prueth_emac *emac, u16 *bd_rd_ptr,
 			 struct prueth_packet_info *pkt_info,
 			 const struct prueth_queue_info *rxqueue);
+
+irqreturn_t icssm_prueth_ptp_tx_irq_handle(int irq, void *dev);
+irqreturn_t icssm_prueth_ptp_tx_irq_work(int irq, void *dev);
 
 void icssm_emac_update_hardware_stats(struct prueth_emac *emac);
 void icssm_emac_set_stats(struct prueth_emac *emac,
