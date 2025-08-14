@@ -75,6 +75,10 @@ static const char * const j721e_rev_string_map[] = {
 	"1.0", "1.1", "2.0",
 };
 
+static const char * const am62lx_rev_string_map[] = {
+	"1.0", "1.1",
+};
+
 static const char * const am62p_gpsw_rev_string_map[] = {
 	"1.0", "1.1", "1.2",
 };
@@ -131,6 +135,12 @@ k3_chipinfo_variant_to_sr(struct platform_device *pdev, unsigned int partno,
 			goto err_unknown_variant;
 		soc_dev_attr->revision = kasprintf(GFP_KERNEL, "SR%s",
 						   j721e_rev_string_map[variant]);
+		break;
+	case JTAG_ID_PARTNO_AM62LX:
+		if (variant >= ARRAY_SIZE(am62lx_rev_string_map))
+			goto err_unknown_variant;
+		soc_dev_attr->revision = kasprintf(GFP_KERNEL, "SR%s",
+						   am62lx_rev_string_map[variant]);
 		break;
 	case JTAG_ID_PARTNO_AM62PX:
 		/* Always parse AM62P variant from GP_SW1 */
