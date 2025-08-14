@@ -18,8 +18,8 @@
 	};
 
 	pmx0: pinctrl@4084000 {
-		compatible = "pinctrl-single";
-		reg = <0x00 0x4084000 0x00 0x8000>;
+		compatible = "ti,am62l-padconf";
+		reg = <0x00 0x4084000 0x00 0x24c>;
 		pinctrl-single,register-width = <32>;
 		pinctrl-single,function-mask = <0xffffffff>;
 		#pinctrl-cells = <1>;
