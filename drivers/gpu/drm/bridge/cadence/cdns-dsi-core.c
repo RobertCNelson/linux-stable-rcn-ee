@@ -627,6 +627,11 @@ static void cdns_dsi_bridge_atomic_post_disable(struct drm_bridge *bridge,
 	phy_power_off(dsi->dphy);
 	phy_exit(dsi->dphy);
 
+	dsi->phy_initialized = false;
+	dsi->link_initialized = false;
+	phy_power_off(dsi->dphy);
+	phy_exit(dsi->dphy);
+
 	pm_runtime_put(dsi->base.dev);
 }
 
@@ -748,6 +753,19 @@ static void cdns_dsi_bridge_atomic_pre_enable(struct drm_bridge *bridge,
 
 	cdns_dsi_init_link(dsi);
 	cdns_dsi_hs_init(dsi);
+
+	/*
+	 * Now that the DSI Link and DSI Phy are initialized,
+	 * wait for the CLK and Data Lanes to be ready.
+	 */
+	tmp = CLK_LANE_RDY;
+	for (int i = 0; i < nlanes; i++)
+		tmp |= DATA_LANE_RDY(i);
+
+	if (readl_poll_timeout(dsi->regs + MCTL_MAIN_STS, status,
+			       (tmp == (status & tmp)), 100, 500000))
+		dev_err(dsi->base.dev,
+			"Timed Out: DSI-DPhy Clock and Data Lanes not ready.\n");
 
 	/*
 	 * Now that the DSI Link and DSI Phy are initialized,

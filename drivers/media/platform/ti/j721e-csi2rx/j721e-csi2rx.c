@@ -812,9 +812,13 @@ static void ti_csi2rx_dma_callback(void *param)
 	ti_csi2rx_dma_submit_pending(ctx);
 
 	if (list_empty(&dma->submitted)) {
-		if (ti_csi2rx_drain_dma(ctx))
-			dev_warn(ctx->csi->dev,
-				"DMA drain failed on one of the transactions\n");
+		if (ti_csi2rx_start_dma(ctx, buf)) {
+			dev_err(ctx->csi->dev, "Failed to queue the next buffer for DMA\n");
+			list_del(&buf->list);
+			vb2_buffer_done(&buf->vb.vb2_buf, VB2_BUF_STATE_ERROR);
+		} else {
+			list_move_tail(&buf->list, &dma->submitted);
+		}
 	}
 	spin_unlock_irqrestore(&dma->lock, flags);
 }
