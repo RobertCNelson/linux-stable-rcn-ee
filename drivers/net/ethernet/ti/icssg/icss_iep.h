@@ -48,7 +48,7 @@ enum {
 };
 
 enum iep_revision {
-	IEP_REV_V1_0 = 0,
+	IEP_REV_V1_0 = 1,
 	IEP_REV_V2_1
 };
 
