@@ -14,6 +14,7 @@
 #include <linux/list.h>
 #include <linux/if_vlan.h>
 #include <linux/if_hsr.h>
+#include <net/lredev.h>
 
 /* Time constants as specified in the HSR specification (IEC-62439-3 2010)
  * Table 8.
@@ -194,6 +195,8 @@ struct hsr_priv {
 	struct timer_list	announce_proxy_timer;
 	struct timer_list	prune_timer;
 	struct timer_list	prune_proxy_timer;
+	struct lre_stats	lre_stats;    /* lre interface stats */
+
 	int announce_count;
 	u16 sequence_nr;
 	u16 sup_sequence_nr;	/* For HSRv1 separate seq_nr for supervision */
@@ -210,12 +213,39 @@ struct hsr_priv {
 	bool fwd_offloaded;	/* Forwarding offloaded to HW */
 	bool redbox;            /* Device supports HSR RedBox */
 	unsigned char		macaddress_redbox[ETH_ALEN];
+	/* Below are used when SV frames are to be sent with VLAN tag */
+	u8 use_vlan_for_sv;
+	u16 sv_frame_vid;
+	u8 sv_frame_dei;
+	u8 sv_frame_pcp;
+	/* To enable/disable SV frame transmission */
+	u8 disable_sv_frame;
+	/* value of hsr mode */
+	enum iec62439_3_hsr_modes hsr_mode;
+	/* PRP Transparent Reception */
+	enum iec62439_3_tr_modes prp_tr;
+	/* Duplicate discard mode */
+	enum iec62439_3_dd_modes dd_mode;
+	/* Clear Node Table command */
+	enum iec62439_3_clear_nt_cmd clear_nt_cmd;
+	u32 dlrmt;	/* duplicate list reside max time */
 	unsigned char		sup_multicast_addr[ETH_ALEN] __aligned(sizeof(u16));
 				/* Align to u16 boundary to avoid unaligned access
 				 * in ether_addr_equal
 				 */
 #ifdef	CONFIG_DEBUG_FS
 	struct dentry *node_tbl_root;
+#endif
+#ifdef	CONFIG_PROC_FS
+	struct proc_dir_entry *dir;
+	struct proc_dir_entry *hsr_mode_file;
+	struct proc_dir_entry *dd_mode_file;
+	struct proc_dir_entry *prp_tr_file;
+	struct proc_dir_entry *clear_nt_file;
+	struct proc_dir_entry *dlrmt_file;
+	struct proc_dir_entry *lre_stats_file;
+	struct proc_dir_entry *node_table_file;
+	struct proc_dir_entry *disable_sv_file;
 #endif
 };
 
@@ -292,4 +322,28 @@ static inline void hsr_debugfs_remove_root(void)
 {}
 #endif
 
+#ifdef	CONFIG_PROC_FS
+int hsr_create_procfs(struct hsr_priv *hsr, struct net_device *ndev);
+void hsr_remove_procfs(struct hsr_priv *hsr, struct net_device *ndev);
+#else
+static inline int hsr_create_procfs(struct hsr_priv *hsr,
+				    struct net_device *ndev)
+{
+	return 0;
+}
+
+static inline void hsr_remove_procfs(struct hsr_priv *hsr,
+				     struct net_device *ndev)
+{}
+#endif
+
+int hsr_lredev_attr_set(struct hsr_priv *hsr,
+			struct lredev_attr *attr);
+int hsr_lredev_attr_get(struct hsr_priv *hsr,
+			struct lredev_attr *attr);
+int hsr_lredev_get_node_table(struct hsr_priv *hsr,
+			      struct lre_node_table_entry table[],
+			      int size);
+int  hsr_lredev_get_lre_stats(struct hsr_priv *hsr,
+			      struct lre_stats *stats);
 #endif /*  __HSR_PRIVATE_H */

@@ -1789,6 +1789,9 @@ enum {
 					 * HSR. For example PRP.
 					 */
 	IFLA_HSR_INTERLINK,		/* HSR interlink network device */
+	IFLA_HSR_SV_VID,                /* Supervision frames VLAN ID */
+	IFLA_HSR_SV_DEI,                /* Supervision frames VLAN DEI */
+	IFLA_HSR_SV_PCP,                /* Supervision frames VLAN PCP */
 	__IFLA_HSR_MAX,
 };
 

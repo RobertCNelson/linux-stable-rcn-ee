@@ -111,9 +111,142 @@ int hsr_get_max_mtu(struct hsr_priv *hsr)
 
 	if (mtu_max < HSR_HLEN)
 		return 0;
-	return mtu_max - HSR_HLEN;
+
+	/* For offloaded keep the mtu same as ETH_DATA_LEN as
+	 * h/w is expected to extend the frame to accommodate RCT
+	 * or TAG
+	 */
+	if (!hsr->fwd_offloaded)
+		return mtu_max - HSR_HLEN;
+
+	return mtu_max;
 }
 
+int hsr_lredev_attr_get(struct hsr_priv *hsr, struct lredev_attr *attr)
+{
+	struct hsr_port *port_a = hsr_port_get_hsr(hsr, HSR_PT_SLAVE_A);
+	struct net_device *slave_a_dev;
+
+	if (!port_a)
+		return -EINVAL;
+
+	slave_a_dev = port_a->dev;
+	if (slave_a_dev && slave_a_dev->lredev_ops &&
+	    slave_a_dev->lredev_ops->lredev_attr_get)
+		return slave_a_dev->lredev_ops->lredev_attr_get(slave_a_dev,
+								attr);
+	return -EINVAL;
+}
+
+int hsr_lredev_attr_set(struct hsr_priv *hsr, struct lredev_attr *attr)
+{
+	struct hsr_port *port_a = hsr_port_get_hsr(hsr, HSR_PT_SLAVE_A);
+	struct net_device *slave_a_dev;
+
+	if (!port_a)
+		return -EINVAL;
+
+	slave_a_dev = port_a->dev;
+	if (slave_a_dev && slave_a_dev->lredev_ops &&
+	    slave_a_dev->lredev_ops->lredev_attr_set)
+		return slave_a_dev->lredev_ops->lredev_attr_set(slave_a_dev,
+								attr);
+	return -EINVAL;
+}
+
+static int _hsr_lredev_get_node_table(struct hsr_priv *hsr,
+				      struct lre_node_table_entry table[],
+				      int size)
+{
+	struct hsr_node *node;
+	int i = 0;
+
+	rcu_read_lock();
+
+	list_for_each_entry_rcu(node, &hsr->node_db, mac_list) {
+		if (hsr_addr_is_self(hsr, node->macaddress_A))
+			continue;
+		/* SANs are not shown as part of Node Table */
+		if (node->san_a || node->san_b)
+			continue;
+		memcpy(&table[i].mac_address[0],
+		       &node->macaddress_A[0], ETH_ALEN);
+		table[i].time_last_seen_a = node->time_in[HSR_PT_SLAVE_A];
+		table[i].time_last_seen_b = node->time_in[HSR_PT_SLAVE_B];
+		if (hsr->prot_version == PRP_V1)
+			table[i].node_type = IEC62439_3_DANP;
+		else if (hsr->prot_version <= HSR_V1)
+			table[i].node_type = IEC62439_3_DANH;
+		else
+			continue;
+		i++;
+	}
+	rcu_read_unlock();
+
+	return i;
+}
+
+int hsr_lredev_get_node_table(struct hsr_priv *hsr,
+			      struct lre_node_table_entry table[],
+			      int size)
+{
+	struct hsr_port *port_a = hsr_port_get_hsr(hsr, HSR_PT_SLAVE_A);
+	struct net_device *slave_a_dev;
+	int ret = -EINVAL;
+
+	if (!port_a)
+		return ret;
+
+	if (!hsr->fwd_offloaded)
+		return _hsr_lredev_get_node_table(hsr, table, size);
+
+	slave_a_dev = port_a->dev;
+
+	if (slave_a_dev && slave_a_dev->lredev_ops &&
+	    slave_a_dev->lredev_ops->lredev_get_node_table)
+		ret =
+		slave_a_dev->lredev_ops->lredev_get_node_table(slave_a_dev,
+							       table,
+							       size);
+	return ret;
+}
+
+static int hsr_set_sv_frame_vid(struct hsr_priv *hsr, u16 vid)
+{
+	struct hsr_port *port_a = hsr_port_get_hsr(hsr, HSR_PT_SLAVE_A);
+	struct net_device *slave_a_dev;
+	int ret = -EINVAL;
+
+	if (!port_a)
+		return ret;
+
+	slave_a_dev = port_a->dev;
+
+	/* TODO can we use vlan_vid_add() here?? */
+	if (slave_a_dev && slave_a_dev->lredev_ops &&
+	    slave_a_dev->lredev_ops->lredev_set_sv_vlan_id)
+		slave_a_dev->lredev_ops->lredev_set_sv_vlan_id(slave_a_dev,
+							       vid);
+	return 0;
+}
+
+int hsr_lredev_get_lre_stats(struct hsr_priv *hsr, struct lre_stats *stats)
+{
+	struct hsr_port *port_a = hsr_port_get_hsr(hsr, HSR_PT_SLAVE_A);
+	struct net_device *slave_a_dev;
+	int ret = -EINVAL;
+
+	if (!port_a)
+		return ret;
+
+	slave_a_dev = port_a->dev;
+
+	if (slave_a_dev && slave_a_dev->lredev_ops &&
+	    slave_a_dev->lredev_ops->lredev_get_stats)
+		ret =
+		slave_a_dev->lredev_ops->lredev_get_stats(slave_a_dev, stats);
+	return ret;
+}
 static int hsr_dev_change_mtu(struct net_device *dev, int new_mtu)
 {
 	struct hsr_priv *hsr;
@@ -455,10 +588,11 @@ done:
 	rcu_read_unlock();
 }
 
-void hsr_del_ports(struct hsr_priv *hsr)
+void hsr_del_ports(struct hsr_priv *hsr, struct net_device *hsr_dev)
 {
 	struct hsr_port *port;
 
+	hsr_remove_procfs(hsr, hsr_dev);
 	port = hsr_port_get_hsr(hsr, HSR_PT_SLAVE_A);
 	if (port)
 		hsr_del_port(port);
@@ -685,7 +819,9 @@ static const unsigned char def_multicast_addr[ETH_ALEN] __aligned(2) = {
 
 int hsr_dev_finalize(struct net_device *hsr_dev, struct net_device *slave[2],
 		     struct net_device *interlink, unsigned char multicast_spec,
-		     u8 protocol_version, struct netlink_ext_ack *extack)
+		     u8 protocol_version, struct netlink_ext_ack *extack,
+		     bool sv_vlan_tag_needed, unsigned short vid,
+		     unsigned char pcp, unsigned char dei)
 {
 	bool unregister = false;
 	struct hsr_priv *hsr;
@@ -706,8 +842,10 @@ int hsr_dev_finalize(struct net_device *hsr_dev, struct net_device *slave[2],
 		 */
 		hsr->net_id = PRP_LAN_ID << 1;
 		hsr->proto_ops = &prp_ops;
+		hsr->dd_mode = IEC62439_3_DD;
 	} else {
 		hsr->proto_ops = &hsr_ops;
+		hsr->hsr_mode = IEC62439_3_HSR_MODE_H;
 	}
 
 	/* Make sure we recognize frames from ourselves in hsr_rcv() */
@@ -722,7 +860,8 @@ int hsr_dev_finalize(struct net_device *hsr_dev, struct net_device *slave[2],
 	hsr->sup_sequence_nr = HSR_SUP_SEQNR_START;
 
 	timer_setup(&hsr->announce_timer, hsr_announce, 0);
-	timer_setup(&hsr->prune_timer, hsr_prune_nodes, 0);
+	if (!hsr->fwd_offloaded)
+		timer_setup(&hsr->prune_timer, hsr_prune_nodes, 0);
 	timer_setup(&hsr->prune_proxy_timer, hsr_prune_proxy_nodes, 0);
 	timer_setup(&hsr->announce_proxy_timer, hsr_proxy_announce, 0);
 
@@ -730,7 +869,11 @@ int hsr_dev_finalize(struct net_device *hsr_dev, struct net_device *slave[2],
 	hsr->sup_multicast_addr[ETH_ALEN - 1] = multicast_spec;
 
 	hsr->prot_version = protocol_version;
-
+	/* update vlan tag information for SV frames */
+	hsr->use_vlan_for_sv = sv_vlan_tag_needed;
+	hsr->sv_frame_vid = vid;
+	hsr->sv_frame_dei = dei;
+	hsr->sv_frame_pcp = pcp;
 	/* Make sure the 1st call to netif_carrier_on() gets through */
 	netif_carrier_off(hsr_dev);
 
@@ -772,16 +915,45 @@ int hsr_dev_finalize(struct net_device *hsr_dev, struct net_device *slave[2],
 			  jiffies + msecs_to_jiffies(PRUNE_PROXY_PERIOD));
 	}
 
+	/* For LRE rx offload, pruning is expected to happen
+	 * at the hardware or firmware . So don't do this in software
+	 */
+	if (!hsr->fwd_offloaded)
+		mod_timer(&hsr->prune_timer,
+			  jiffies + msecs_to_jiffies(PRUNE_PERIOD));
+	/* for offloaded case, expect both slaves have the
+	 * same MAC address configured. If not fail.
+	 */
+	if (hsr->fwd_offloaded &&
+	    !ether_addr_equal(slave[0]->dev_addr,
+			      slave[1]->dev_addr)) {
+		netdev_err(hsr_dev,
+			   "Slave's MAC addr must be same. So change it\n");
+		res = -EINVAL;
+		goto err_add_slaves;
+	}
+
 	hsr_debugfs_init(hsr, hsr_dev);
 	mod_timer(&hsr->prune_timer, jiffies + msecs_to_jiffies(PRUNE_PERIOD));
 
-	return 0;
+	res = hsr_create_procfs(hsr, hsr_dev);
+	if (res)
+		goto err_add_slaves;
 
+	if (hsr->use_vlan_for_sv)
+		res = hsr_set_sv_frame_vid(hsr, hsr->sv_frame_vid);
+
+	if (res)
+		goto err_procfs;
+
+	return 0;
+err_procfs:
+	hsr_remove_procfs(hsr, hsr_dev);
 err_unregister:
-	hsr_del_ports(hsr);
+	hsr_del_ports(hsr, hsr_dev);
 err_add_master:
 	hsr_del_self_node(hsr);
-
+err_add_slaves:
 	if (unregister)
 		unregister_netdevice(hsr_dev);
 	return res;

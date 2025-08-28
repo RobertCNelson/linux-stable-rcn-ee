@@ -13,11 +13,13 @@
 #include <linux/netdevice.h>
 #include "hsr_main.h"
 
-void hsr_del_ports(struct hsr_priv *hsr);
+void hsr_del_ports(struct hsr_priv *hsr, struct net_device *hsr_dev);
 void hsr_dev_setup(struct net_device *dev);
 int hsr_dev_finalize(struct net_device *hsr_dev, struct net_device *slave[2],
 		     struct net_device *interlink, unsigned char multicast_spec,
-		     u8 protocol_version, struct netlink_ext_ack *extack);
+		     u8 protocol_version, struct netlink_ext_ack *extack,
+		     bool sv_vlan_tag_needed, unsigned short vid,
+		     unsigned char pcp, unsigned char cfi);
 void hsr_check_carrier_and_operstate(struct hsr_priv *hsr);
 int hsr_get_max_mtu(struct hsr_priv *hsr);
 #endif /* __HSR_DEVICE_H */

@@ -198,9 +198,13 @@ struct sk_buff *prp_get_untagged_frame(struct hsr_frame_info *frame,
 {
 	if (!frame->skb_std) {
 		if (frame->skb_prp) {
-			/* trim the skb by len - HSR_HLEN to exclude RCT */
-			skb_trim(frame->skb_prp,
-				 frame->skb_prp->len - HSR_HLEN);
+			if (!port->hsr->fwd_offloaded) {
+				/* trim the skb by
+				 * len - HSR_HLEN to exclude RCT
+				 */
+				skb_trim(frame->skb_prp,
+					 frame->skb_prp->len - HSR_HLEN);
+			}
 			frame->skb_std =
 				__pskb_copy(frame->skb_prp,
 					    skb_headroom(frame->skb_prp),
@@ -386,14 +390,20 @@ struct sk_buff *prp_create_tagged_frame(struct hsr_frame_info *frame,
 	return prp_fill_rct(skb, frame, port);
 }
 
-static void hsr_deliver_master(struct sk_buff *skb, struct net_device *dev,
+static void hsr_deliver_master(struct sk_buff *skb, struct hsr_port *port,
 			       struct hsr_node *node_src)
 {
+	struct net_device *dev = port->dev;
 	bool was_multicast_frame;
 	int res, recv_len;
 
 	was_multicast_frame = (skb->pkt_type == PACKET_MULTICAST);
-	hsr_addr_subst_source(node_src, skb);
+	/* For LRE offloaded case, assume same MAC address is on both
+	 * interfaces of the remote node and hence no need to substitute
+	 * the source MAC address.
+	 */
+	if (!port->hsr->fwd_offloaded)
+		hsr_addr_subst_source(node_src, skb);
 	skb_pull(skb, ETH_HLEN);
 	recv_len = skb->len;
 	res = netif_rx(skb);
@@ -410,7 +420,8 @@ static void hsr_deliver_master(struct sk_buff *skb, struct net_device *dev,
 static int hsr_xmit(struct sk_buff *skb, struct hsr_port *port,
 		    struct hsr_frame_info *frame)
 {
-	if (frame->port_rcv->type == HSR_PT_MASTER) {
+	if (!port->hsr->fwd_offloaded &&
+	    frame->port_rcv->type == HSR_PT_MASTER) {
 		hsr_addr_subst_dest(frame->node_src, skb, port);
 
 		/* Address substitution (IEC62439-3 pp 26, 50): replace mac
@@ -533,15 +544,18 @@ static void hsr_forward_do(struct hsr_frame_info *frame)
 			continue;
 
 		/* Don't send frame over port where it has been sent before.
-		 * Also for SAN, this shouldn't be done.
+		 * Also if rx LRE is offloaded, hardware does duplication
+		 * detection and discard and send only one copy to the upper
+		 * device and thus discard duplicate detection. For PRP, frame
+		 * could be from a SAN for which bypass duplicate discard here.
 		 */
-		if (!frame->is_from_san &&
+		if (!port->hsr->fwd_offloaded && !frame->is_from_san &&
 		    hsr->proto_ops->register_frame_out &&
 		    hsr->proto_ops->register_frame_out(port, frame))
 			continue;
 
 		if (frame->is_supervision && port->type == HSR_PT_MASTER &&
-		    !frame->is_proxy_supervision) {
+		    !frame->is_proxy_supervision && !port->hsr->fwd_offloaded) {
 			hsr_handle_sup_frame(frame);
 			continue;
 		}
@@ -566,7 +580,7 @@ static void hsr_forward_do(struct hsr_frame_info *frame)
 
 		skb->dev = port->dev;
 		if (port->type == HSR_PT_MASTER) {
-			hsr_deliver_master(skb, port->dev, frame->node_src);
+			hsr_deliver_master(skb, port, frame->node_src);
 		} else {
 			if (!hsr_xmit(skb, port, frame))
 				if (port->type == HSR_PT_SLAVE_A ||
@@ -687,10 +701,24 @@ static int fill_frame_info(struct hsr_frame_info *frame,
 	if (port->type == HSR_PT_INTERLINK)
 		n_db = &hsr->proxy_node_db;
 
-	frame->node_src = hsr_get_node(port, n_db, skb,
-				       frame->is_supervision, port->type);
-	if (!frame->node_src)
-		return -1; /* Unknown node and !is_supervision, or no mem */
+	/* When offloaded, don't expect Supervision frame which
+	 * is terminated at h/w or f/w that offload the LRE
+	 */
+	if (frame->is_supervision && hsr->fwd_offloaded &&
+	    port->type != HSR_PT_MASTER)
+		return -1;
+
+	/* For Offloaded case, there is no need for node list since
+	 * firmware/hardware implements LRE function.
+	 */
+	if (!hsr->fwd_offloaded) {
+		frame->node_src = hsr_get_node(port, n_db, skb,
+					       frame->is_supervision,
+					       port->type);
+		/* Unknown node and !is_supervision, or no mem */
+		if (!frame->node_src)
+			return -1;
+	}
 
 	ethhdr = (struct ethhdr *)skb_mac_header(skb);
 	frame->is_vlan = false;
@@ -728,8 +756,9 @@ void hsr_forward_skb(struct sk_buff *skb, struct hsr_port *port)
 	rcu_read_lock();
 	if (fill_frame_info(&frame, skb, port) < 0)
 		goto out_drop;
-
-	hsr_register_frame_in(frame.node_src, port, frame.sequence_nr);
+	/* No need to register frame when rx offload is supported */
+	if (!port->hsr->fwd_offloaded)
+		hsr_register_frame_in(frame.node_src, port, frame.sequence_nr);
 	hsr_forward_do(&frame);
 	rcu_read_unlock();
 	/* Gets called for ingress frames as well as egress from master port.
