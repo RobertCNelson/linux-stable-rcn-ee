@@ -119,6 +119,8 @@ struct prueth_queue_info {
  */
 struct prueth_packet_info {
 	bool start_offset;
+	/* indicate whether Link local packet has HSR tag or not */
+	bool ll_has_no_hsr_tag;
 	bool shadow;
 	unsigned int port;
 	unsigned int length;

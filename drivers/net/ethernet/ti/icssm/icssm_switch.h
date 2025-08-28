@@ -55,7 +55,8 @@
  *				address found in FDB). For switch only.
  * 8		RED_INFO	indicate whether the packet has redundancy
  *				tag (HSR/PRP).
- * 13		More		"More" bit indicating that there are more blocks
+ * 13		LinkLocal	indicates that Link local packet has HSR tag
+ *				or not.
  * 14		Shadow		indicates that "index" is pointing into shadow
  *				buffer
  * 15		TimeStamp	indicates that this packet has time stamp in
@@ -92,6 +93,9 @@
 
 #define PRUETH_BD_RED_PKT_MASK	        BIT(8)
 #define PRUETH_BD_RED_PKT		8
+
+#define	PRUETH_LL_HAS_NO_HSRTAG_MASK	BIT(13)
+#define	PRUETH_LL_HAS_NO_HSRTAG_SHIFT	13
 
 #define	PRUETH_BD_SHADOW_MASK		BIT(14)
 #define	PRUETH_BD_SHADOW_SHIFT		14
