@@ -344,11 +344,13 @@ enum pruss_device {
  * @driver_data: PRU Ethernet device name
  * @fw_pru: firmware names to be used for PRUSS ethernet usecases
  * @fw_rev: Firmware revision identifier
+ * @support_switch: boolean to indicate if switch is enabled
  */
 struct prueth_private_data {
 	enum pruss_device driver_data;
 	const struct prueth_firmware fw_pru[PRUSS_NUM_PRUS];
 	enum fw_revision fw_rev;
+	bool support_switch;
 };
 
 struct nsp_counter {
@@ -403,6 +405,8 @@ struct prueth_emac {
 	bool ptp_rx_enable;
 
 	struct hrtimer tx_hrtimer;
+	int offload_fwd_mark;
+
 };
 
 struct prueth {
@@ -433,8 +437,11 @@ struct prueth {
 	size_t ocmc_ram_size;
 	struct mutex mlock; /* serialize access */
 	u8 emac_configured;
+	u8 br_members;
 	u8 base_mac[ETH_ALEN];
 };
+
+extern const struct prueth_queue_desc queue_descs[][NUM_QUEUES];
 
 extern const struct ethtool_ops emac_ethtool_ops;
 
