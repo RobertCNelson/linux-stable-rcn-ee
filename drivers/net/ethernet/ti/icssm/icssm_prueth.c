@@ -935,6 +935,7 @@ static int icssm_prueth_tx_enqueue(struct prueth_emac *emac,
 	u16 bd_rd_ptr_other_port;
 	struct ethhdr *ethhdr;
 	bool is_vlan = false;
+	bool link_up = false;
 	int pkt_block_size;
 	void __iomem *sram;
 	void __iomem *dram;
@@ -946,6 +947,18 @@ static int icssm_prueth_tx_enqueue(struct prueth_emac *emac,
 	u8 *hdr;
 
 	other_emac = emac->prueth->emac[(emac->port_id ^ 3) - 1];
+
+	/* TX Optimization
+	 * As part of TX optimization, we have common queues which
+	 * are accessed by both PRU's inorder to avoid double copy.
+	 * It is very important to maintain synchronization of
+	 * pointers across both PRU's in order to avoid queue corruption
+	 * and non aligned access.
+	 * Since the queues are common for both PRU's it is mandatory to
+	 * update the pointers of both PRU's in order to maintain the sync.
+	 */
+	if (PRUETH_IS_LRE(prueth) && (emac->link || other_emac->link))
+		link_up = true;
 
 	if (!PRUETH_IS_EMAC(prueth))
 		dram = prueth->mem[PRUETH_MEM_DRAM1].va;
@@ -990,7 +1003,7 @@ static int icssm_prueth_tx_enqueue(struct prueth_emac *emac,
 	}
 
 	/* HSR PRP Tx Optimization: Calculate free blocks for Other port */
-	if (PRUETH_IS_LRE(prueth) && other_emac->link) {
+	if (PRUETH_IS_LRE(prueth) && link_up) {
 		queue_desc_other_port = emac->tx_queue_descs_other_port +
 					queue_id;
 		bd_rd_ptr_other_port = readw(&queue_desc_other_port->rd_ptr);
@@ -1180,7 +1193,7 @@ static int icssm_prueth_tx_enqueue(struct prueth_emac *emac,
 	/* Tx optimization - update the write pointer in
 	 * queue descriptor of other port
 	 */
-	if (PRUETH_IS_LRE(prueth) && other_emac->link)
+	if (PRUETH_IS_LRE(prueth) && link_up)
 		writew(update_wr_ptr, &queue_desc_other_port->wr_ptr);
 
 	return 0;
