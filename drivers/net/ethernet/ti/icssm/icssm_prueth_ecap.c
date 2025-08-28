@@ -87,7 +87,12 @@ static int icssm_prueth_ecap_config_pacing(struct prueth_emac *emac,
 		/* disable pacing */
 		writeb_relaxed(val, sram + pacing_ctrl);
 		/* Timeout separate */
-		ecap->timeout[port] = new_timeout_val;
+		if (PRUETH_IS_SWITCH(prueth)) {
+			ecap->timeout[PRUETH_MAC0] = new_timeout_val;
+			ecap->timeout[PRUETH_MAC1] = new_timeout_val;
+		} else {
+			ecap->timeout[port] = new_timeout_val;
+		}
 		return 0;
 	}
 
@@ -102,7 +107,24 @@ static int icssm_prueth_ecap_config_pacing(struct prueth_emac *emac,
 		/* For EMAC set timeout for specific port and for
 		 * LRE for both ports
 		 */
-		if (PRUETH_IS_EMAC(prueth)) {
+		if (PRUETH_IS_SWITCH(prueth)) {
+			offsets = &ecap->int_pacing_offsets[PRUETH_MAC0];
+			writel_relaxed(new_timeout_val *
+				       NSEC_PER_USEC / ECAP_TICK_NSEC,
+				       sram + offsets->rx_int_pacing_exp);
+			writel_relaxed(INTR_PAC_PREV_TS_RESET_VAL,
+				       sram + offsets->rx_int_pacing_prev);
+			ecap->timeout[PRUETH_MAC0] = new_timeout_val;
+
+			offsets = &ecap->int_pacing_offsets[PRUETH_MAC1];
+			writel_relaxed(new_timeout_val *
+				       NSEC_PER_USEC / ECAP_TICK_NSEC,
+				       sram + offsets->rx_int_pacing_exp);
+			writel_relaxed(INTR_PAC_PREV_TS_RESET_VAL,
+				       sram + offsets->rx_int_pacing_prev);
+			ecap->timeout[PRUETH_MAC1] = new_timeout_val;
+
+		} else if (PRUETH_IS_EMAC(prueth)) {
 			if (!port) {
 				offsets =
 					&ecap->int_pacing_offsets[PRUETH_MAC0];
@@ -129,7 +151,19 @@ static int icssm_prueth_ecap_config_pacing(struct prueth_emac *emac,
 		}
 	} else {
 		/* update */
-		if (PRUETH_IS_EMAC(prueth)) {
+		if (PRUETH_IS_SWITCH(prueth)) {
+			offsets = &ecap->int_pacing_offsets[PRUETH_MAC0];
+			writel_relaxed(new_timeout_val *
+				       NSEC_PER_USEC / ECAP_TICK_NSEC,
+				       sram + offsets->rx_int_pacing_exp);
+			ecap->timeout[PRUETH_MAC0] = new_timeout_val;
+
+			offsets = &ecap->int_pacing_offsets[PRUETH_MAC1];
+			writel_relaxed(new_timeout_val *
+				       NSEC_PER_USEC / ECAP_TICK_NSEC,
+				       sram + offsets->rx_int_pacing_exp);
+			ecap->timeout[PRUETH_MAC1] = new_timeout_val;
+		} else if (PRUETH_IS_EMAC(prueth)) {
 			if (!port) {
 				offsets =
 					&ecap->int_pacing_offsets[PRUETH_MAC0];
@@ -164,6 +198,16 @@ static int icssm_prueth_ecap_config_pacing(struct prueth_emac *emac,
 static void icssm_prueth_ecap_init(struct prueth_emac *emac)
 {
 	struct prueth *prueth = emac->prueth;
+	struct prueth_ecap *ecap;
+
+	ecap = prueth->ecap;
+	if (PRUETH_IS_SWITCH(prueth)) {
+		/* Both ports shares the same location */
+		ecap->int_pacing_offsets[PRUETH_MAC0].rx_int_pacing_ctrl =
+			INTR_PAC_STATUS_OFFSET;
+		ecap->int_pacing_offsets[PRUETH_MAC1].rx_int_pacing_ctrl =
+			INTR_PAC_STATUS_OFFSET;
+	}
 
 	if (!prueth->emac_configured || PRUETH_IS_EMAC(prueth))
 		icssm_prueth_ecap_config_pacing(emac, 0, 0);
