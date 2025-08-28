@@ -380,6 +380,11 @@ struct prueth_emac {
 	struct phy_device *phydev;
 	struct prueth_queue_desc __iomem *rx_queue_descs;
 	struct prueth_queue_desc __iomem *tx_queue_descs;
+	/*
+	 * HSR/PRP TX optimization:
+	 * Because we need to write the packet in to both the port queues
+	 */
+	struct prueth_queue_desc __iomem *tx_queue_descs_other_port;
 	struct port_statistics stats; /* stats holder when i/f is down */
 	u32 emac_stats[ICSSM_NUM_STATS];
 	u32 lre_stats[ICSS_LRE_NUM_STATS];
@@ -418,6 +423,11 @@ struct prueth_emac {
 	int hsr_ptp_tx_irq;
 	bool ptp_tx_enable;
 	bool ptp_rx_enable;
+	/* HSR PRP Tx Optimization:
+	 * raw spin lock for locking and unlocking
+	 * Host Tx Queues for EMAC and RSTP Protocols
+	 */
+	raw_spinlock_t host_queue_lock[NUM_QUEUES];
 
 	struct hrtimer tx_hrtimer;
 	int offload_fwd_mark;
@@ -482,9 +492,17 @@ struct prueth {
 	u8 emac_configured;
 	u8 br_members;
 	u8 base_mac[ETH_ALEN];
+
+	/* HSR PRP Tx Optimization:
+	 * raw spin lock for locking and unlocking
+	 * Host Tx Queues for HSR and PRP Protocols
+	 */
+	raw_spinlock_t lre_host_queue_lock[NUM_QUEUES / 2];
 };
 
 extern const struct prueth_queue_desc queue_descs[][NUM_QUEUES];
+/* HSR PRP Tx Optimization: Queue descriptors for HSR PRP */
+extern const struct prueth_queue_desc hsr_prp_txopt_queue_descs[][NUM_QUEUES];
 
 extern const struct ethtool_ops emac_ethtool_ops;
 

@@ -159,9 +159,9 @@ static int prueth_common_icssm_emac_rx_packets(struct prueth_emac *emac,
 			used++;
 		}
 
-		/* after reading the buffer descriptor we clear it
-		 * to prevent improperly moved read pointer errors
-		 * from simply looking like old packets.
+		/* after reading the buffer descriptor do not clear it
+		 * since same buffer descriptor will be used
+		 * at forwarding side in the firmware.
 		 */
 
 		/* update read pointer in queue descriptor */
