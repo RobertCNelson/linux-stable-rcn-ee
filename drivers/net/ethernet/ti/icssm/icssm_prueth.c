@@ -29,6 +29,7 @@
 #include <net/pkt_cls.h>
 
 #include "icssm_prueth.h"
+#include "icssm_prueth_switch.h"
 #include "icssm_vlan_mcast_filter_mmap.h"
 #include "icssm_prueth_ecap.h"
 #include "../icssg/icssg_mii_rt.h"
@@ -2049,6 +2050,20 @@ static void icssm_prueth_netdev_exit(struct prueth *prueth,
 
 	netif_napi_del(&emac->napi);
 	prueth->emac[mac] = NULL;
+}
+
+bool icssm_prueth_sw_port_dev_check(const struct net_device *ndev)
+{
+	if (ndev->netdev_ops != &emac_netdev_ops)
+		return false;
+
+	if (ndev->features & NETIF_F_HW_L2FW_DOFFLOAD)
+		return true;
+
+	if (ndev->features & NETIF_F_HW_HSR_TAG_RM)
+		return true;
+
+	return false;
 }
 
 static int icssm_prueth_probe(struct platform_device *pdev)

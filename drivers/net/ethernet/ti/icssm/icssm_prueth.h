@@ -422,7 +422,12 @@ struct prueth {
 	struct prueth_emac *emac[PRUETH_NUM_MACS];
 	struct net_device *registered_netdevs[PRUETH_NUM_MACS];
 
+	struct net_device *hw_bridge_dev;
 	struct fdb_tbl *fdb_tbl;
+
+	struct notifier_block prueth_netdevice_nb;
+	struct notifier_block prueth_switchdev_nb;
+	struct notifier_block prueth_switchdev_bl_nb;
 
 	unsigned int eth_type;
 	size_t ocmc_ram_size;
