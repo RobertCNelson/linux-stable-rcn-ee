@@ -60,6 +60,20 @@ static struct prueth_fw_offsets fw_offsets_v2_1 = {
 	.iep_wrap = 0xffffffff,
 };
 
+static struct prueth_fw_offsets fw_offsets_v1_0 = {
+	.hash_mask = ICSS_LRE_V1_0_HASH_MASK,
+	.index_array_offset = ICSS_LRE_V1_0_INDEX_ARRAY_NT,
+	.bin_array_offset = ICSS_LRE_V1_0_BIN_ARRAY,
+	.nt_array_offset = ICSS_LRE_V1_0_NODE_TABLE_NEW,
+	.index_array_loc = ICSS_LRE_V1_0_INDEX_ARRAY_LOC,
+	.bin_array_loc = ICSS_LRE_V1_0_BIN_ARRAY_LOC,
+	.nt_array_loc = ICSS_LRE_V1_0_NODE_TABLE_LOC,
+	.index_array_max_entries = ICSS_LRE_V1_0_INDEX_TBL_MAX_ENTRIES,
+	.bin_array_max_entries = ICSS_LRE_V1_0_BIN_TBL_MAX_ENTRIES,
+	.nt_array_max_entries = ICSS_LRE_V1_0_NODE_TBL_MAX_ENTRIES,
+	.iep_wrap = 0xffffffff,
+};
+
 static void icssm_prueth_set_fw_offsets(struct prueth *prueth)
 {
 	/* Set VLAN/Multicast filter control and table offsets */
@@ -3196,8 +3210,13 @@ static int icssm_prueth_probe(struct platform_device *pdev)
 	prueth->fw_offsets = devm_kzalloc(dev,
 					  sizeof(struct prueth_fw_offsets),
 					  GFP_KERNEL);
-	memcpy(prueth->fw_offsets,
-	       &fw_offsets_v2_1, sizeof(struct prueth_fw_offsets));
+	if (prueth->fw_data->fw_rev == FW_REV_V1_0) {
+		memcpy(prueth->fw_offsets,
+		       &fw_offsets_v1_0, sizeof(struct prueth_fw_offsets));
+	} else {
+		memcpy(prueth->fw_offsets,
+		       &fw_offsets_v2_1, sizeof(struct prueth_fw_offsets));
+	}
 
 	eth_ports_node = of_get_child_by_name(np, "ethernet-ports");
 	if (!eth_ports_node)
@@ -3659,16 +3678,25 @@ static struct prueth_private_data am335x_prueth_pdata = {
 	.fw_pru[PRUSS_PRU0] = {
 		.fw_name[PRUSS_ETHTYPE_EMAC] =
 			"ti-pruss/am335x-pru0-prueth-fw.elf",
+		.fw_name[PRUSS_ETHTYPE_HSR] =
+			"ti-pruss/am335x-pru0-pruhsr-fw.elf",
+		.fw_name[PRUSS_ETHTYPE_PRP] =
+			"ti-pruss/am335x-pru0-pruprp-fw.elf",
 		.fw_name[PRUSS_ETHTYPE_SWITCH] =
 			"ti-pruss/am335x-pru0-prusw-fw.elf",
 	},
 	.fw_pru[PRUSS_PRU1] = {
 		.fw_name[PRUSS_ETHTYPE_EMAC] =
 			"ti-pruss/am335x-pru1-prueth-fw.elf",
+		.fw_name[PRUSS_ETHTYPE_HSR] =
+			"ti-pruss/am335x-pru1-pruhsr-fw.elf",
+		.fw_name[PRUSS_ETHTYPE_PRP] =
+			"ti-pruss/am335x-pru1-pruprp-fw.elf",
 		.fw_name[PRUSS_ETHTYPE_SWITCH] =
 			"ti-pruss/am335x-pru1-prusw-fw.elf",
 	},
 	.fw_rev = FW_REV_V1_0,
+	.support_lre = true,
 	.support_switch = true,
 };
 
@@ -3678,16 +3706,25 @@ static struct prueth_private_data am437x_prueth_pdata = {
 	.fw_pru[PRUSS_PRU0] = {
 		.fw_name[PRUSS_ETHTYPE_EMAC] =
 			"ti-pruss/am437x-pru0-prueth-fw.elf",
+		.fw_name[PRUSS_ETHTYPE_HSR] =
+			"ti-pruss/am437x-pru0-pruhsr-fw.elf",
+		.fw_name[PRUSS_ETHTYPE_PRP] =
+			"ti-pruss/am437x-pru0-pruprp-fw.elf",
 		.fw_name[PRUSS_ETHTYPE_SWITCH] =
 			"ti-pruss/am437x-pru0-prusw-fw.elf",
 	},
 	.fw_pru[PRUSS_PRU1] = {
 		.fw_name[PRUSS_ETHTYPE_EMAC] =
 			"ti-pruss/am437x-pru1-prueth-fw.elf",
+		.fw_name[PRUSS_ETHTYPE_HSR] =
+			"ti-pruss/am437x-pru1-pruhsr-fw.elf",
+		.fw_name[PRUSS_ETHTYPE_PRP] =
+			"ti-pruss/am437x-pru1-pruprp-fw.elf",
 		.fw_name[PRUSS_ETHTYPE_SWITCH] =
 			"ti-pruss/am437x-pru1-prusw-fw.elf",
 	},
 	.fw_rev = FW_REV_V1_0,
+	.support_lre = true,
 	.support_switch = true,
 };
 

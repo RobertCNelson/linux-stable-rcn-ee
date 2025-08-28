@@ -110,6 +110,18 @@
 
 #define ICSS_LRE_NODE_FREE			0x10
 /* PRU1 DMEM */
+/* Node table offsets are different for AM3/4 vs AM57/K2G, set by firmware */
+#define ICSS_LRE_V1_0_HASH_MASK                 0x3F
+#define ICSS_LRE_V1_0_INDEX_ARRAY_NT            0x60
+#define ICSS_LRE_V1_0_BIN_ARRAY                 0x1A00
+#define ICSS_LRE_V1_0_NODE_TABLE_NEW            0x1FC0
+#define ICSS_LRE_V1_0_INDEX_ARRAY_LOC           PRUETH_MEM_DRAM0
+#define ICSS_LRE_V1_0_BIN_ARRAY_LOC             PRUETH_MEM_DRAM0
+#define ICSS_LRE_V1_0_NODE_TABLE_LOC            PRUETH_MEM_SHARED_RAM
+#define ICSS_LRE_V1_0_INDEX_TBL_MAX_ENTRIES     64
+#define ICSS_LRE_V1_0_BIN_TBL_MAX_ENTRIES       128
+#define ICSS_LRE_V1_0_NODE_TBL_MAX_ENTRIES      128
+
 #define ICSS_LRE_V2_1_HASH_MASK                 0xFF
 #define ICSS_LRE_V2_1_INDEX_ARRAY_NT            0x3000
 #define ICSS_LRE_V2_1_BIN_ARRAY \
