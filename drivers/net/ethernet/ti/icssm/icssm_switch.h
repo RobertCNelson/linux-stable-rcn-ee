@@ -55,6 +55,8 @@
  *				address found in FDB). For switch only.
  * 8		RED_INFO	indicate whether the packet has redundancy
  *				tag (HSR/PRP).
+ * 10		HostRecv	indicates whether packet is consumed by host
+ *				or not.
  * 13		LinkLocal	indicates that Link local packet has HSR tag
  *				or not.
  * 14		Shadow		indicates that "index" is pointing into shadow
@@ -93,6 +95,10 @@
 
 #define PRUETH_BD_RED_PKT_MASK	        BIT(8)
 #define PRUETH_BD_RED_PKT		8
+
+/* Added for HSR Rx optimization */
+#define PRUETH_BD_HOST_RECV_MASK	BIT(10)
+#define PRUETH_BD_HOST_RECV_SHIFT	10
 
 #define	PRUETH_LL_HAS_NO_HSRTAG_MASK	BIT(13)
 #define	PRUETH_LL_HAS_NO_HSRTAG_SHIFT	13
@@ -324,13 +330,9 @@
  * Host Tx Low Priority:
  *  Port2 Q1 and  Q2 is merged and made as common queue Port1/Port2 Q4
  */
-#define P1_Q3_TXOPT_BD_OFFSET	(P1_Q2_BD_OFFSET + QUEUE_2_SIZE * BD_SIZE)
+#define P1_Q3_TXOPT_BD_OFFSET	(P0_Q4_BD_OFFSET + HOST_QUEUE_4_SIZE * BD_SIZE)
 #define P2_Q1_TXOPT_BD_OFFSET	(P1_Q3_TXOPT_BD_OFFSET +  \
 				 QUEUE_3_TXOPT_SIZE * BD_SIZE)
-#define P2_Q2_TXOPT_BD_OFFSET	(P2_Q1_TXOPT_BD_OFFSET + QUEUE_1_SIZE *  \
-					 BD_SIZE)
-#define P1_Q4_TXOPT_BD_OFFSET	(P2_Q2_TXOPT_BD_OFFSET + QUEUE_2_SIZE *  \
-					 BD_SIZE)
 #define P0_Q1_BD_OFFSET		P0_BUFFER_DESC_OFFSET
 #define P0_BUFFER_DESC_OFFSET	SRAM_START_OFFSET
 
@@ -369,14 +371,10 @@
  * Host Tx Low Priority:
  * Port2 Q1 and  Q2 is merged and made as common queue Port1/Port2 Q4
  */
-#define P1_Q3_TXOPT_BUFFER_OFFSET	(P1_Q2_BUFFER_OFFSET + QUEUE_2_SIZE *  \
-					 ICSS_BLOCK_SIZE)
+#define P1_Q3_TXOPT_BUFFER_OFFSET	(P0_Q4_BUFFER_OFFSET +	\
+					 HOST_QUEUE_4_SIZE * ICSS_BLOCK_SIZE)
 #define P2_Q1_TXOPT_BUFFER_OFFSET	(P1_Q3_TXOPT_BUFFER_OFFSET +  \
 					 QUEUE_3_TXOPT_SIZE * ICSS_BLOCK_SIZE)
-#define P2_Q2_TXOPT_BUFFER_OFFSET	(P2_Q1_TXOPT_BUFFER_OFFSET +  \
-					 QUEUE_1_SIZE * ICSS_BLOCK_SIZE)
-#define P1_Q4_TXOPT_BUFFER_OFFSET	(P2_Q2_TXOPT_BUFFER_OFFSET +  \
-					 QUEUE_2_SIZE * ICSS_BLOCK_SIZE)
 #define P0_COL_BUFFER_OFFSET	0xEE00
 #define P0_Q1_BUFFER_OFFSET	0x0000
 

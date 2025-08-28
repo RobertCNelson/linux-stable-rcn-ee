@@ -99,22 +99,20 @@ const struct prueth_queue_desc hsr_prp_txopt_queue_descs[][NUM_QUEUES] = {
 		{ .rd_ptr = P0_Q4_BD_OFFSET, .wr_ptr = P0_Q4_BD_OFFSET, },
 	},
 	[PRUETH_PORT_QUEUE_MII0] = {
-		{ .rd_ptr = P1_Q1_BD_OFFSET, .wr_ptr = P1_Q1_BD_OFFSET, },
-		{ .rd_ptr = P1_Q2_BD_OFFSET, .wr_ptr = P1_Q2_BD_OFFSET, },
+		{ .rd_ptr = P0_Q3_BD_OFFSET, .wr_ptr = P0_Q3_BD_OFFSET, },
+		{ .rd_ptr = P0_Q4_BD_OFFSET, .wr_ptr = P0_Q4_BD_OFFSET, },
 		{ .rd_ptr = P1_Q3_TXOPT_BD_OFFSET,
 			.wr_ptr = P1_Q3_TXOPT_BD_OFFSET, },
-		{ .rd_ptr = P1_Q4_TXOPT_BD_OFFSET,
-			.wr_ptr = P1_Q4_TXOPT_BD_OFFSET, },
-	},
-	[PRUETH_PORT_QUEUE_MII1] = {
 		{ .rd_ptr = P2_Q1_TXOPT_BD_OFFSET,
 			.wr_ptr = P2_Q1_TXOPT_BD_OFFSET, },
-		{ .rd_ptr = P2_Q2_TXOPT_BD_OFFSET,
-			.wr_ptr = P2_Q2_TXOPT_BD_OFFSET, },
+	},
+	[PRUETH_PORT_QUEUE_MII1] = {
+		{ .rd_ptr = P0_Q1_BD_OFFSET, .wr_ptr = P0_Q1_BD_OFFSET, },
+		{ .rd_ptr = P0_Q2_BD_OFFSET, .wr_ptr = P0_Q2_BD_OFFSET, },
 		{ .rd_ptr = P1_Q3_TXOPT_BD_OFFSET,
 			.wr_ptr = P1_Q3_TXOPT_BD_OFFSET, },
-		{ .rd_ptr = P1_Q4_TXOPT_BD_OFFSET,
-			.wr_ptr = P1_Q4_TXOPT_BD_OFFSET, },
+		{ .rd_ptr = P2_Q1_TXOPT_BD_OFFSET,
+			.wr_ptr = P2_Q1_TXOPT_BD_OFFSET, },
 	}
 };
 
@@ -1185,6 +1183,12 @@ void icssm_parse_packet_info(struct prueth *prueth, u32 buffer_descriptor,
 
 	pkt_info->ll_has_no_hsr_tag = (buffer_descriptor &
 				       PRUETH_LL_HAS_NO_HSRTAG_MASK);
+	/* HSR Rx Optimization:
+	 * Read flag from BD to indicate packet is valid or not for HOST.
+	 */
+	pkt_info->host_recv_flag = !!(buffer_descriptor &
+				      PRUETH_BD_HOST_RECV_MASK);
+
 	pkt_info->length = (buffer_descriptor & PRUETH_BD_LENGTH_MASK) >>
 			   PRUETH_BD_LENGTH_SHIFT;
 	pkt_info->broadcast = !!(buffer_descriptor & PRUETH_BD_BROADCAST_MASK);
@@ -1332,8 +1336,26 @@ int icssm_emac_rx_packet(struct prueth_emac *emac, u16 *bd_rd_ptr,
 	/* calculate new pointer in ram */
 	*bd_rd_ptr = rxqueue->buffer_desc_offset + (update_block * BD_SIZE);
 
+	/* HSR Rx Optimization
+	 * If the packet need to be just forwarded,
+	 * update read pointer(*bd_rd_ptr) and skip
+	 * processing since this is a dummy packet for HOST.
+	 */
+	if (PRUETH_IS_HSR(emac->prueth)) {
+		if (!pkt_info->host_recv_flag)
+			return 0;
+	}
+
 	/* Pkt len w/ HSR tag removed, If applicable */
 	actual_pkt_len = pkt_info->length - start_offset;
+
+	if (PRUETH_IS_HSR(emac->prueth)) {
+		/* HSR RX optimization: HSR Tag Removal Handling
+		 * Packet is sent with HSR Tag to Driver
+		 */
+		if (!start_offset && !pkt_info->timestamp)
+			actual_pkt_len -= ICSS_LRE_TAG_RCT_SIZE;
+	}
 
 	/* Need to add dummy hsr tag for PTP LL packets */
 	if (pkt_info->ll_has_no_hsr_tag)
@@ -1360,28 +1382,41 @@ int icssm_emac_rx_packet(struct prueth_emac *emac, u16 *bd_rd_ptr,
 		   (read_block * ICSS_BLOCK_SIZE);
 	src_addr += start_offset;
 
+	/* HSR RX optimization: HSR Tag Removal Handling
+	 * Packet is sent with HSR Tag to Driver
+	 */
+
+	/* Copy destination and source MAC address first */
+	memcpy(dst_addr, src_addr, PRUETH_ETH_TYPE_OFFSET);
+	src_addr += PRUETH_ETH_TYPE_OFFSET;
+	dst_addr += PRUETH_ETH_TYPE_OFFSET;
+
+	adjust_for_dummy_hsr_tag += PRUETH_ETH_TYPE_OFFSET;
+
+	/* Check for VLAN tag */
+	check_vlan_ptr = src_addr;
+	type = (*check_vlan_ptr++) << PRUETH_ETH_TYPE_UPPER_SHIFT;
+	type |= *check_vlan_ptr++;
+
+	if (type == ETH_P_8021Q) {
+		memcpy(dst_addr, src_addr, VLAN_HLEN);
+		src_addr += VLAN_HLEN;
+		dst_addr += VLAN_HLEN;
+		adjust_for_dummy_hsr_tag += VLAN_HLEN;
+	}
+
 	if (pkt_info->ll_has_no_hsr_tag) {
-		/* Copy destination and source MAC address first */
-		memcpy(dst_addr, src_addr, PRUETH_ETH_TYPE_OFFSET);
-		src_addr += PRUETH_ETH_TYPE_OFFSET;
-		dst_addr += PRUETH_ETH_TYPE_OFFSET;
-
-		adjust_for_dummy_hsr_tag += PRUETH_ETH_TYPE_OFFSET;
-
-		/* Check for VLAN tag */
-		check_vlan_ptr = src_addr;
-		type = (*check_vlan_ptr++) << PRUETH_ETH_TYPE_UPPER_SHIFT;
-		type |= *check_vlan_ptr++;
-
-		if (type == ETH_P_8021Q) {
-			memcpy(dst_addr, src_addr, VLAN_HLEN);
-			src_addr += VLAN_HLEN;
-			dst_addr += VLAN_HLEN;
-			adjust_for_dummy_hsr_tag += VLAN_HLEN;
-		}
 		/* Copy dummy HSR tag */
 		memcpy(dst_addr, dummy_hsr_tag, ICSS_LRE_TAG_RCT_SIZE);
 		dst_addr += ICSS_LRE_TAG_RCT_SIZE;
+	}
+
+	/* HSR RX optimization: HSR Tag Removal Handling
+	 * Packet is sent with HSR Tag to Driver
+	 */
+	if (PRUETH_IS_HSR(emac->prueth)) {
+		if (!start_offset && !pkt_info->timestamp)
+			src_addr += ICSS_LRE_TAG_RCT_SIZE;
 	}
 
 	/* Copy the data from PRU buffers(OCMC) to socket buffer(DRAM) */
@@ -1398,6 +1433,14 @@ int icssm_emac_rx_packet(struct prueth_emac *emac, u16 *bd_rd_ptr,
 
 		/* If applicable, account for the HSR tag removed */
 		bytes -= start_offset;
+
+		/* HSR RX optimization: HSR Tag Removal Handling
+		 * Packet is sent with HSR Tag to Driver
+		 */
+		if (PRUETH_IS_HSR(emac->prueth)) {
+			if (!start_offset && !pkt_info->timestamp)
+				bytes -= ICSS_LRE_TAG_RCT_SIZE;
+		}
 
 		/* copy non-wrapped part */
 		memcpy(dst_addr, src_addr, bytes - adjust_for_dummy_hsr_tag);

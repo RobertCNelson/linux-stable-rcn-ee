@@ -122,6 +122,10 @@ struct prueth_packet_info {
 	/* indicate whether Link local packet has HSR tag or not */
 	bool ll_has_no_hsr_tag;
 	bool shadow;
+	/* HSR RX optimization
+	 * indicates packet has to be consumed for host.
+	 */
+	bool host_recv_flag;
 	unsigned int port;
 	unsigned int length;
 	bool broadcast;

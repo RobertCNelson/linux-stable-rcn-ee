@@ -166,11 +166,9 @@ static int prueth_common_icssm_emac_rx_packets(struct prueth_emac *emac,
 
 		/* update read pointer in queue descriptor */
 		if (port == 0) {
-			writel(0, shared_ram + bd_rd_ptr);
 			writew(update_rd_ptr, &queue_desc->rd_ptr);
 			bd_rd_ptr = update_rd_ptr;
 		} else {
-			writel(0, shared_ram + bd_rd_ptr_o);
 			writew(update_rd_ptr, &queue_desc_o->rd_ptr);
 			bd_rd_ptr_o = update_rd_ptr;
 		}
