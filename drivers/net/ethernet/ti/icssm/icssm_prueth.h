@@ -454,6 +454,7 @@ struct prueth {
 	unsigned int hsr_mode;
 	unsigned int tbl_check_period;
 	unsigned int node_table_clear;
+	unsigned int node_table_clear_last_cmd;
 	unsigned int tbl_check_mask;
 	enum iec62439_3_tr_modes prp_tr_mode;
 	struct node_tbl *nt;

@@ -715,6 +715,223 @@ void icssm_prueth_lre_free_memory(struct prueth *prueth)
 	prueth->nt = NULL;
 }
 
+static int icssm_prueth_lre_attr_get(struct net_device *ndev,
+				     struct lredev_attr *attr)
+{
+	struct prueth_emac *emac = netdev_priv(ndev);
+	struct prueth *prueth = emac->prueth;
+	void __iomem *sram = prueth->mem[PRUETH_MEM_SHARED_RAM].va;
+	void __iomem *dram0 = prueth->mem[PRUETH_MEM_DRAM0].va;
+	void __iomem *dram1 = prueth->mem[PRUETH_MEM_DRAM1].va;
+	int ret = 0;
+
+	netdev_dbg(ndev, "%d:%s, id %d\n", __LINE__, __func__, attr->id);
+
+	switch (attr->id) {
+	case LREDEV_ATTR_ID_HSR_MODE:
+		if (!PRUETH_IS_HSR(prueth))
+			return -EPERM;
+		attr->mode = readl(dram0 + ICSS_LRE_HSR_MODE);
+		break;
+	case LREDEV_ATTR_ID_DD_MODE:
+		attr->dd_mode = readl(sram + ICSS_LRE_DUPLICATE_DISCARD);
+		break;
+	case LREDEV_ATTR_ID_PRP_TR:
+		if (!PRUETH_IS_PRP(prueth))
+			return -EINVAL;
+		attr->tr_mode = prueth->prp_tr_mode;
+		break;
+	case LREDEV_ATTR_ID_DLRMT:
+		attr->dl_reside_max_time =
+			readl(dram1 + ICSS_LRE_DUPLI_FORGET_TIME) * 10;
+		break;
+	case LREDEV_ATTR_ID_CLEAR_NT:
+		attr->clear_nt_cmd = prueth->node_table_clear_last_cmd;
+		break;
+	default:
+		ret = -EINVAL;
+		break;
+	}
+
+	return ret;
+}
+
+static int icssm_prueth_lre_attr_set(struct net_device *ndev,
+				     struct lredev_attr *attr)
+{
+	struct prueth_emac *emac = netdev_priv(ndev);
+	struct prueth *prueth = emac->prueth;
+	void __iomem *sram = prueth->mem[PRUETH_MEM_SHARED_RAM].va;
+	void __iomem *dram0 = prueth->mem[PRUETH_MEM_DRAM0].va;
+	void __iomem *dram1 = prueth->mem[PRUETH_MEM_DRAM1].va;
+	int ret = 0;
+
+	netdev_dbg(ndev, "%d:%s, id = %d\n", __LINE__, __func__, attr->id);
+
+	switch (attr->id) {
+	case LREDEV_ATTR_ID_HSR_MODE:
+		if (!PRUETH_IS_HSR(prueth))
+			return -EPERM;
+		prueth->hsr_mode = attr->mode;
+		writel(prueth->hsr_mode, dram0 + ICSS_LRE_HSR_MODE);
+		break;
+	case LREDEV_ATTR_ID_DD_MODE:
+		writel(attr->dd_mode, sram + ICSS_LRE_DUPLICATE_DISCARD);
+		break;
+	case LREDEV_ATTR_ID_PRP_TR:
+		if (!PRUETH_IS_PRP(prueth))
+			return -EINVAL;
+		prueth->prp_tr_mode = attr->tr_mode;
+		break;
+	case LREDEV_ATTR_ID_DLRMT:
+		/* input is in milli seconds. Firmware expects in unit
+		 * of 10 msec
+		 */
+		writel((attr->dl_reside_max_time / 10),
+		       dram1 + ICSS_LRE_DUPLI_FORGET_TIME);
+		break;
+	case LREDEV_ATTR_ID_CLEAR_NT:
+		/* need to return last cmd received for corresponding
+		 * get command. So save it
+		 */
+		prueth->node_table_clear_last_cmd = attr->clear_nt_cmd;
+		if (attr->clear_nt_cmd == IEC62439_3_CLEAR_NT)
+			prueth->node_table_clear = 1;
+		else
+			prueth->node_table_clear = 0;
+		break;
+	default:
+		ret = -EINVAL;
+		break;
+	}
+
+	return ret;
+}
+
+static int
+icssm_emac_lredev_update_node_entry(struct node_tbl_t *node,
+				    struct lre_node_table_entry table[],
+				    int j)
+{
+	u8 val, is_hsr, updated = 1;
+
+	table[j].time_last_seen_a = node->time_last_seen_a;
+	table[j].time_last_seen_b = node->time_last_seen_b;
+
+	is_hsr = node->status & ICSS_LRE_NT_REM_NODE_HSR_BIT;
+	val = (node->status & ICSS_LRE_NT_REM_NODE_TYPE_MASK) >>
+					ICSS_LRE_NT_REM_NODE_TYPE_SHIFT;
+	switch (val) {
+	case ICSS_LRE_NT_REM_NODE_TYPE_DAN:
+		if (is_hsr)
+			table[j].node_type = IEC62439_3_DANH;
+		else
+			table[j].node_type = IEC62439_3_DANP;
+		break;
+
+	case ICSS_LRE_NT_REM_NODE_TYPE_REDBOX:
+		if (is_hsr)
+			table[j].node_type = IEC62439_3_REDBOXH;
+		else
+			table[j].node_type = IEC62439_3_REDBOXP;
+		break;
+
+	case ICSS_LRE_NT_REM_NODE_TYPE_VDAN:
+		if (is_hsr)
+			table[j].node_type = IEC62439_3_VDANH;
+		else
+			table[j].node_type = IEC62439_3_VDANP;
+		break;
+	default:
+		updated = 0;
+		break;
+	}
+
+	return updated;
+}
+
+static int icssm_prueth_lre_get_node_table(struct net_device *ndev,
+					   struct lre_node_table_entry table[],
+					   int size)
+{
+	struct prueth_emac *emac = netdev_priv(ndev);
+	struct prueth *prueth = emac->prueth;
+	struct node_tbl *nt = prueth->nt;
+	struct bin_tbl_t *bin;
+	struct node_tbl_t *node;
+	int i, j = 0, updated;
+	unsigned long flags;
+
+	netdev_dbg(ndev, "%d:%s\n", __LINE__, __func__);
+
+	if (size < nt->nt_lre_cnt->lre_cnt)
+		netdev_warn(ndev,
+			    "actual table size %d is < required size %d\n",
+			    size,  nt->nt_lre_cnt->lre_cnt);
+
+	spin_lock_irqsave(&prueth->nt_lock, flags);
+	for (i = 0; i < nt->bin_array_max_entries; i++) {
+		if (nt->bin_array->bin_tbl[i].node_tbl_offset <
+		    nt->nt_array_max_entries) {
+			bin =  &nt->bin_array->bin_tbl[i];
+			if (WARN_ON(bin->node_tbl_offset >=
+					nt->nt_array_max_entries))
+				continue;
+			node =  &nt->nt_array->node_tbl[bin->node_tbl_offset];
+
+			if (!(node->entry_state & 0x1))
+				continue;
+
+			updated =
+				icssm_emac_lredev_update_node_entry(node,
+								    table, j);
+			if (updated) {
+				table[j].mac_address[0] = bin->src_mac_id[3];
+				table[j].mac_address[1] = bin->src_mac_id[2];
+				table[j].mac_address[2] = bin->src_mac_id[1];
+				table[j].mac_address[3] = bin->src_mac_id[0];
+				table[j].mac_address[4] = bin->src_mac_id[5];
+				table[j].mac_address[5] = bin->src_mac_id[4];
+				j++;
+			}
+		}
+	}
+	spin_unlock_irqrestore(&prueth->nt_lock, flags);
+
+	return j;
+}
+
+static int icssm_prueth_lre_get_lre_stats(struct net_device *ndev,
+					  struct lre_stats *stats)
+{
+	struct prueth_emac *emac = netdev_priv(ndev);
+	struct prueth *prueth = emac->prueth;
+	void __iomem *sram = prueth->mem[PRUETH_MEM_SHARED_RAM].va;
+
+	memcpy_fromio(stats, sram + ICSS_LRE_CNT_TX_A, sizeof(*stats));
+
+	return 0;
+}
+
+static int icssm_prueth_lre_set_sv_vlan_id(struct net_device *ndev, u16 vid)
+{
+	struct prueth_emac *emac = netdev_priv(ndev);
+	struct prueth *prueth = emac->prueth;
+
+	if (!PRUETH_IS_LRE(prueth))
+		return 0;
+
+	return icssm_emac_add_del_vid(emac, true, htons(ETH_P_8021Q), vid);
+}
+
+const struct lredev_ops icssm_prueth_lredev_ops = {
+	.lredev_attr_get = icssm_prueth_lre_attr_get,
+	.lredev_attr_set = icssm_prueth_lre_attr_set,
+	.lredev_get_node_table = icssm_prueth_lre_get_node_table,
+	.lredev_get_stats = icssm_prueth_lre_get_lre_stats,
+	.lredev_set_sv_vlan_id = icssm_prueth_lre_set_sv_vlan_id,
+};
+
 int icssm_prueth_lre_init_node_table(struct prueth *prueth)
 {
 	/* HSR/PRP: initialize node table when first port is up */

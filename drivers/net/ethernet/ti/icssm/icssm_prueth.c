@@ -37,6 +37,8 @@
 #include "../icssg/icss_iep.h"
 
 #define OCMC_RAM_SIZE		(SZ_64K)
+#define PRUETH_ETH_TYPE_OFFSET          12
+#define PRUETH_ETH_TYPE_UPPER_SHIFT     8
 
 #define TX_START_DELAY		0x40
 #define TX_CLK_DELAY_100M	0x6
@@ -929,6 +931,9 @@ static int icssm_prueth_tx_enqueue(struct prueth_emac *emac,
        /* update first buffer descriptor */
 	wr_buf_desc = (pktlen << PRUETH_BD_LENGTH_SHIFT) &
 		       PRUETH_BD_LENGTH_MASK;
+	if (PRUETH_IS_HSR(prueth))
+		wr_buf_desc |= BIT(PRUETH_BD_HSR_FRAME_SHIFT);
+
 	sram = prueth->mem[PRUETH_MEM_SHARED_RAM].va;
 	if (!PRUETH_IS_EMAC(prueth))
 		writel(wr_buf_desc, sram + readw(&queue_desc->wr_ptr));
@@ -947,7 +952,11 @@ static int icssm_prueth_tx_enqueue(struct prueth_emac *emac,
 void icssm_parse_packet_info(struct prueth *prueth, u32 buffer_descriptor,
 			     struct prueth_packet_info *pkt_info)
 {
-	pkt_info->start_offset = false;
+	if (PRUETH_IS_LRE(prueth))
+		pkt_info->start_offset = !!(buffer_descriptor &
+					    PRUETH_BD_START_FLAG_MASK);
+	else
+		pkt_info->start_offset = false;
 
 	pkt_info->port = (buffer_descriptor & PRUETH_BD_PORT_MASK) >>
 			 PRUETH_BD_PORT_SHIFT;
@@ -955,7 +964,11 @@ void icssm_parse_packet_info(struct prueth *prueth, u32 buffer_descriptor,
 			   PRUETH_BD_LENGTH_SHIFT;
 	pkt_info->broadcast = !!(buffer_descriptor & PRUETH_BD_BROADCAST_MASK);
 	pkt_info->error = !!(buffer_descriptor & PRUETH_BD_ERROR_MASK);
-	pkt_info->sv_frame = false;
+	if (PRUETH_IS_LRE(prueth))
+		pkt_info->sv_frame = !!(buffer_descriptor &
+					PRUETH_BD_SUP_HSR_FRAME_MASK);
+	else
+		pkt_info->sv_frame = false;
 	pkt_info->lookup_success = !!(buffer_descriptor &
 				      PRUETH_BD_LOOKUP_SUCCESS_MASK);
 	pkt_info->flood = !!(buffer_descriptor & PRUETH_BD_SW_FLOOD_MASK);
@@ -986,11 +999,21 @@ int icssm_emac_rx_packet(struct prueth_emac *emac, u16 *bd_rd_ptr,
 	bool buffer_wrapped = false;
 	void *src_addr, *dst_addr;
 	u16 start_offset = 0;
+	bool prp_rct = false;
+	u8 offset = 0, *ptr;
 	struct sk_buff *skb;
 	int pkt_block_size;
+	void *nt_dst_addr;
 	void *ocmc_ram;
+	u16 type = 0;
+	u8 macid[6];
 	u64 ts;
 
+	if (PRUETH_IS_HSR(emac->prueth))
+		start_offset = (pkt_info->start_offset ?
+				ICSS_LRE_TAG_RCT_SIZE : 0);
+	else if (PRUETH_IS_PRP(emac->prueth) && pkt_info->start_offset)
+		prp_rct = true;
 	/* the PRU firmware deals mostly in pointers already
 	 * offset into ram, we would like to deal in indexes
 	 * within the queue we are working with for code
@@ -1027,6 +1050,7 @@ int icssm_emac_rx_packet(struct prueth_emac *emac, u16 *bd_rd_ptr,
 	}
 
 	dst_addr = skb->data;
+	nt_dst_addr = dst_addr;
 
 	/* OCMC RAM is not cached and read order is not important */
 	ocmc_ram = (__force void *)emac->prueth->mem[PRUETH_MEM_OCMC].va;
@@ -1073,6 +1097,51 @@ int icssm_emac_rx_packet(struct prueth_emac *emac, u16 *bd_rd_ptr,
 		if (!pkt_info->lookup_success)
 			icssm_prueth_sw_learn_fdb(emac, skb->data + ETH_ALEN);
 	}
+	/* Check if VLAN tag is present since SV payload location will change
+	 * based on that
+	 */
+	if (PRUETH_IS_LRE(emac->prueth)) {
+		ptr = nt_dst_addr + PRUETH_ETH_TYPE_OFFSET;
+		type = (*ptr++) << PRUETH_ETH_TYPE_UPPER_SHIFT;
+		type |= *ptr++;
+		if (type == ETH_P_8021Q)
+			offset = 4;
+	}
+
+	/* TODO. The check for FW_REV_V1_0 is a workaround since
+	 * lookup of MAC address in Node table by this version of firmware
+	 * is not reliable. Once this issue is fixed in firmware, this driver
+	 * check has to be removed.
+	 */
+	if (PRUETH_IS_LRE(emac->prueth) && !pkt_info->lookup_success) {
+		if (PRUETH_IS_PRP(emac->prueth)) {
+			memcpy(macid,
+			       ((pkt_info->sv_frame) ?
+			       nt_dst_addr + LRE_SV_FRAME_OFFSET + offset :
+			       nt_dst_addr + ICSS_LRE_TAG_RCT_SIZE),
+			       ICSS_LRE_TAG_RCT_SIZE);
+
+			icssm_prueth_lre_nt_insert(emac->prueth, macid,
+						   emac->port_id,
+						   pkt_info->sv_frame,
+						   LRE_PROTO_PRP);
+
+		} else if (pkt_info->sv_frame) {
+			memcpy(macid,
+			       nt_dst_addr + LRE_SV_FRAME_OFFSET + offset,
+			       ICSS_LRE_TAG_RCT_SIZE);
+			icssm_prueth_lre_nt_insert(emac->prueth, macid,
+						   emac->port_id,
+						   pkt_info->sv_frame,
+						   LRE_PROTO_HSR);
+		}
+	}
+
+	/* For PRP, firmware always send us RCT. So skip Tag if
+	 * prp_tr_mode is IEC62439_3_TR_REMOVE_RCT
+	 */
+	if (prp_rct && emac->prueth->prp_tr_mode == IEC62439_3_TR_REMOVE_RCT)
+		actual_pkt_len -= ICSS_LRE_TAG_RCT_SIZE;
 
 	if (!pkt_info->sv_frame) {
 		skb_put(skb, actual_pkt_len);
@@ -2383,6 +2452,10 @@ static int icssm_prueth_netdev_init(struct prueth *prueth,
 
 	ndev->netdev_ops = &emac_netdev_ops;
 	ndev->ethtool_ops = &emac_ethtool_ops;
+#if IS_ENABLED(CONFIG_HSR)
+	if (fw_data->support_lre)
+		ndev->lredev_ops = &icssm_prueth_lredev_ops;
+#endif
 
 	if (PRUETH_IS_EMAC(prueth))
 		netif_napi_add(ndev, &emac->napi, icssm_emac_napi_poll);
@@ -2399,7 +2472,8 @@ static int icssm_prueth_netdev_init(struct prueth *prueth,
 		     HRTIMER_MODE_REL_PINNED);
 	emac->tx_hrtimer.function = icssm_emac_tx_timer_callback;
 
-	if (fw_data->support_switch && emac->port_id == PRUETH_PORT_MII0) {
+	if ((prueth->support_lre || fw_data->support_switch) &&
+	    emac->port_id == PRUETH_PORT_MII0) {
 		prueth->hp->ndev = ndev;
 		prueth->hp->priority = 0;
 		prueth->lp->ndev = ndev;
@@ -2764,7 +2838,7 @@ static int icssm_prueth_probe(struct platform_device *pdev)
 	/* RSTP: Packet re-order
 	 * configuring the interrupts for switch
 	 */
-	if (prueth->fw_data->support_switch) {
+	if (prueth->fw_data->support_switch || has_lre) {
 		/* need to configure interrupts per queue common for
 		 * both ports
 		 */
@@ -2788,17 +2862,25 @@ static int icssm_prueth_probe(struct platform_device *pdev)
 
 		prueth->rx_lpq_irq = of_irq_get_byname(np, "rx_lp");
 		if (prueth->rx_lpq_irq < 0) {
-			ret = prueth->rx_lpq_irq;
-			if (ret != -EPROBE_DEFER)
-				dev_err(prueth->dev, "could not get rx_lp irq\n");
-			goto free_pool;
+			if (has_lre) {
+				has_lre = false;
+			} else {
+				ret = prueth->rx_lpq_irq;
+				if (ret != -EPROBE_DEFER)
+					dev_err(prueth->dev, "could not get rx_lp irq\n");
+				goto free_pool;
+			}
 		}
 		prueth->rx_hpq_irq = of_irq_get_byname(np, "rx_hp");
 		if (prueth->rx_hpq_irq < 0) {
-			ret = prueth->rx_hpq_irq;
-			if (ret != -EPROBE_DEFER)
-				dev_err(prueth->dev, "could not get rx_hp irq\n");
-			goto free_pool;
+			if (has_lre) {
+				has_lre = false;
+			} else {
+				ret = prueth->rx_hpq_irq;
+				if (ret != -EPROBE_DEFER)
+					dev_err(prueth->dev, "could not get rx_hp irq\n");
+				goto free_pool;
+			}
 		}
 	}
 	prueth->support_lre = has_lre;

@@ -130,4 +130,6 @@ void icssm_prueth_lre_free_memory(struct prueth *prueth);
 int icssm_prueth_lre_nt_insert(struct prueth *prueth,
 			       u8 *mac, int port, int sv_frame, int proto);
 
+extern const struct lredev_ops icssm_prueth_lredev_ops;
+
 #endif /* __NET_TI_PRUETH_LRE_H */
