@@ -133,6 +133,30 @@ struct prueth_packet_info {
 #define ICSSM_NUM_STANDARD_STATS       18
 #define ICSSM_NUM_STATS      40
 
+/*If 0 and 1 bytes are 0x33 then it is a IPv6 entries*/
+#define IPV6_MAC_IDENTITY_BYTE		0x33
+/*Bit Number mask for entry*/
+#define MAC_FILTER_BIT_NUM_MASK		0x7
+/*Bit Number shift/position for entry*/
+#define MAC_FILTER_BIT_NUM_SHIFT	 5
+/*Map Index mask for creating/removing entry*/
+#define MAC_FILTER_MAP_IDX_MASK		0x1F
+
+/**
+ * @brief xor of 0, 1, 2 byte for MAC address to
+ * identify type of entry for categorization.
+ */
+enum prueth_mc_ether {
+	/**PTPv2 xor of 0,1,2 bytes*/
+	MC_FILTER_TABLE_PTP = 0,
+	/**IEEE802 xor of 0,1,2 bytes*/
+	MC_FILTER_TABLE_IEEE_802 = 4,
+	/**IPv4 xor of 0,1,2 bytes*/
+	MC_FILTER_TABLE_IPv4 = 5,
+	/**IEC_61850_GOOSE xor of 0,1,2 bytes*/
+	MC_FILTER_TABLE_IEC_61850_GOOSE = 12
+};
+
 /**
  * struct port_statistics - Statistics structure for capturing statistics
  *			    on PRUs
@@ -531,6 +555,8 @@ u64 icssm_iep_get_timestamp_cycles(struct icss_iep *iep,
 void icssm_emac_mc_filter_bin_allow(struct prueth_emac *emac, u8 hash);
 void icssm_emac_mc_filter_bin_disallow(struct prueth_emac *emac, u8 hash);
 u8 icssm_emac_get_mc_hash(u8 *mac, u8 *mask);
+void icssm_emac_mc_filter_enhanced(struct prueth_emac *emac,
+				   struct netdev_hw_addr *ha);
 
 void icssm_emac_update_hardware_stats(struct prueth_emac *emac);
 void icssm_emac_set_stats(struct prueth_emac *emac,

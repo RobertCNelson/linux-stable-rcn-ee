@@ -29,7 +29,44 @@
 #define ICSS_EMAC_FW_MULTICAST_FILTER_INIT_VAL			0xFF
 
 /* Size requirements for Multicast filtering feature */
-#define ICSS_EMAC_FW_MULTICAST_TABLE_SIZE_BYTES			       256
+/*Max number of Global entries allowed */
+#define ICSS_EMAC_FW_GLOBAL_TBL_SIZE				32
+/*Max number of IEEE.802 or PTP entries allowed */
+#define ICSS_EMAC_FW_IEEE_802_PTP_TBL_SIZE			32
+/*Max number of IEC_61850 or Goose entries allowed */
+#define ICSS_EMAC_FW_IEC_61850_TBL_SIZE			256
+/*Max number of IPv4 entries allowed */
+#define ICSS_EMAC_FW_IPv4_TBL_SIZE				256
+/*Max number of IPv6 entries allowed */
+#define ICSS_EMAC_FW_IPv6_TBL_SIZE				256
+/*Max number of any other entries allowed */
+#define ICSS_EMAC_FW_OTHER_TBL_SIZE				256
+
+#define ICSS_EMAC_FW_MULTICAST_TABLE_SIZE_BYTES	\
+	(ICSS_EMAC_FW_GLOBAL_TBL_SIZE +	\
+	 ICSS_EMAC_FW_IEEE_802_PTP_TBL_SIZE +	\
+	 ICSS_EMAC_FW_IEC_61850_TBL_SIZE +	\
+	 ICSS_EMAC_FW_IPv4_TBL_SIZE +		\
+	 ICSS_EMAC_FW_IPv6_TBL_SIZE + ICSS_EMAC_FW_OTHER_TBL_SIZE)
+
+/* MAC filter offset for IEEE 802(Link Local) and PTPv2 Mac addresses */
+#define ICSS_EMAC_FW_IEEE_802_PTP_FILTER_OFFSET		\
+	ICSS_EMAC_FW_GLOBAL_TBL_SIZE
+/* MAC filter offset for IEC 61850 and Goose Mac addresses */
+#define ICSS_EMAC_FW_IEC_61850_FILTER_OFFSET		\
+	(ICSS_EMAC_FW_IEEE_802_PTP_FILTER_OFFSET +	\
+	 ICSS_EMAC_FW_IEEE_802_PTP_TBL_SIZE)
+/* MAC filter offset for IEEE 802(Link Local) and PTPv2 Mac addresses */
+#define ICSS_EMAC_FW_IPv4_FILTER_OFFSET		\
+	(ICSS_EMAC_FW_IEC_61850_FILTER_OFFSET +	\
+	 ICSS_EMAC_FW_IEC_61850_TBL_SIZE)
+/* MAC filter offset for IPv4 MAC addresses */
+#define ICSS_EMAC_FW_IPv6_FILTER_OFFSET		\
+	(ICSS_EMAC_FW_IPv4_FILTER_OFFSET + ICSS_EMAC_FW_IPv4_TBL_SIZE)
+/* MAC filter offset for All other MAC addresses */
+#define ICSS_EMAC_FW_OTHER_FILTER_OFFSET	\
+	(ICSS_EMAC_FW_IPv6_FILTER_OFFSET + ICSS_EMAC_FW_IPv6_TBL_SIZE)
+
 #define ICSS_EMAC_FW_MULTICAST_FILTER_MASK_SIZE_BYTES			 6
 #define ICSS_EMAC_FW_MULTICAST_FILTER_CTRL_SIZE_BYTES			 1
 #define ICSS_EMAC_FW_MULTICAST_FILTER_MASK_OVERRIDE_STATUS_SIZE_BYTES	 1
@@ -59,9 +96,7 @@
 	(ICSS_EMAC_FW_MULTICAST_FILTER_OVERRIDE_STATUS +\
 	 ICSS_EMAC_FW_MULTICAST_FILTER_MASK_OVERRIDE_STATUS_SIZE_BYTES)
 /* Multicast table */
-#define ICSS_EMAC_FW_MULTICAST_FILTER_TABLE		\
-	(ICSS_EMAC_FW_MULTICAST_FILTER_DROP_CNT_OFFSET +\
-	 ICSS_EMAC_FW_MULTICAST_FILTER_DROP_CNT_SIZE_BYTES)
+#define ICSS_EMAC_FW_MULTICAST_FILTER_TABLE		0x400
 
 /* Multicast filter defines & offsets for LRE
  */
@@ -71,7 +106,7 @@
  * 1 -> multicast filtering enabled
  */
 #define ICSS_LRE_FW_MULTICAST_FILTER_MASK			 0xE4
-#define ICSS_LRE_FW_MULTICAST_FILTER_TABLE			 0x100
+#define ICSS_LRE_FW_MULTICAST_FILTER_TABLE			 0x1630
 
 /* VLAN table Offsets */
 #define ICSS_EMAC_FW_VLAN_FLTR_TBL_BASE_ADDR		 0x200

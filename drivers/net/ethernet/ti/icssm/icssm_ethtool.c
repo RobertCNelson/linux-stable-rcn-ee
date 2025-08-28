@@ -236,7 +236,6 @@ static void icssm_emac_get_regs(struct net_device *ndev,
 
 		reg += len;
 
-		ram = prueth->mem[PRUETH_MEM_DRAM1].va;
 		len = ICSS_LRE_FW_MULTICAST_FILTER_TABLE +
 			ICSS_EMAC_FW_MULTICAST_TABLE_SIZE_BYTES;
 		memcpy_fromio(reg, ram, len);

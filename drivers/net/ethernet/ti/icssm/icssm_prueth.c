@@ -2198,8 +2198,7 @@ static void icssm_emac_mc_filter_reset(struct prueth_emac *emac)
 
 	ram = prueth->mem[emac->dram].va;
 	if (PRUETH_IS_LRE(prueth))
-		ram = prueth->mem[PRUETH_MEM_DRAM1].va;
-
+		ram = prueth->mem[PRUETH_MEM_SHARED_RAM].va;
 	mc_filter_tbl_base = prueth->fw_offsets->mc_filter_tbl;
 
 	mc_filter_tbl = ram + mc_filter_tbl_base;
@@ -2225,6 +2224,113 @@ static void icssm_emac_mc_filter_hashmask
 	mc_filter_mask = ram + mc_filter_mask_base;
 	memcpy_toio(mc_filter_mask, mask,
 		    ICSS_EMAC_FW_MULTICAST_FILTER_MASK_SIZE_BYTES);
+}
+
+/*
+ * Added for Enhanced MAC Filter
+ */
+/*
+ * Existing multicast filtering algorithm in the PRUs uses the logic of
+ * XOR of all address bits as index into a single table with only 256 entries.
+ * When both GOOSE and IEC92 traffic present on the link
+ * XOR of a IEC92 address will be identical to the XOR of a GOOSE address.
+ * Enabling GOOSE multicast addresses can easily lead IEC92 traffic
+ * to pass through the multicast filter.
+ * To achieve better selectivity below Enhanced MAC filter has been developed.
+ * Following are the range of offsets for global and
+ * specific entries in Enhanced Multicast table:
+ * Global entries 32 bytes
+ * IEEE and PTP entries 32 bytes
+ * IEC entries 256 bytes
+ * IPv4 entries 256 bytes
+ * IPv6 entries 256 bytes
+ * Other entries 256 byte
+ */
+void icssm_emac_mc_filter_enhanced(struct prueth_emac *emac,
+				   struct netdev_hw_addr *ha)
+{
+	unsigned char gbl_map_ix = 0, gbl_value = 0;
+	unsigned char gbl_bit_no = 0, bit_no = 0;
+	unsigned char map_ix = 0, value = 0;
+	enum prueth_mc_ether mc_ether_type = 0;
+
+	struct prueth *prueth = emac->prueth;
+	void __iomem *mc_filter_tbl;
+	/* MAC filter Base Address */
+	u32 mc_filter_tbl_base = prueth->fw_offsets->mc_filter_tbl;
+	void __iomem *ram = prueth->mem[emac->dram].va;
+
+	/* In case of HSR/PRP the MAC filter table is located in SRAM*/
+	if (PRUETH_IS_LRE(prueth))
+		ram = prueth->mem[PRUETH_MEM_SHARED_RAM].va;
+
+	mc_filter_tbl = ram + mc_filter_tbl_base;
+
+	gbl_map_ix = ha->addr[5] & MAC_FILTER_MAP_IDX_MASK;
+	gbl_bit_no = ha->addr[5] >> MAC_FILTER_BIT_NUM_SHIFT;
+
+	gbl_value = (1 << gbl_bit_no);
+
+	/* read the previous Global value in to the mc_filter_tbl + index */
+	gbl_value |= readb(mc_filter_tbl + gbl_map_ix);
+
+	/* writes the Global value in to the mc_filter_tbl + index */
+	writeb(gbl_value, mc_filter_tbl + gbl_map_ix);
+
+	/* Except for IEEE and PTP map_ix calculation for other
+	 * MAC address is same
+	 */
+	map_ix = ha->addr[5];
+
+	/* IPV6 */
+	if (ha->addr[0] == ha->addr[1] &&
+	    ha->addr[0] == IPV6_MAC_IDENTITY_BYTE) {
+		bit_no = ha->addr[2] ^ ha->addr[3] ^ ha->addr[4];
+		bit_no &= MAC_FILTER_BIT_NUM_MASK;
+
+		mc_filter_tbl += ICSS_EMAC_FW_IPv6_FILTER_OFFSET;
+	} else {
+		/* classification reveals the offset*/
+		mc_ether_type = ha->addr[2] ^ (ha->addr[0] ^ ha->addr[1]);
+		mc_ether_type >>= 4;
+
+		switch (mc_ether_type) {
+		/*ICSS_EMAC_FW_FILTER_IEEE and PTP*/
+		case MC_FILTER_TABLE_PTP:
+		case MC_FILTER_TABLE_IEEE_802:
+			map_ix = ha->addr[5] & MAC_FILTER_MAP_IDX_MASK;
+			bit_no = ha->addr[5] >> MAC_FILTER_BIT_NUM_SHIFT;
+			mc_filter_tbl +=
+				ICSS_EMAC_FW_IEEE_802_PTP_FILTER_OFFSET;
+			break;
+		/*ICSS_EMAC_FW_FILTER_IEC*/
+		case MC_FILTER_TABLE_IEC_61850_GOOSE:
+			bit_no = (ha->addr[3] & 0b100) | (ha->addr[4] & 0b11);
+			bit_no &= MAC_FILTER_BIT_NUM_MASK;
+			mc_filter_tbl += ICSS_EMAC_FW_IEC_61850_FILTER_OFFSET;
+			break;
+		/*ICSS_EMAC_FW_FILTER_IPV4*/
+		case MC_FILTER_TABLE_IPv4:
+			bit_no = ha->addr[3] ^ ha->addr[4];
+			bit_no &= MAC_FILTER_BIT_NUM_MASK;
+			mc_filter_tbl += ICSS_EMAC_FW_IPv4_FILTER_OFFSET;
+			break;
+		default:
+			/* ICSS_EMAC_FW_FILTER_ANY */
+			bit_no = ha->addr[2] ^ ha->addr[3] ^  ha->addr[4];
+			bit_no &= MAC_FILTER_BIT_NUM_MASK;
+			mc_filter_tbl += ICSS_EMAC_FW_OTHER_FILTER_OFFSET;
+			break;
+		}
+	}
+
+	value = (1 << bit_no);
+
+	/* read the previous value in to the mc_filter_tbl + index */
+	value |= readb(mc_filter_tbl + map_ix);
+
+	/* writes the specific filter value in to the mc_filter_tbl + index */
+	writeb(value, mc_filter_tbl + map_ix);
 }
 
 static void icssm_emac_mc_filter_bin_update(struct prueth_emac *emac, u8 hash,
@@ -2286,7 +2392,6 @@ static void icssm_emac_ndo_set_rx_mode(struct net_device *ndev)
 	unsigned long flags;
 	void __iomem *sram;
 	u32 mask, reg;
-	u8 hash;
 
 	prueth = emac->prueth;
 	sram = prueth->mem[PRUETH_MEM_SHARED_RAM].va;
@@ -2343,16 +2448,15 @@ static void icssm_emac_ndo_set_rx_mode(struct net_device *ndev)
 		goto unlock;
 
 	netdev_for_each_mc_addr(ha, ndev) {
-		hash = icssm_emac_get_mc_hash(ha->addr, emac->mc_filter_mask);
-		icssm_emac_mc_filter_bin_allow(emac, hash);
+		/* Enhanced MAC Filter */
+		icssm_emac_mc_filter_enhanced(emac, ha);
 	}
 
 	/* Add bridge device's MC addresses as well */
 	if (prueth->hw_bridge_dev) {
 		netdev_for_each_mc_addr(ha, prueth->hw_bridge_dev) {
-			hash = icssm_emac_get_mc_hash(ha->addr,
-						      emac->mc_filter_mask);
-			icssm_emac_mc_filter_bin_allow(emac, hash);
+			/* Enhanced MAC Filter */
+			icssm_emac_mc_filter_enhanced(emac, ha);
 		}
 	}
 
@@ -3008,7 +3112,13 @@ static int icssm_prueth_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, prueth);
 	prueth->dev = dev;
 	prueth->fw_data = device_get_match_data(dev);
-	prueth->fw_offsets = &fw_offsets_v2_1;
+
+	/* Added for Enhanced MAC Filter crash bug fix*/
+	prueth->fw_offsets = devm_kzalloc(dev,
+					  sizeof(struct prueth_fw_offsets),
+					  GFP_KERNEL);
+	memcpy(prueth->fw_offsets,
+	       &fw_offsets_v2_1, sizeof(struct prueth_fw_offsets));
 
 	eth_ports_node = of_get_child_by_name(np, "ethernet-ports");
 	if (!eth_ports_node)
