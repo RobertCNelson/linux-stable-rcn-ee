@@ -217,8 +217,16 @@ static void _icssm_prueth_lre_init_node_table(struct prueth *prueth)
 	nt->nt_lre_cnt =
 		(struct node_tbl_lre_cnt_t *)((__force const void *)
 		 prueth->mem[PRUETH_MEM_SHARED_RAM].va + ICSS_LRE_CNT_NODES);
+
 	memset_io((void __iomem *)nt->nt_lre_cnt, 0,
 		  sizeof(struct node_tbl_lre_cnt_t));
+
+	nt->nt_lre_table_full =
+		(struct node_tbl_lre_table_full *)((__force const void *)
+		 prueth->mem[PRUETH_MEM_SHARED_RAM].va +
+		 ICSS_LRE_NODE_TABLE_FULL);
+	memset_io((void __iomem *)nt->nt_lre_table_full, 0,
+		  sizeof(struct node_tbl_lre_table_full));
 
 	nt->nt_array_max_entries = fw_offsets->nt_array_max_entries;
 	nt->bin_array_max_entries = fw_offsets->bin_array_max_entries;
@@ -350,9 +358,16 @@ static void move_up(u16 start, u16 end, struct node_tbl *nt,
 		       sizeof(struct bin_tbl_t));
 
 	BIN_NODEOFS(start) = nt->nt_array_max_entries;
-
+	/* PRP Paging issue during network storm
+	 * In case of node table move up condition,
+	 * end value was passed as start+1 to update_indexes function
+	 * As it's an invalid value it was corrupting the index & bin table,
+	 * which was leading to crash
+	 * Example:
+	 * if start value is 255 then start+1 will be 256 which is invalid entry
+	 */
 	if (update)
-		update_indexes(end, start + 1, nt);
+		update_indexes(end, start, nt);
 
 	pru_spin_unlock(nt);
 }
@@ -449,7 +464,19 @@ static int node_table_insert_from_queue(struct node_tbl *nt,
 		if (empty_slot != nt->nt_array_max_entries) {
 			move_down(index, empty_slot, nt, true);
 		} else {
-			for (empty_slot = index - 1;
+			/* PRP Paging issue during network storm
+			 * In the above for loop condition, index value is
+			 * incremented by 1, in case of move up condition
+			 * index value will be invalid Due to that it was
+			 * corrupting the index & bin table, which was leading
+			 * to crash so to get the correct index value we need
+			 * to subtract index by 1
+			 * Example:
+			 * if free entry is found at bin 255 then
+			 * the index value will be 256 which is invalid
+			 */
+			index = index - 1;
+			for (empty_slot = index;
 			     (BIN_NODEOFS(empty_slot) !=
 			     nt->nt_array_max_entries) &&
 			     (empty_slot > 0);
@@ -471,6 +498,8 @@ static int node_table_insert_from_queue(struct node_tbl *nt,
 
 		nt->nt_lre_cnt->lre_cnt++;
 	}
+	if (nt->nt_lre_cnt->lre_cnt >= nt->nt_array_max_entries)
+		nt->nt_lre_table_full->lre_node_table_full = 1;
 
 	return LRE_OK;
 }
@@ -495,7 +524,14 @@ static void node_table_check_and_remove(struct node_tbl *nt, u16 forget_time)
 			end_bin = IND_BINOFS(hash) + IND_BIN_NO(hash) - 1;
 
 			move_up(end_bin, j, nt, false);
-			(IND_BIN_NO(hash))--;
+
+			/* PRP Paging issue during network storm
+			 * Below is a safety check, if number of entries
+			 * in the bin is zero,
+			 * We should skip the subtraction of entries
+			 */
+			if (IND_BIN_NO(hash))
+				(IND_BIN_NO(hash))--;
 
 			if (!IND_BIN_NO(hash))
 				IND_BINOFS(hash) = nt->bin_array_max_entries;
@@ -504,6 +540,8 @@ static void node_table_check_and_remove(struct node_tbl *nt, u16 forget_time)
 							ICSS_LRE_NODE_FREE;
 			BIN_NODEOFS(end_bin) = nt->nt_array_max_entries;
 
+			if (nt->nt_lre_cnt->lre_cnt == nt->nt_array_max_entries)
+				nt->nt_lre_table_full->lre_node_table_full = 0;
 			nt->nt_lre_cnt->lre_cnt--;
 		}
 	}
@@ -778,6 +816,11 @@ static const struct icssm_prueth_lre_stats prueth_ethtool_lre_stats[] = {
 	PRUETH_LRE_STAT_OFFSET(lre_cnt_dd_pru1, false),
 	PRUETH_LRE_STAT_OFFSET(lre_cnt_sup_pru0, false),
 	PRUETH_LRE_STAT_OFFSET(lre_cnt_sup_pru1, false),
+
+	PRUETH_LRE_STAT_OFFSET(lre_no_prp_tag_rx_a, false),
+	PRUETH_LRE_STAT_OFFSET(lre_no_prp_tag_rx_b, false),
+	PRUETH_LRE_STAT_OFFSET(lre_fwd_overflow_pru0, false),
+	PRUETH_LRE_STAT_OFFSET(lre_fwd_overflow_pru1, false),
 };
 
 void icssm_prueth_lre_set_stats(struct prueth *prueth,
@@ -798,9 +841,28 @@ void icssm_prueth_lre_set_stats(struct prueth *prueth,
 void icssm_prueth_lre_get_stats(struct prueth *prueth,
 				struct lre_statistics *pstats)
 {
+	struct lre_statistics_pru1 *pstats_pru1;
 	void __iomem *sram = prueth->mem[PRUETH_MEM_SHARED_RAM].va;
 
-	memcpy_fromio(pstats, sram + ICSS_LRE_CNT_TX_A, sizeof(*pstats));
+	memcpy_fromio((void *)pstats, sram + ICSS_LRE_CNT_TX_A,
+		      sizeof(*pstats));
+
+	/* maintains separate counters in shared memory for PRUs */
+	pstats_pru1 = kmalloc(sizeof(*pstats_pru1), GFP_KERNEL);
+
+	if (pstats_pru1) {
+		memcpy_fromio((void *)pstats_pru1,
+			      sram + ICSS_LRE_START + ICSS_LRE_STATS_DMEM_SIZE,
+			      sizeof(*pstats_pru1));
+		pstats->lre_tx_c += pstats_pru1->lre_tx_cb;
+		pstats->lre_unique_rx_c += pstats_pru1->lre_unique_rx_cb;
+		pstats->lre_duplicate_rx_c +=
+			pstats_pru1->lre_duplicate_rx_cb;
+		pstats->lre_multicast_dropped +=
+			pstats_pru1->lre_multicast_dropped_b;
+		pstats->lre_vlan_dropped += pstats_pru1->lre_vlan_dropped_b;
+		kfree(pstats_pru1);
+	}
 }
 
 int icssm_prueth_lre_get_sset_count(struct prueth *prueth)
@@ -834,8 +896,28 @@ void icssm_lre_update_hardware_stats(struct prueth_emac *emac)
 	sram = emac->prueth->mem[PRUETH_MEM_SHARED_RAM].va;
 	stat_base = sram + ICSS_LRE_CNT_TX_A;
 
-	for (i = 0; i < ARRAY_SIZE(prueth_ethtool_lre_stats); i++)
+	for (i = 0; i < ARRAY_SIZE(prueth_ethtool_lre_stats); i++) {
 		emac->lre_stats[i] = ioread32(stat_base + i * sizeof(u32));
+		if (!strcmp(prueth_ethtool_lre_stats[i].string, "lre_tx_c"))
+			emac->lre_stats[i] +=
+				ioread32(sram + ICSS_LRE_CNT_TX_CB);
+		else if (!strcmp(prueth_ethtool_lre_stats[i].string,
+				 "lre_unique_rx_c"))
+			emac->lre_stats[i] +=
+				ioread32(sram + ICSS_LRE_CNT_UNIQUE_RX_CB);
+		else if (!strcmp(prueth_ethtool_lre_stats[i].string,
+				 "lre_duplicate_rx_c"))
+			emac->lre_stats[i] +=
+				ioread32(sram + ICSS_LRE_CNT_DUPLICATE_RX_CB);
+		else if (!strcmp(prueth_ethtool_lre_stats[i].string,
+				 "lre_multicast_dropped"))
+			emac->lre_stats[i] +=
+				ioread32(sram + ICSS_LRE_MULTICAST_DROPPED_B);
+		else if (!strcmp(prueth_ethtool_lre_stats[i].string,
+				 "lre_vlan_dropped"))
+			emac->lre_stats[i] +=
+				ioread32(sram + ICSS_LRE_VLAN_DROPPED_B);
+	}
 }
 
 void icssm_prueth_lre_update_stats(struct prueth_emac *emac, u64 *data)

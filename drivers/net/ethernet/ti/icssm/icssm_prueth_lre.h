@@ -78,7 +78,25 @@ struct lre_statistics {
 	u32 lre_cnt_dd_pru1; /* count of DD frames to host on PRU 1 */
 	u32 lre_cnt_sup_pru0; /* count of supervisor frames to host on PRU 0 */
 	u32 lre_cnt_sup_pru1; /* count of supervisor frames to host on PRU 1 */
+
+	/* count of frames with no RCT tag to host on PRU 0 */
+	u32 lre_no_prp_tag_rx_a;
+	/* count of frames with no RCT tag to host on PRU 1 */
+	u32 lre_no_prp_tag_rx_b;
+	/* count of port overflow frames to port on PRU 0 */
+	u32 lre_fwd_overflow_pru0;
+	/* count of port overflow frames to port on PRU 1 */
+	u32 lre_fwd_overflow_pru1;
 } __packed;
+
+/* separate counters in shared memory for PRUs */
+struct lre_statistics_pru1 {
+	u32 lre_tx_cb;
+	u32 lre_unique_rx_cb;
+	u32 lre_duplicate_rx_cb;
+	u32 lre_multicast_dropped_b;
+	u32 lre_vlan_dropped_b;
+};
 
 /* node table info */
 struct icssm_prueth_lre_node {
@@ -146,6 +164,10 @@ struct node_tbl_lre_cnt_t {
 	u16 lre_cnt;
 } __packed;
 
+struct node_tbl_lre_table_full {
+	u16 lre_node_table_full;
+} __packed;
+
 struct node_tbl_info_t {
 	u32 next_free_slot;
 	u8  arm_lock;
@@ -171,6 +193,7 @@ struct node_tbl {
 	struct nt_array_t *nt_array;
 	struct node_tbl_info_t *nt_info;
 	struct node_tbl_lre_cnt_t *nt_lre_cnt;
+	struct node_tbl_lre_table_full *nt_lre_table_full;
 	u32 index_array_max_entries;
 	u32 bin_array_max_entries;
 	u32 nt_array_max_entries;
