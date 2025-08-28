@@ -134,4 +134,7 @@
 /* Node ent duplicate type: DupDiscard */
 #define ICSS_LRE_NT_REM_NODE_DUP_DISCARD	0x80
 
+#define ICSS_LRE_NUM_STATS			39
+#define ICSS_LRE_NUM_STANDARD_STATS		39
+
 #endif /* __ICSS_LRE_FIRMWARE_H */

@@ -9,6 +9,7 @@
 #include <linux/if_vlan.h>
 #include "icssm_prueth.h"
 #include "icssm_prueth_ecap.h"
+#include "icssm_prueth_lre.h"
 #include "icssm_vlan_mcast_filter_mmap.h"
 #include "../icssg/icss_iep.h"
 
@@ -133,9 +134,12 @@ void icssm_emac_update_hardware_stats(struct prueth_emac *emac)
 
 static int icssm_emac_get_sset_count(struct net_device *ndev, int stringset)
 {
+	struct prueth_emac *emac = netdev_priv(ndev);
+
 	switch (stringset) {
 	case ETH_SS_STATS:
-		return ICSSM_NUM_STANDARD_STATS;
+		return ICSSM_NUM_STANDARD_STATS +
+			icssm_prueth_lre_get_sset_count(emac->prueth);
 	default:
 		return -EOPNOTSUPP;
 	}
@@ -144,6 +148,7 @@ static int icssm_emac_get_sset_count(struct net_device *ndev, int stringset)
 static void icssm_emac_get_strings(struct net_device *ndev, u32 stringset,
 				   u8 *data)
 {
+	struct prueth_emac *emac = netdev_priv(ndev);
 	u8 *p = data;
 	int i;
 
@@ -154,6 +159,7 @@ static void icssm_emac_get_strings(struct net_device *ndev, u32 stringset,
 				ethtool_puts(&p,
 					     prueth_ethtool_stats[i].string);
 		}
+		icssm_prueth_lre_get_strings(emac->prueth, p);
 		break;
 	default:
 		break;
@@ -172,6 +178,7 @@ static void icssm_emac_get_ethtool_stats(struct net_device *ndev,
 		if (!prueth_ethtool_stats[i].standard_stats)
 			*(data++) = emac->emac_stats[i];
 	}
+	icssm_prueth_lre_update_stats(emac, data);
 }
 
 static int icssm_emac_get_regs_len(struct net_device *ndev)
@@ -187,6 +194,17 @@ static int icssm_emac_get_regs_len(struct net_device *ndev)
 	if (PRUETH_IS_EMAC(prueth) || PRUETH_IS_SWITCH(prueth)) {
 		return ICSS_EMAC_FW_VLAN_FLTR_TBL_BASE_ADDR +
 		       ICSS_EMAC_FW_VLAN_FILTER_TABLE_SIZE_BYTES;
+	}
+
+	/* MultiCast table and VLAN filter table are in different
+	 * memories in case of HSR/PRP firmware. Therefore add the sizes
+	 * of individual region.
+	 */
+	if (PRUETH_IS_LRE(prueth)) {
+		return  ICSS_LRE_FW_VLAN_FLTR_TBL_BASE_ADDR +
+			ICSS_EMAC_FW_VLAN_FILTER_TABLE_SIZE_BYTES +
+			ICSS_LRE_FW_MULTICAST_FILTER_TABLE +
+			ICSS_EMAC_FW_MULTICAST_TABLE_SIZE_BYTES;
 	}
 
 	return 0;
@@ -207,6 +225,21 @@ static void icssm_emac_get_regs(struct net_device *ndev,
 		ram = prueth->mem[emac->dram].va;
 		memcpy_fromio(reg, ram, icssm_emac_get_regs_len(ndev));
 		return;
+	}
+
+	if (PRUETH_IS_LRE(prueth)) {
+		size_t len = ICSS_LRE_FW_VLAN_FLTR_TBL_BASE_ADDR +
+			ICSS_EMAC_FW_VLAN_FILTER_TABLE_SIZE_BYTES;
+
+		ram =  prueth->mem[PRUETH_MEM_SHARED_RAM].va;
+		memcpy_fromio(reg, ram, len);
+
+		reg += len;
+
+		ram = prueth->mem[PRUETH_MEM_DRAM1].va;
+		len = ICSS_LRE_FW_MULTICAST_FILTER_TABLE +
+			ICSS_EMAC_FW_MULTICAST_TABLE_SIZE_BYTES;
+		memcpy_fromio(reg, ram, len);
 	}
 }
 

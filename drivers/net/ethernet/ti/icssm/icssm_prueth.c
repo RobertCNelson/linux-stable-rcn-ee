@@ -1466,6 +1466,8 @@ static int icssm_emac_ndo_open(struct net_device *ndev)
 
 	/* restore stats */
 	icssm_emac_set_stats(emac, &emac->stats);
+	if (PRUETH_IS_LRE(prueth))
+		icssm_prueth_lre_set_stats(prueth, prueth->lre_stats);
 	/* initialize ecap for interrupt pacing */
 	if (!IS_ERR(ecap))
 		ecap->init(emac);
@@ -1585,8 +1587,10 @@ static int icssm_emac_ndo_stop(struct net_device *ndev)
 
 	icssm_emac_get_stats(emac, &emac->stats);
 
-	if (PRUETH_IS_LRE(prueth) && !prueth->emac_configured)
+	if (PRUETH_IS_LRE(prueth) && !prueth->emac_configured) {
+		icssm_prueth_lre_get_stats(prueth, prueth->lre_stats);
 		icssm_prueth_lre_cleanup(prueth);
+	}
 	/* free table memory of the switch */
 	if (PRUETH_IS_SWITCH(emac->prueth))
 		icssm_prueth_sw_free_fdb_table(prueth);
@@ -2858,6 +2862,17 @@ static int icssm_prueth_probe(struct platform_device *pdev)
 		if (!prueth->lp) {
 			ret = -ENOMEM;
 			goto free_pool;
+		}
+
+		if (has_lre) {
+			prueth->lre_stats =
+				devm_kzalloc(dev, sizeof(*prueth->lre_stats),
+					     GFP_KERNEL);
+
+			if (!prueth->lre_stats) {
+				ret = -ENOMEM;
+				goto free_pool;
+			}
 		}
 
 		prueth->rx_lpq_irq = of_irq_get_byname(np, "rx_lp");

@@ -715,6 +715,144 @@ void icssm_prueth_lre_free_memory(struct prueth *prueth)
 	prueth->nt = NULL;
 }
 
+#define PRUETH_LRE_STAT_OFFSET(m, stats_type)   \
+{                                               \
+	#m,                                     \
+	offsetof(struct lre_statistics, m),    \
+	stats_type                              \
+}
+
+struct icssm_prueth_lre_stats {
+	char string[ETH_GSTRING_LEN];
+	u32 offset;
+	bool standard_stats;
+};
+
+static const struct icssm_prueth_lre_stats prueth_ethtool_lre_stats[] = {
+	PRUETH_LRE_STAT_OFFSET(lre_tx_a, false),
+	PRUETH_LRE_STAT_OFFSET(lre_tx_b, false),
+	PRUETH_LRE_STAT_OFFSET(lre_tx_c, false),
+
+	PRUETH_LRE_STAT_OFFSET(lre_errwronglan_a, false),
+	PRUETH_LRE_STAT_OFFSET(lre_errwronglan_b, false),
+	PRUETH_LRE_STAT_OFFSET(lre_errwronglan_c, false),
+
+	PRUETH_LRE_STAT_OFFSET(lre_rx_a, false),
+	PRUETH_LRE_STAT_OFFSET(lre_rx_b, false),
+	PRUETH_LRE_STAT_OFFSET(lre_rx_c, false),
+
+	PRUETH_LRE_STAT_OFFSET(lre_errors_a, false),
+	PRUETH_LRE_STAT_OFFSET(lre_errors_b, false),
+	PRUETH_LRE_STAT_OFFSET(lre_errors_c, false),
+
+	PRUETH_LRE_STAT_OFFSET(lre_nodes, false),
+	PRUETH_LRE_STAT_OFFSET(lre_proxy_nodes, false),
+
+	PRUETH_LRE_STAT_OFFSET(lre_unique_rx_a, false),
+	PRUETH_LRE_STAT_OFFSET(lre_unique_rx_b, false),
+	PRUETH_LRE_STAT_OFFSET(lre_unique_rx_c, false),
+
+	PRUETH_LRE_STAT_OFFSET(lre_duplicate_rx_a, false),
+	PRUETH_LRE_STAT_OFFSET(lre_duplicate_rx_b, false),
+	PRUETH_LRE_STAT_OFFSET(lre_duplicate_rx_c, false),
+
+	PRUETH_LRE_STAT_OFFSET(lre_multiple_rx_a, false),
+	PRUETH_LRE_STAT_OFFSET(lre_multiple_rx_b, false),
+	PRUETH_LRE_STAT_OFFSET(lre_multiple_rx_c, false),
+
+	PRUETH_LRE_STAT_OFFSET(lre_own_rx_a, false),
+	PRUETH_LRE_STAT_OFFSET(lre_own_rx_b, false),
+
+	PRUETH_LRE_STAT_OFFSET(duplicate_discard, false),
+	PRUETH_LRE_STAT_OFFSET(transparent_reception, false),
+
+	PRUETH_LRE_STAT_OFFSET(lre_node_table_full, false),
+	PRUETH_LRE_STAT_OFFSET(lre_multicast_dropped, false),
+	PRUETH_LRE_STAT_OFFSET(lre_vlan_dropped, false),
+	PRUETH_LRE_STAT_OFFSET(lre_intr_tmr_exp, false),
+	PRUETH_LRE_STAT_OFFSET(lre_total_rx_a, false),
+	PRUETH_LRE_STAT_OFFSET(lre_total_rx_b, false),
+	PRUETH_LRE_STAT_OFFSET(lre_overflow_pru0, false),
+	PRUETH_LRE_STAT_OFFSET(lre_overflow_pru1, false),
+	PRUETH_LRE_STAT_OFFSET(lre_cnt_dd_pru0, false),
+	PRUETH_LRE_STAT_OFFSET(lre_cnt_dd_pru1, false),
+	PRUETH_LRE_STAT_OFFSET(lre_cnt_sup_pru0, false),
+	PRUETH_LRE_STAT_OFFSET(lre_cnt_sup_pru1, false),
+};
+
+void icssm_prueth_lre_set_stats(struct prueth *prueth,
+				struct lre_statistics *pstats)
+{
+	void __iomem *sram = prueth->mem[PRUETH_MEM_SHARED_RAM].va;
+
+	if (prueth->emac_configured)
+		return;
+
+	/* These two are actually not statistics, so keep original */
+	pstats->duplicate_discard = readl(sram + ICSS_LRE_DUPLICATE_DISCARD);
+	pstats->transparent_reception =
+		readl(sram + ICSS_LRE_TRANSPARENT_RECEPTION);
+	memcpy_toio(sram + ICSS_LRE_START + 4, pstats, sizeof(*pstats));
+}
+
+void icssm_prueth_lre_get_stats(struct prueth *prueth,
+				struct lre_statistics *pstats)
+{
+	void __iomem *sram = prueth->mem[PRUETH_MEM_SHARED_RAM].va;
+
+	memcpy_fromio(pstats, sram + ICSS_LRE_CNT_TX_A, sizeof(*pstats));
+}
+
+int icssm_prueth_lre_get_sset_count(struct prueth *prueth)
+{
+	if (!PRUETH_IS_LRE(prueth))
+		return 0;
+
+	return ICSS_LRE_NUM_STANDARD_STATS;
+}
+
+void icssm_prueth_lre_get_strings(struct prueth *prueth, u8 *data)
+{
+	int i;
+
+	if (!PRUETH_IS_LRE(prueth))
+		return;
+
+	for (i = 0; i < ARRAY_SIZE(prueth_ethtool_lre_stats); i++) {
+		if (!prueth_ethtool_lre_stats[i].standard_stats) {
+			ethtool_puts(&data,
+				     prueth_ethtool_lre_stats[i].string);
+		}
+	}
+}
+
+void icssm_lre_update_hardware_stats(struct prueth_emac *emac)
+{
+	void __iomem *sram, *stat_base;
+	int i;
+
+	sram = emac->prueth->mem[PRUETH_MEM_SHARED_RAM].va;
+	stat_base = sram + ICSS_LRE_CNT_TX_A;
+
+	for (i = 0; i < ARRAY_SIZE(prueth_ethtool_lre_stats); i++)
+		emac->lre_stats[i] = ioread32(stat_base + i * sizeof(u32));
+}
+
+void icssm_prueth_lre_update_stats(struct prueth_emac *emac, u64 *data)
+{
+	int i;
+
+	if (!PRUETH_IS_LRE(emac->prueth))
+		return;
+
+	icssm_lre_update_hardware_stats(emac);
+
+	for (i = 0; i < ARRAY_SIZE(prueth_ethtool_lre_stats); i++) {
+		if (!prueth_ethtool_lre_stats[i].standard_stats)
+			*(data++) = emac->lre_stats[i];
+	}
+}
+
 static int icssm_prueth_lre_attr_get(struct net_device *ndev,
 				     struct lredev_attr *attr)
 {

@@ -382,6 +382,7 @@ struct prueth_emac {
 	struct prueth_queue_desc __iomem *tx_queue_descs;
 	struct port_statistics stats; /* stats holder when i/f is down */
 	u32 emac_stats[ICSSM_NUM_STATS];
+	u32 lre_stats[ICSS_LRE_NUM_STATS];
 
 	int link;
 	int speed;
@@ -464,6 +465,7 @@ struct prueth {
 	u32 rem_cnt;
 	/* lock between kthread worker and rx packet processing code */
 	spinlock_t nt_lock;
+	struct lre_statistics *lre_stats;
 
 	struct net_device *hw_bridge_dev;
 	struct fdb_tbl *fdb_tbl;
