@@ -30,6 +30,7 @@
 
 #include "icssm_prueth.h"
 #include "icssm_prueth_switch.h"
+#include "icssm_prueth_lre.h"
 #include "icssm_vlan_mcast_filter_mmap.h"
 #include "icssm_prueth_ecap.h"
 #include "../icssg/icssg_mii_rt.h"
@@ -43,7 +44,19 @@
 
 #define TIMESYNC_SECONDS_BIT_MASK   0x0000ffffffffffff
 
-static struct prueth_fw_offsets fw_offsets_v2_1;
+static struct prueth_fw_offsets fw_offsets_v2_1 = {
+	.hash_mask = ICSS_LRE_V2_1_HASH_MASK,
+	.index_array_offset = ICSS_LRE_V2_1_INDEX_ARRAY_NT,
+	.bin_array_offset = ICSS_LRE_V2_1_BIN_ARRAY,
+	.nt_array_offset = ICSS_LRE_V2_1_NODE_TABLE_NEW,
+	.index_array_loc = ICSS_LRE_V2_1_INDEX_ARRAY_LOC,
+	.bin_array_loc = ICSS_LRE_V2_1_BIN_ARRAY_LOC,
+	.nt_array_loc = ICSS_LRE_V2_1_NODE_TABLE_LOC,
+	.index_array_max_entries = ICSS_LRE_V2_1_INDEX_TBL_MAX_ENTRIES,
+	.bin_array_max_entries = ICSS_LRE_V2_1_BIN_TBL_MAX_ENTRIES,
+	.nt_array_max_entries = ICSS_LRE_V2_1_NODE_TBL_MAX_ENTRIES,
+	.iep_wrap = 0xffffffff,
+};
 
 static void icssm_prueth_set_fw_offsets(struct prueth *prueth)
 {
@@ -60,6 +73,18 @@ static void icssm_prueth_set_fw_offsets(struct prueth *prueth)
 			ICSS_EMAC_FW_MULTICAST_FILTER_MASK_OFFSET;
 		prueth->fw_offsets->mc_filter_tbl =
 			ICSS_EMAC_FW_MULTICAST_FILTER_TABLE;
+	} else {
+		prueth->fw_offsets->vlan_ctrl_byte  =
+			ICSS_LRE_FW_VLAN_FLTR_CTRL_BYTE;
+		prueth->fw_offsets->vlan_filter_tbl =
+			ICSS_LRE_FW_VLAN_FLTR_TBL_BASE_ADDR;
+
+		prueth->fw_offsets->mc_ctrl_byte  =
+			ICSS_LRE_FW_MULTICAST_TABLE_SEARCH_OP_CONTROL_BIT;
+		prueth->fw_offsets->mc_filter_mask =
+			ICSS_LRE_FW_MULTICAST_FILTER_MASK;
+		prueth->fw_offsets->mc_filter_tbl =
+			ICSS_LRE_FW_MULTICAST_FILTER_TABLE;
 	}
 }
 
@@ -381,6 +406,8 @@ static void icssm_prueth_init_ethernet_mode(struct prueth *prueth)
 {
 	icssm_prueth_set_fw_offsets(prueth);
 	icssm_prueth_hostinit(prueth);
+	if (PRUETH_IS_LRE(prueth))
+		icssm_prueth_lre_config(prueth);
 }
 
 static void icssm_prueth_port_enable(struct prueth_emac *emac, bool enable)
@@ -395,6 +422,9 @@ static void icssm_prueth_port_enable(struct prueth_emac *emac, bool enable)
 	ram = prueth->mem[emac->dram].va;
 	port_ctrl = ram + PORT_CONTROL_ADDR;
 	writeb(!!enable, port_ctrl);
+
+	if (PRUETH_IS_LRE(prueth))
+		ram = prueth->mem[PRUETH_MEM_SHARED_RAM].va;
 
 	vlan_ctrl = ram + vlan_ctrl_offset;
 	writeb(!!enable, vlan_ctrl);
@@ -1253,6 +1283,12 @@ free_irq:
 
 static int icssm_emac_sanitize_feature_flags(struct prueth_emac *emac)
 {
+	if ((PRUETH_IS_HSR(emac->prueth) || PRUETH_IS_PRP(emac->prueth)) &&
+	    !(emac->ndev->features & NETIF_F_HW_HSR_TAG_RM)) {
+		netdev_err(emac->ndev, "Error: Turn ON HSR offload\n");
+		return -EINVAL;
+	}
+
 	if ((PRUETH_IS_EMAC(emac->prueth) || PRUETH_IS_SWITCH(emac->prueth)) &&
 	    (emac->ndev->features & NETIF_F_HW_HSR_TAG_RM)) {
 		netdev_err(emac->ndev, "Error: Turn OFF HSR offload\n");
@@ -1267,6 +1303,8 @@ static void icssm_prueth_free_memory(struct prueth *prueth)
 {
 	if (PRUETH_IS_SWITCH(prueth))
 		icssm_prueth_sw_free_fdb_table(prueth);
+	if (PRUETH_IS_LRE(prueth))
+		icssm_prueth_lre_free_memory(prueth);
 }
 
 static void icssm_ptp_dram_init(struct prueth_emac *emac)
@@ -1343,8 +1381,13 @@ static int icssm_emac_ndo_open(struct net_device *ndev)
 		if (ret)
 			return ret;
 
-		if (PRUETH_IS_SWITCH(prueth))
+		if (PRUETH_IS_SWITCH(prueth)) {
 			ret = icssm_prueth_sw_init_fdb_table(prueth);
+		} else {
+			/* HSR/PRP */
+			icssm_prueth_lre_config_check_flags(prueth);
+			ret = icssm_prueth_lre_init_node_table(prueth);
+		}
 	} else {
 		icssm_prueth_emac_config(emac);
 	}
@@ -1393,7 +1436,8 @@ static int icssm_emac_ndo_open(struct net_device *ndev)
 	if (PRUETH_IS_EMAC(prueth)) {
 		napi_enable(&emac->napi);
 	} else {
-		if (PRUETH_IS_SWITCH(prueth) && !prueth->emac_configured) {
+		if (!prueth->emac_configured &&
+		    (PRUETH_IS_SWITCH(prueth) || PRUETH_IS_LRE(prueth))) {
 			napi_enable(&prueth->napi_hpq);
 			napi_enable(&prueth->napi_lpq);
 		}
@@ -1453,7 +1497,8 @@ static int icssm_emac_ndo_stop(struct net_device *ndev)
 	if (PRUETH_IS_EMAC(prueth)) {
 		napi_disable(&emac->napi);
 	} else {
-		if (PRUETH_IS_SWITCH(prueth) && !prueth->emac_configured) {
+		if (!prueth->emac_configured &&
+		    (PRUETH_IS_SWITCH(prueth) || PRUETH_IS_LRE(prueth))) {
 			napi_disable(&prueth->napi_lpq);
 			napi_disable(&prueth->napi_hpq);
 		}
@@ -1471,6 +1516,8 @@ static int icssm_emac_ndo_stop(struct net_device *ndev)
 
 	icssm_emac_get_stats(emac, &emac->stats);
 
+	if (PRUETH_IS_LRE(prueth) && !prueth->emac_configured)
+		icssm_prueth_lre_cleanup(prueth);
 	/* free table memory of the switch */
 	if (PRUETH_IS_SWITCH(emac->prueth))
 		icssm_prueth_sw_free_fdb_table(prueth);
@@ -1744,6 +1791,9 @@ static void icssm_emac_mc_filter_ctrl(struct prueth_emac *emac, bool enable)
 	u32 reg;
 
 	ram = prueth->mem[emac->dram].va;
+	if (PRUETH_IS_LRE(prueth))
+		ram = prueth->mem[PRUETH_MEM_DRAM1].va;
+
 	mc_ctrl_byte = prueth->fw_offsets->mc_ctrl_byte;
 	mc_filter_ctrl = ram + mc_ctrl_byte;
 
@@ -1764,6 +1814,9 @@ static void icssm_emac_mc_filter_reset(struct prueth_emac *emac)
 	void __iomem *ram;
 
 	ram = prueth->mem[emac->dram].va;
+	if (PRUETH_IS_LRE(prueth))
+		ram = prueth->mem[PRUETH_MEM_DRAM1].va;
+
 	mc_filter_tbl_base = prueth->fw_offsets->mc_filter_tbl;
 
 	mc_filter_tbl = ram + mc_filter_tbl_base;
@@ -1781,6 +1834,9 @@ static void icssm_emac_mc_filter_hashmask
 	void __iomem *ram;
 
 	ram = prueth->mem[emac->dram].va;
+	if (PRUETH_IS_LRE(prueth))
+		ram = prueth->mem[PRUETH_MEM_DRAM1].va;
+
 	mc_filter_mask_base = prueth->fw_offsets->mc_filter_mask;
 
 	mc_filter_mask = ram + mc_filter_mask_base;
@@ -1797,6 +1853,9 @@ static void icssm_emac_mc_filter_bin_update(struct prueth_emac *emac, u8 hash,
 	void __iomem *ram;
 
 	ram = prueth->mem[emac->dram].va;
+	if (PRUETH_IS_LRE(prueth))
+		ram = prueth->mem[PRUETH_MEM_DRAM1].va;
+
 	mc_filter_tbl_base = prueth->fw_offsets->mc_filter_tbl;
 
 	mc_filter_tbl = ram + mc_filter_tbl_base;
@@ -1849,6 +1908,13 @@ static void icssm_emac_ndo_set_rx_mode(struct net_device *ndev)
 	prueth = emac->prueth;
 	sram = prueth->mem[PRUETH_MEM_SHARED_RAM].va;
 	reg = readl(sram + EMAC_PROMISCUOUS_MODE_OFFSET);
+
+	if (promisc && PRUETH_IS_LRE(prueth)) {
+		netdev_dbg(ndev,
+			   "%s: promisc/mc filtering not supported for switch\n",
+			   __func__);
+		return;
+	}
 
 	/* for LRE, it is a shared table. So lock the access */
 	spin_lock_irqsave(&emac->addr_lock, flags);
@@ -1979,6 +2045,8 @@ int icssm_emac_add_del_vid(struct prueth_emac *emac,
 
 	vlan_filter_tbl = prueth->fw_offsets->vlan_filter_tbl;
 	ram = prueth->mem[emac->dram].va;
+	if (PRUETH_IS_LRE(prueth))
+		ram =  prueth->mem[PRUETH_MEM_SHARED_RAM].va;
 
 	if (proto != htons(ETH_P_8021Q))
 		return -EINVAL;
@@ -2061,6 +2129,71 @@ static int icssm_emac_ndo_get_phys_port_name(struct net_device *ndev,
 	return 0;
 }
 
+/**
+ * icssm_emac_ndo_set_features - function to set feature flag
+ * @ndev: The network adapter device
+ * @features: Requested set of features from user
+ *
+ * Called when ethtool -K option is invoked by user
+ *
+ * Change the eth_type in the prueth structure  based on hsr or prp
+ * offload options from user through ethtool -K command. If the device
+ * is running or if the other paired device is running, then don't accept.
+ * Otherwise, set the ethernet type and offload feature flag
+ *
+ * Return: success if eth_type and feature flags are updated  or error
+ * otherwise.
+ */
+static int icssm_emac_ndo_set_features(struct net_device *ndev,
+				       netdev_features_t features)
+{
+	netdev_features_t have = ndev->features & NETIF_F_HW_HSR_TAG_RM;
+	netdev_features_t wanted = features & NETIF_F_HW_HSR_TAG_RM;
+	struct prueth_emac *emac = netdev_priv(ndev), *other_emac;
+	bool change_request = ((wanted ^ have) != 0);
+	struct prueth *prueth = emac->prueth;
+	int ret = -EBUSY;
+
+	if (!prueth->fw_data->support_lre)
+		return 0;
+
+	if (PRUETH_IS_SWITCH(prueth)) {
+		/* Don't allow switching to HSR/PRP ethtype from Switch.
+		 * User needs to first remove eth ports from a bridge which
+		 * will automatically put the ethtype back to EMAC. So
+		 * disallow this.
+		 */
+		netdev_err(ndev,
+			   "Switch to HSR/PRP/EMAC not allowed\n");
+		return -EINVAL;
+	}
+
+	if (netif_running(ndev) && change_request) {
+		netdev_err(ndev,
+			   "Can't change feature when device runs\n");
+		return ret;
+	}
+
+	/* MAC instance index starts from 0. So index by port_id - 1 */
+	other_emac = prueth->emac[(emac->port_id ^ 0x3) - 1];
+	if (other_emac && netif_running(other_emac->ndev) && change_request) {
+		netdev_err(ndev,
+			   "Can't change feature when other device runs\n");
+		return ret;
+	}
+
+	if (features & NETIF_F_HW_HSR_TAG_RM) {
+		ndev->features |= NETIF_F_HW_HSR_TAG_RM;
+	} else if (features & NETIF_F_HW_HSR_FWD) {
+		ndev->features |= NETIF_F_HW_HSR_FWD;
+	} else {
+		prueth->eth_type = PRUSS_ETHTYPE_EMAC;
+		ndev->features &= ~(NETIF_F_HW_HSR_TAG_RM | NETIF_F_HW_HSR_FWD);
+	}
+
+	return 0;
+}
+
 static const struct net_device_ops emac_netdev_ops = {
 	.ndo_open = icssm_emac_ndo_open,
 	.ndo_stop = icssm_emac_ndo_stop,
@@ -2072,6 +2205,7 @@ static const struct net_device_ops emac_netdev_ops = {
 	.ndo_set_rx_mode = icssm_emac_ndo_set_rx_mode,
 	.ndo_hwtstamp_get = icssm_emac_hwtstamp_config_get,
 	.ndo_hwtstamp_set = icssm_emac_hwtstamp_config_set,
+	.ndo_set_features = icssm_emac_ndo_set_features,
 	.ndo_vlan_rx_add_vid = icssm_emac_ndo_vlan_rx_add_vid,
 	.ndo_vlan_rx_kill_vid = icssm_emac_ndo_vlan_rx_kill_vid,
 	.ndo_setup_tc = icssm_emac_ndo_setup_tc,
@@ -2239,6 +2373,10 @@ static int icssm_prueth_netdev_init(struct prueth *prueth,
 	if (fw_data->support_switch)
 		ndev->hw_features |= NETIF_F_HW_L2FW_DOFFLOAD;
 
+	if (prueth->support_lre)
+		ndev->hw_features |=
+			(NETIF_F_HW_HSR_FWD | NETIF_F_HW_HSR_TAG_RM);
+
 	ndev->features |= NETIF_F_HW_VLAN_CTAG_FILTER | NETIF_F_HW_TC;
 
 	ndev->hw_features |= NETIF_F_HW_VLAN_CTAG_FILTER;
@@ -2249,7 +2387,8 @@ static int icssm_prueth_netdev_init(struct prueth *prueth,
 	if (PRUETH_IS_EMAC(prueth))
 		netif_napi_add(ndev, &emac->napi, icssm_emac_napi_poll);
 
-	if (fw_data->support_switch && emac->port_id == PRUETH_PORT_MII0) {
+	if (emac->port_id == PRUETH_PORT_MII0 &&
+	    (fw_data->support_switch || prueth->support_lre)) {
 		netif_napi_add(ndev, &prueth->napi_hpq,
 			       icssm_prueth_lre_napi_poll_hpq);
 		netif_napi_add(ndev, &prueth->napi_lpq,
@@ -2278,6 +2417,7 @@ free:
 static void icssm_prueth_netdev_exit(struct prueth *prueth,
 				     struct device_node *eth_node)
 {
+	const struct prueth_private_data *fw_data = prueth->fw_data;
 	struct prueth_emac *emac;
 	enum prueth_mac mac;
 
@@ -2294,8 +2434,8 @@ static void icssm_prueth_netdev_exit(struct prueth *prueth,
 	if (PRUETH_IS_EMAC(prueth)) {
 		netif_napi_del(&emac->napi);
 	} else {
-		if (PRUETH_IS_SWITCH(prueth) &&
-		    emac->port_id == PRUETH_PORT_MII0) {
+		if (emac->port_id == PRUETH_PORT_MII0 &&
+		    (fw_data->support_switch || prueth->support_lre)) {
 			netif_napi_del(&prueth->napi_hpq);
 			netif_napi_del(&prueth->napi_lpq);
 		}
@@ -2390,7 +2530,10 @@ static int icssm_prueth_ndev_event(struct notifier_block *unused,
 {
 	struct net_device *ndev = netdev_notifier_info_to_dev(ptr);
 	struct netdev_notifier_changeupper_info *info;
+	struct prueth_emac *emac = netdev_priv(ndev);
+	struct prueth *prueth = emac->prueth;
 	int ret = NOTIFY_DONE;
+	enum hsr_version ver;
 
 	if (!icssm_prueth_sw_port_dev_check(ndev))
 		return NOTIFY_DONE;
@@ -2398,6 +2541,16 @@ static int icssm_prueth_ndev_event(struct notifier_block *unused,
 	switch (event) {
 	case NETDEV_CHANGEUPPER:
 		info = ptr;
+		if (ndev->features & NETIF_F_HW_HSR_TAG_RM) {
+			if (is_hsr_master(info->upper_dev)) {
+				hsr_get_version(info->upper_dev, &ver);
+				if (ver == HSR_V1)
+					prueth->eth_type = PRUSS_ETHTYPE_HSR;
+				else if (ver == PRP_V1)
+					prueth->eth_type = PRUSS_ETHTYPE_PRP;
+			}
+		}
+
 		if (netif_is_bridge_master(info->upper_dev)) {
 			if (info->linking)
 				ret = icssm_prueth_ndev_port_link
@@ -2440,6 +2593,7 @@ static int icssm_prueth_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct device_node *np;
 	struct prueth *prueth;
+	bool has_lre = false;
 	struct pruss *pruss;
 	int i, ret;
 
@@ -2598,6 +2752,15 @@ static int icssm_prueth_probe(struct platform_device *pdev)
 		prueth->mem[PRUETH_MEM_OCMC].va,
 		prueth->mem[PRUETH_MEM_OCMC].size);
 
+	if (IS_ENABLED(CONFIG_HSR) && prueth->fw_data->support_lre)
+		has_lre = true;
+
+	/* if lre is supported, then both eth nodes to be present in
+	 * DT node. If not, reset the support flag
+	 */
+	if (has_lre && (!eth0_node || !eth1_node))
+		has_lre = false;
+
 	/* RSTP: Packet re-order
 	 * configuring the interrupts for switch
 	 */
@@ -2638,6 +2801,7 @@ static int icssm_prueth_probe(struct platform_device *pdev)
 			goto free_pool;
 		}
 	}
+	prueth->support_lre = has_lre;
 	/* setup netdev interfaces */
 	if (eth0_node) {
 		ret = icssm_prueth_netdev_init(prueth, eth0_node);
@@ -2922,17 +3086,26 @@ static struct prueth_private_data am57xx_prueth_pdata = {
 	.fw_pru[PRUSS_PRU0] = {
 		.fw_name[PRUSS_ETHTYPE_EMAC] =
 			"ti-pruss/am57xx-pru0-prueth-fw.elf",
+		.fw_name[PRUSS_ETHTYPE_HSR] =
+			"ti-pruss/am57xx-pru0-pruhsr-fw.elf",
+		.fw_name[PRUSS_ETHTYPE_PRP] =
+			"ti-pruss/am57xx-pru0-pruprp-fw.elf",
 	.fw_name[PRUSS_ETHTYPE_SWITCH] =
 			"ti-pruss/am57xx-pru0-prusw-fw.elf",
 	},
 	.fw_pru[PRUSS_PRU1] = {
 		.fw_name[PRUSS_ETHTYPE_EMAC] =
 			"ti-pruss/am57xx-pru1-prueth-fw.elf",
+		.fw_name[PRUSS_ETHTYPE_HSR] =
+			"ti-pruss/am57xx-pru1-pruhsr-fw.elf",
+		.fw_name[PRUSS_ETHTYPE_PRP] =
+			"ti-pruss/am57xx-pru1-pruprp-fw.elf",
 		.fw_name[PRUSS_ETHTYPE_SWITCH] =
 			"ti-pruss/am57xx-pru1-prusw-fw.elf",
 
 	},
 	.fw_rev = FW_REV_V2_1,
+	.support_lre = true,
 	.support_switch = true,
 };
 

@@ -122,7 +122,11 @@ struct node_tbl {
 	u16 hash_mask;
 };
 
+void icssm_prueth_lre_config(struct prueth *prueth);
+void icssm_prueth_lre_cleanup(struct prueth *prueth);
 int icssm_prueth_lre_init_node_table(struct prueth *prueth);
+void icssm_prueth_lre_config_check_flags(struct prueth *prueth);
+void icssm_prueth_lre_free_memory(struct prueth *prueth);
 int icssm_prueth_lre_nt_insert(struct prueth *prueth,
 			       u8 *mac, int port, int sv_frame, int proto);
 

@@ -13,10 +13,12 @@
 #include <linux/pruss_driver.h>
 #include <linux/remoteproc/pruss.h>
 #include <linux/netdevice.h>
+#include <net/lredev.h>
 
 #include "icssm_switch.h"
 #include "icssm_prueth_ptp.h"
 #include "icssm_prueth_fdb_tbl.h"
+#include "icssm_lre_firmware.h"
 
 /* ICSSM size of redundancy tag */
 #define ICSSM_LRE_TAG_SIZE	6
@@ -32,6 +34,8 @@
 
 /* default timer for NSP and HSR/PRP */
 #define PRUETH_NSP_TIMER_MS	(100) /* Refresh NSP counters every 100ms */
+
+#define PRUETH_TIMER_MS (10)
 
 #define PRUETH_REG_DUMP_VER		1
 
@@ -52,6 +56,12 @@ enum pruss_ethtype {
 
 #define PRUETH_IS_EMAC(p)	((p)->eth_type == PRUSS_ETHTYPE_EMAC)
 #define PRUETH_IS_SWITCH(p)	((p)->eth_type == PRUSS_ETHTYPE_SWITCH)
+#define PRUETH_IS_HSR(p)	((p)->eth_type == PRUSS_ETHTYPE_HSR)
+#define PRUETH_IS_PRP(p)	((p)->eth_type == PRUSS_ETHTYPE_PRP)
+#define PRUETH_IS_LRE(p) ({		\
+	typeof(p) __p = (p);		\
+	PRUETH_IS_HSR(__p) || PRUETH_IS_PRP(__p);	\
+})
 
 /**
  * struct prueth_queue_desc - Queue descriptor
@@ -345,12 +355,14 @@ enum pruss_device {
  * @fw_pru: firmware names to be used for PRUSS ethernet usecases
  * @fw_rev: Firmware revision identifier
  * @support_switch: boolean to indicate if switch is enabled
+ * @support_lre: boolean to indicate if lre is enabled
  */
 struct prueth_private_data {
 	enum pruss_device driver_data;
 	const struct prueth_firmware fw_pru[PRUSS_NUM_PRUS];
 	enum fw_revision fw_rev;
 	bool support_switch;
+	bool support_lre;
 };
 
 struct nsp_counter {
@@ -437,6 +449,13 @@ struct prueth {
 	int rx_lpq_irq;
 	int rx_hpq_irq;
 
+	bool support_lre;
+	struct hrtimer tbl_check_timer;
+	unsigned int hsr_mode;
+	unsigned int tbl_check_period;
+	unsigned int node_table_clear;
+	unsigned int tbl_check_mask;
+	enum iec62439_3_tr_modes prp_tr_mode;
 	struct node_tbl *nt;
 	struct nt_queue_t *mac_queue;
 	struct kthread_worker *nt_kworker;
