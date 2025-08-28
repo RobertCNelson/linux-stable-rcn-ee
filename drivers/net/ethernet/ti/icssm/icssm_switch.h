@@ -282,4 +282,9 @@
 #define INTR_PAC_TMR_EXP_OFFSET_PRU1                 0x1FBC
 #define INTR_PAC_PREV_TS_RESET_VAL                   0x0
 
+#define V2_1_FDB_TBL_LOC          PRUETH_MEM_SHARED_RAM
+#define V2_1_FDB_TBL_OFFSET       0x2000
+
+#define FDB_INDEX_TBL_MAX_ENTRIES     256
+#define FDB_MAC_TBL_MAX_ENTRIES       256
 #endif /* __ICSS_SWITCH_H */
