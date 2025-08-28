@@ -336,6 +336,8 @@
 #define P0_COL_BUFFER_OFFSET	0xEE00
 #define P0_Q1_BUFFER_OFFSET	0x0000
 
+#define ICSS_COMMON_TIMESTAMP_ARRAY_OFFSET          0xC200
+
 /* Below Rx Interrupt pacing defines. */
 /* shared RAM */
 /* 1 byte for pace control */

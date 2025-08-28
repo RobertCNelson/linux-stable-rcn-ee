@@ -409,6 +409,11 @@ struct prueth_emac {
 
 };
 
+struct prueth_ndev_priority {
+	struct net_device *ndev;
+	int priority;
+};
+
 struct prueth {
 	struct device *dev;
 	struct pruss *pruss;
@@ -425,6 +430,12 @@ struct prueth {
 	struct device_node *eth_node[PRUETH_NUM_MACS];
 	struct prueth_emac *emac[PRUETH_NUM_MACS];
 	struct net_device *registered_netdevs[PRUETH_NUM_MACS];
+	struct prueth_ndev_priority *hp, *lp;
+	/* NAPI for lp and hp queue scans */
+	struct napi_struct napi_lpq;
+	struct napi_struct napi_hpq;
+	int rx_lpq_irq;
+	int rx_hpq_irq;
 
 	struct net_device *hw_bridge_dev;
 	struct fdb_tbl *fdb_tbl;
@@ -457,6 +468,12 @@ int icssm_emac_add_del_vid(struct prueth_emac *emac,
 			   bool add, __be16 proto, u16 vid);
 irqreturn_t icssm_prueth_ptp_tx_irq_handle(int irq, void *dev);
 irqreturn_t icssm_prueth_ptp_tx_irq_work(int irq, void *dev);
+
+int icssm_prueth_lre_napi_poll_lpq(struct napi_struct *napi, int budget);
+int icssm_prueth_lre_napi_poll_hpq(struct napi_struct *napi, int budget);
+
+int icssm_prueth_common_request_irqs(struct prueth_emac *emac);
+void icssm_prueth_common_free_irqs(struct prueth_emac *emac);
 
 u64 icssm_iep_get_timestamp_cycles(struct icss_iep *iep,
 				   void __iomem *mem);

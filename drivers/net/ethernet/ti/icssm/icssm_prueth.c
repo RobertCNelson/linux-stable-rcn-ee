@@ -1378,12 +1378,26 @@ static int icssm_emac_ndo_open(struct net_device *ndev)
 			goto iep_exit;
 	}
 
-	if (PRUETH_IS_EMAC(prueth) || PRUETH_IS_SWITCH(prueth))
+	/* RSTP: Packet re-order
+	 * Registering irq's for switch, irq's which are used for
+	 * lre are used for switch as well.
+	 */
+	if (PRUETH_IS_EMAC(prueth))
 		ret = icssm_emac_request_irqs(emac);
+	else
+		ret = icssm_prueth_common_request_irqs(emac);
+
 	if (ret)
 		goto rproc_shutdown;
 
-	napi_enable(&emac->napi);
+	if (PRUETH_IS_EMAC(prueth)) {
+		napi_enable(&emac->napi);
+	} else {
+		if (PRUETH_IS_SWITCH(prueth) && !prueth->emac_configured) {
+			napi_enable(&prueth->napi_hpq);
+			napi_enable(&prueth->napi_lpq);
+		}
+	}
 
 	/* start PHY */
 	phy_start(emac->phydev);
@@ -1436,7 +1450,14 @@ static int icssm_emac_ndo_stop(struct net_device *ndev)
 	/* stop PHY */
 	phy_stop(emac->phydev);
 
-	napi_disable(&emac->napi);
+	if (PRUETH_IS_EMAC(prueth)) {
+		napi_disable(&emac->napi);
+	} else {
+		if (PRUETH_IS_SWITCH(prueth) && !prueth->emac_configured) {
+			napi_disable(&prueth->napi_lpq);
+			napi_disable(&prueth->napi_hpq);
+		}
+	}
 	/* inform the upper layers. */
 	netif_stop_queue(ndev);
 
@@ -1465,13 +1486,19 @@ static int icssm_emac_ndo_stop(struct net_device *ndev)
 		}
 	}
 
-	/* For EMAC and Switch, interrupt is per port.
+	/* For EMAC, interrupt is per port.
 	 * So free interrupts same way
 	 */
 	if (PRUETH_IS_EMAC(emac->prueth) || PRUETH_IS_SWITCH(prueth)) {
-		free_irq(emac->rx_irq, ndev);
 		if (emac->emac_ptp_tx_irq)
 			free_irq(emac->emac_ptp_tx_irq, ndev);
+	}
+
+	if (PRUETH_IS_EMAC(emac->prueth)) {
+		free_irq(emac->rx_irq, ndev);
+	} else {
+		/* Free interrupts on last port */
+		icssm_prueth_common_free_irqs(emac);
 	}
 
 	/* free memory related to sw/lre */
@@ -2219,11 +2246,26 @@ static int icssm_prueth_netdev_init(struct prueth *prueth,
 	ndev->netdev_ops = &emac_netdev_ops;
 	ndev->ethtool_ops = &emac_ethtool_ops;
 
-	netif_napi_add(ndev, &emac->napi, icssm_emac_napi_poll);
+	if (PRUETH_IS_EMAC(prueth))
+		netif_napi_add(ndev, &emac->napi, icssm_emac_napi_poll);
+
+	if (fw_data->support_switch && emac->port_id == PRUETH_PORT_MII0) {
+		netif_napi_add(ndev, &prueth->napi_hpq,
+			       icssm_prueth_lre_napi_poll_hpq);
+		netif_napi_add(ndev, &prueth->napi_lpq,
+			       icssm_prueth_lre_napi_poll_lpq);
+	}
 
 	hrtimer_init(&emac->tx_hrtimer, CLOCK_MONOTONIC,
 		     HRTIMER_MODE_REL_PINNED);
 	emac->tx_hrtimer.function = icssm_emac_tx_timer_callback;
+
+	if (fw_data->support_switch && emac->port_id == PRUETH_PORT_MII0) {
+		prueth->hp->ndev = ndev;
+		prueth->hp->priority = 0;
+		prueth->lp->ndev = ndev;
+		prueth->lp->priority = 1;
+	}
 
 	return 0;
 free:
@@ -2249,7 +2291,16 @@ static void icssm_prueth_netdev_exit(struct prueth *prueth,
 
 	phy_disconnect(emac->phydev);
 
-	netif_napi_del(&emac->napi);
+	if (PRUETH_IS_EMAC(prueth)) {
+		netif_napi_del(&emac->napi);
+	} else {
+		if (PRUETH_IS_SWITCH(prueth) &&
+		    emac->port_id == PRUETH_PORT_MII0) {
+			netif_napi_del(&prueth->napi_hpq);
+			netif_napi_del(&prueth->napi_lpq);
+		}
+	}
+
 	prueth->emac[mac] = NULL;
 }
 
@@ -2547,6 +2598,46 @@ static int icssm_prueth_probe(struct platform_device *pdev)
 		prueth->mem[PRUETH_MEM_OCMC].va,
 		prueth->mem[PRUETH_MEM_OCMC].size);
 
+	/* RSTP: Packet re-order
+	 * configuring the interrupts for switch
+	 */
+	if (prueth->fw_data->support_switch) {
+		/* need to configure interrupts per queue common for
+		 * both ports
+		 */
+		prueth->hp = devm_kzalloc(dev,
+					  sizeof(struct prueth_ndev_priority),
+					  GFP_KERNEL);
+		if (!prueth->hp) {
+			ret = -ENOMEM;
+			goto free_pool;
+		}
+		prueth->lp = devm_kzalloc(dev,
+					  sizeof(struct prueth_ndev_priority),
+					  GFP_KERNEL);
+		/* cit Feature - RSTP: Packet re-order
+		 * configuring the interrupts for switch
+		 */
+		if (!prueth->lp) {
+			ret = -ENOMEM;
+			goto free_pool;
+		}
+
+		prueth->rx_lpq_irq = of_irq_get_byname(np, "rx_lp");
+		if (prueth->rx_lpq_irq < 0) {
+			ret = prueth->rx_lpq_irq;
+			if (ret != -EPROBE_DEFER)
+				dev_err(prueth->dev, "could not get rx_lp irq\n");
+			goto free_pool;
+		}
+		prueth->rx_hpq_irq = of_irq_get_byname(np, "rx_hp");
+		if (prueth->rx_hpq_irq < 0) {
+			ret = prueth->rx_hpq_irq;
+			if (ret != -EPROBE_DEFER)
+				dev_err(prueth->dev, "could not get rx_hp irq\n");
+			goto free_pool;
+		}
+	}
 	/* setup netdev interfaces */
 	if (eth0_node) {
 		ret = icssm_prueth_netdev_init(prueth, eth0_node);
