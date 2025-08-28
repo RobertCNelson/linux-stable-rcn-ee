@@ -299,7 +299,8 @@ static int icssm_emac_get_ts_info(struct net_device *ndev,
 {
 	struct prueth_emac *emac = netdev_priv(ndev);
 
-	if ((PRUETH_IS_EMAC(emac->prueth) && !emac->emac_ptp_tx_irq))
+	if ((PRUETH_IS_EMAC(emac->prueth) && !emac->emac_ptp_tx_irq) ||
+	    (PRUETH_IS_LRE(emac->prueth) && !emac->hsr_ptp_tx_irq))
 		return ethtool_op_get_ts_info(ndev, info);
 
 	info->so_timestamping =

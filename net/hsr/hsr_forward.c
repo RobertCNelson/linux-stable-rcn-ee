@@ -17,6 +17,16 @@
 
 struct hsr_node;
 
+static inline int is_hsr_l2ptp(struct sk_buff *skb)
+{
+	struct hsr_ethhdr *hsr_ethhdr;
+
+	hsr_ethhdr = (struct hsr_ethhdr *)skb_mac_header(skb);
+
+	return (hsr_ethhdr->ethhdr.h_proto == htons(ETH_P_HSR) &&
+		hsr_ethhdr->hsr_tag.encap_proto == htons(ETH_P_1588));
+}
+
 /* The uses I can see for these HSR supervision frames are:
  * 1) Use the frames that are sent after node initialization ("HSR_TLV.Type =
  *    22") to reset any sequence_nr counters belonging to that node. Useful if
@@ -308,7 +318,11 @@ static struct sk_buff *hsr_fill_tag(struct sk_buff *skb,
 	else
 		hsr_ethhdr = (struct hsr_ethhdr *)pc;
 
-	hsr_set_path_id(hsr_ethhdr, port);
+	if (REDINFO_T(skb) == DIRECTED_TX)
+		set_hsr_tag_path(&hsr_ethhdr->hsr_tag, REDINFO_PATHID(skb));
+	else
+		hsr_set_path_id(hsr_ethhdr, port);
+
 	set_hsr_tag_LSDU_size(&hsr_ethhdr->hsr_tag, lsdu_size);
 	hsr_ethhdr->hsr_tag.sequence_nr = htons(frame->sequence_nr);
 	hsr_ethhdr->hsr_tag.encap_proto = hsr_ethhdr->ethhdr.h_proto;
@@ -325,9 +339,12 @@ static struct sk_buff *hsr_fill_tag(struct sk_buff *skb,
 struct sk_buff *hsr_create_tagged_frame(struct hsr_frame_info *frame,
 					struct hsr_port *port)
 {
+	struct skb_redundant_info *sred;
+	struct hsr_ethhdr *hsr_ethhdr;
 	unsigned char *dst, *src;
 	struct sk_buff *skb;
 	int movelen;
+	u16 s;
 
 	if (frame->skb_hsr) {
 		struct hsr_ethhdr *hsr_ethhdr =
@@ -362,7 +379,32 @@ struct sk_buff *hsr_create_tagged_frame(struct hsr_frame_info *frame,
 	/* skb_put_padto free skb on error and hsr_fill_tag returns NULL in
 	 * that case
 	 */
-	return hsr_fill_tag(skb, frame, port, port->hsr->prot_version);
+
+	skb = hsr_fill_tag(skb, frame, port, port->hsr->prot_version);
+	if (!skb)
+		return NULL;
+
+	if (REDINFO_T(skb) == DIRECTED_TX)
+		return skb;
+
+	skb_shinfo(skb)->tx_flags |= skb_shinfo(frame->skb_std)->tx_flags &
+				     SKBTX_ANY_TSTAMP;
+	skb->sk = frame->skb_std->sk;
+
+	/* TODO: should check socket option instead? */
+	if (is_hsr_l2ptp(skb)) {
+		sred = skb_redinfo(skb);
+		/* assumes no vlan */
+		hsr_ethhdr = (struct hsr_ethhdr *)skb_mac_header(skb);
+		sred->io_port = (PTP_EVT_OUT | BIT(port->type - 1));
+		sred->ethertype = ntohs(hsr_ethhdr->ethhdr.h_proto);
+		s = ntohs(hsr_ethhdr->hsr_tag.path_and_LSDU_size);
+		sred->lsdu_size = s & 0xfff;
+		sred->pathid = (s >> 12) & 0xf;
+		sred->seqnr = hsr_get_skb_sequence_nr(skb);
+	}
+
+	return skb;
 }
 
 struct sk_buff *prp_create_tagged_frame(struct hsr_frame_info *frame,
@@ -505,6 +547,56 @@ bool hsr_drop_frame(struct hsr_frame_info *frame, struct hsr_port *port)
 	return false;
 }
 
+static void stripped_skb_get_shared_info(struct sk_buff *skb_stripped,
+					 struct hsr_frame_info *frame)
+{
+	struct hsr_port *port_rcv = frame->port_rcv;
+	struct skb_redundant_info *sred;
+	struct sk_buff *skb_hsr, *skb;
+	struct hsr_ethhdr *hsr_ethhdr;
+	u16 s;
+
+	if (port_rcv->hsr->prot_version > HSR_V1)
+		return;
+
+	if (!frame->skb_hsr)
+		return;
+
+	skb_hsr = frame->skb_hsr;
+	skb = skb_stripped;
+
+	if (is_hsr_l2ptp(skb_hsr)) {
+		skb_hwtstamps(skb)->hwtstamp = skb_hwtstamps(skb_hsr)->hwtstamp;
+		skb_redinfo_hwtstamps(skb)->hwtstamp =
+			skb_redinfo_hwtstamps(skb_hsr)->hwtstamp;
+
+		sred = skb_redinfo(skb);
+		/* assumes no vlan */
+		hsr_ethhdr = (struct hsr_ethhdr *)skb_mac_header(skb_hsr);
+		sred->io_port = (PTP_MSG_IN | BIT(port_rcv->type - 1));
+		sred->ethertype = ntohs(hsr_ethhdr->ethhdr.h_proto);
+		s = ntohs(hsr_ethhdr->hsr_tag.path_and_LSDU_size);
+		sred->lsdu_size = s & 0xfff;
+		sred->pathid = (s >> 12) & 0xf;
+		sred->seqnr = frame->sequence_nr;
+	}
+}
+
+static unsigned int
+hsr_directed_tx_ports(struct hsr_frame_info *frame)
+{
+	struct sk_buff *skb;
+
+	if (frame->skb_std)
+		skb = frame->skb_std;
+	else
+		return 0;
+
+	if (REDINFO_T(skb) == DIRECTED_TX)
+		return REDINFO_PORTS(skb);
+
+	return 0;
+}
 /* Forward the frame through all devices except:
  * - Back through the receiving device
  * - If it's a HSR frame: through a device where it has passed before
@@ -519,6 +611,7 @@ bool hsr_drop_frame(struct hsr_frame_info *frame, struct hsr_port *port)
  */
 static void hsr_forward_do(struct hsr_frame_info *frame)
 {
+	unsigned int dir_ports = 0;
 	struct hsr_port *port;
 	struct sk_buff *skb;
 	bool sent = false;
@@ -567,11 +660,16 @@ static void hsr_forward_do(struct hsr_frame_info *frame)
 		    hsr->proto_ops->drop_frame(frame, port))
 			continue;
 
+		dir_ports = hsr_directed_tx_ports(frame);
+		if (dir_ports && !(dir_ports & BIT(port->type - 1)))
+			continue;
 		if (port->type == HSR_PT_SLAVE_A ||
-		    port->type == HSR_PT_SLAVE_B)
+		    port->type == HSR_PT_SLAVE_B) {
 			skb = hsr->proto_ops->create_tagged_frame(frame, port);
-		else
+		} else {
 			skb = hsr->proto_ops->get_untagged_frame(frame, port);
+			stripped_skb_get_shared_info(skb, frame);
+		}
 
 		if (!skb) {
 			frame->port_rcv->dev->stats.rx_dropped++;
@@ -622,8 +720,11 @@ static void handle_std_frame(struct sk_buff *skb,
 	if (port->type != HSR_PT_MASTER)
 		frame->is_from_san = true;
 
-	if (port->type == HSR_PT_MASTER ||
-	    port->type == HSR_PT_INTERLINK) {
+	if ((REDINFO_T(skb) == DIRECTED_TX) &&
+	    (REDINFO_LSDU_SIZE(skb))) {
+		frame->sequence_nr = REDINFO_SEQNR(skb);
+	} else if (port->type == HSR_PT_MASTER ||
+		   port->type == HSR_PT_INTERLINK) {
 		/* Sequence nr for the master/interlink node */
 		lockdep_assert_held(&hsr->seqnr_lock);
 		frame->sequence_nr = hsr->sequence_nr;

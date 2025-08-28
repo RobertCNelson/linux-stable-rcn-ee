@@ -268,6 +268,21 @@ int icssm_prueth_common_request_irqs(struct prueth_emac *emac)
 		}
 	}
 
+	if (PRUETH_IS_LRE(prueth)) {
+		if (emac->hsr_ptp_tx_irq) {
+			ret = request_threaded_irq
+				(emac->hsr_ptp_tx_irq,
+				 icssm_prueth_ptp_tx_irq_handle,
+				 icssm_prueth_ptp_tx_irq_work,
+				 IRQF_TRIGGER_HIGH | IRQF_ONESHOT,
+				 ndev->name, ndev);
+			if (ret) {
+				netdev_err(ndev, "unable to request PTP TX IRQ\n");
+				return ret;
+			}
+		}
+	}
+
 	/* HSR/PRP. Request irq when first port is initialized */
 	if (prueth->emac_configured)
 		return 0;
@@ -301,6 +316,11 @@ free_ptp_irq:
 		if (emac->emac_ptp_tx_irq)
 			free_irq(emac->emac_ptp_tx_irq, emac->ndev);
 	}
+
+	if (PRUETH_IS_LRE(prueth)) {
+		if (emac->hsr_ptp_tx_irq)
+			free_irq(emac->hsr_ptp_tx_irq, emac->ndev);
+	}
 	return ret;
 }
 
@@ -313,6 +333,11 @@ free_ptp_irq:
 void icssm_prueth_common_free_irqs(struct prueth_emac *emac)
 {
 	struct prueth *prueth = emac->prueth;
+
+	if (PRUETH_IS_LRE(prueth)) {
+		if (emac->hsr_ptp_tx_irq)
+			free_irq(emac->hsr_ptp_tx_irq, emac->ndev);
+	}
 
 	/* HSR/PRP: free irqs when last port is down */
 	if (prueth->emac_configured)

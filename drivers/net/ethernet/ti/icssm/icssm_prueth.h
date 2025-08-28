@@ -412,8 +412,10 @@ struct prueth_emac {
 	bool nsp_enabled;
 
 	struct sk_buff *ptp_skb[PRUETH_PTP_TS_EVENTS];
+	struct sk_buff *ptp_ct_skb[PRUETH_PTP_TS_EVENTS];
 	spinlock_t ptp_skb_lock; /* spin lock used to protect PTP */
 	int emac_ptp_tx_irq;
+	int hsr_ptp_tx_irq;
 	bool ptp_tx_enable;
 	bool ptp_rx_enable;
 
