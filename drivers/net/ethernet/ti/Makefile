@@ -4,7 +4,8 @@
 #
 
 obj-$(CONFIG_TI_PRUETH) += icssm-prueth.o
-icssm-prueth-y := icssm/icssm_prueth.o icssm/icssm_ethtool.o icssm/icssm_prueth_dos.o icssm/icssm_prueth_switch.o icssm/icssm_switchdev.o icssm/icssm_prueth_common.o
+icssm-prueth-y := icssm/icssm_prueth.o icssm/icssm_ethtool.o icssm/icssm_prueth_dos.o icssm/icssm_prueth_switch.o icssm/icssm_switchdev.o icssm/icssm_prueth_common.o \
+		  icssm/icssm_prueth_lre.o
 
 obj-$(CONFIG_TI_CPSW) += cpsw-common.o
 obj-$(CONFIG_TI_DAVINCI_EMAC) += cpsw-common.o

@@ -437,6 +437,14 @@ struct prueth {
 	int rx_lpq_irq;
 	int rx_hpq_irq;
 
+	struct node_tbl *nt;
+	struct nt_queue_t *mac_queue;
+	struct kthread_worker *nt_kworker;
+	struct kthread_work nt_work;
+	u32 rem_cnt;
+	/* lock between kthread worker and rx packet processing code */
+	spinlock_t nt_lock;
+
 	struct net_device *hw_bridge_dev;
 	struct fdb_tbl *fdb_tbl;
 
