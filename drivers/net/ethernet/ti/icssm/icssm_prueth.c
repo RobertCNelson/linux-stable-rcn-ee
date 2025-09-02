@@ -2953,7 +2953,7 @@ static int icssm_prueth_netdev_init(struct prueth *prueth,
 					      icssm_emac_adjust_link);
 	if (!emac->phydev) {
 		dev_dbg(prueth->dev, "PHY connection failed\n");
-		ret = -EPROBE_DEFER;
+		ret = -ENODEV;
 		goto free;
 	}
 
