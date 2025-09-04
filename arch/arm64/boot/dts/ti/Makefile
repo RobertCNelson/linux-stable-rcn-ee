@@ -77,9 +77,37 @@ dtb-$(CONFIG_ARCH_K3) += k3-j721s2-evm.dtb
 dtb-$(CONFIG_ARCH_K3) += k3-am69-sk.dtb
 dtb-$(CONFIG_ARCH_K3) += k3-j784s4-evm.dtb
 
+dtb-$(CONFIG_ARCH_K3) += k3-am6232-pocketbeagle2.dtb
+dtb-$(CONFIG_ARCH_K3) += k3-am6232-pocketbeagle2-techlab-cape.dtbo
+dtb-$(CONFIG_ARCH_K3) += k3-am62-pocketbeagle2-ardupilot-cape.dtbo
+dtb-$(CONFIG_ARCH_K3) += k3-am62-pocketbeagle2-leds-off.dtbo
+dtb-$(CONFIG_ARCH_K3) += k3-am62-pocketbeagle2-mspm0swd.dtbo
+dtb-$(CONFIG_ARCH_K3) += k3-am62-pocketbeagle2-techlab-cape.dtbo
+dtb-$(CONFIG_ARCH_K3) += k3-am625-beagleplay-bcfserial-no-firmware.dtbo
+dtb-$(CONFIG_ARCH_K3) += k3-j721e-beagleboneai64-BBORG_MOTOR.dtbo
+dtb-$(CONFIG_ARCH_K3) += k3-j721e-beagleboneai64-pwm-epwm0-p8_13.dtbo
+dtb-$(CONFIG_ARCH_K3) += k3-j721e-beagleboneai64-pwm-epwm0-p8_13-p8_19.dtbo
+dtb-$(CONFIG_ARCH_K3) += k3-j721e-beagleboneai64-pwm-epwm0-p8_19.dtbo
+dtb-$(CONFIG_ARCH_K3) += k3-j721e-beagleboneai64-pwm-epwm2-p9_14.dtbo
+dtb-$(CONFIG_ARCH_K3) += k3-j721e-beagleboneai64-pwm-epwm2-p9_14-p9_16.dtbo
+dtb-$(CONFIG_ARCH_K3) += k3-j721e-beagleboneai64-pwm-epwm2-p9_16.dtbo
+dtb-$(CONFIG_ARCH_K3) += k3-j721e-beagleboneai64-pwm-epwm4-p9_25.dtbo
+dtb-$(CONFIG_ARCH_K3) += k3-j721e-beagleboneai64-spi-mcspi1-cs0.dtbo
+dtb-$(CONFIG_ARCH_K3) += k3-j721e-beagleboneai64-spi-mcspi1-cs0-no-miso.dtbo
+dtb-$(CONFIG_ARCH_K3) += k3-j721e-beagleboneai64-spi-mcspi2-cs0.dtbo
+dtb-$(CONFIG_ARCH_K3) += k3-j721e-beagleboneai64-spi-mcspi3-cs0-no-miso.dtbo
+dtb-$(CONFIG_ARCH_K3) += k3-j721e-beagleboneai64-spi-mcspi6-cs0-cs1.dtbo
+dtb-$(CONFIG_ARCH_K3) += k3-j721e-beagleboneai64-spi-mcspi6-cs0.dtbo
+dtb-$(CONFIG_ARCH_K3) += k3-j721e-beagleboneai64-spi-mcspi6-cs1-no-miso.dtbo
+dtb-$(CONFIG_ARCH_K3) += k3-j721e-beagleboneai64-spi-mcspi7-cs0.dtbo
+
 # Enable support for device-tree overlays
 DTC_FLAGS_k3-am625-sk += -@
 DTC_FLAGS_k3-am62-lp-sk += -@
 DTC_FLAGS_k3-am6548-iot2050-advanced-m2 += -@
 DTC_FLAGS_k3-j721e-common-proc-board += -@
 DTC_FLAGS_k3-j721s2-common-proc-board += -@
+DTC_FLAGS_k3-am62-pocketbeagle2 += -@
+DTC_FLAGS_k3-am6232-pocketbeagle2 += -@
+DTC_FLAGS_k3-am67a-beagley-ai += -@
+DTC_FLAGS_k3-j721e-beagleboneai64 += -@
