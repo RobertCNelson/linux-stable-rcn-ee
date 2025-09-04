@@ -31,6 +31,19 @@
 			snps,usb2-lpm-disable;
 		};
 	};
+
+	gpu: gpu@fd80000 {
+		 compatible = "ti,am62p-pvr", "img,pvr-bxs64";
+		 reg = <0x00 0x0fd80000 0x00 0x80000>;
+		 interrupts = <GIC_SPI 241 IRQ_TYPE_LEVEL_HIGH>;
+		 power-domains = <&k3_pds 237 TI_SCI_PD_EXCLUSIVE>,
+				 <&k3_pds 242 TI_SCI_PD_EXCLUSIVE>;
+		 assigned-clocks = <&k3_clks 237 3>;
+		 assigned-clock-rates = <800000000>;
+		 power-domain-names = "firmware", "dust";
+		 clocks = <&k3_clks 237 3>;
+		 clock-names = "core";
+	};
 };
 
 &oc_sram {
@@ -42,17 +55,23 @@
 	ti,interrupt-ranges = <5 69 35>;
 };
 
-&main_pmx0 {
-	pinctrl-single,gpio-range =
-		<&main_pmx0_range 0 32 PIN_GPIO_RANGE_IOPAD>,
-		<&main_pmx0_range 33 38 PIN_GPIO_RANGE_IOPAD>,
-		<&main_pmx0_range 72 22 PIN_GPIO_RANGE_IOPAD>,
-		<&main_pmx0_range 137 5 PIN_GPIO_RANGE_IOPAD>,
-		<&main_pmx0_range 143 3 PIN_GPIO_RANGE_IOPAD>,
-		<&main_pmx0_range 149 2 PIN_GPIO_RANGE_IOPAD>;
+&main_conf {
+	audio_refclk0: clock-controller@82e0 {
+		compatible = "ti,am62-audio-refclk";
+		reg = <0x82e0 0x4>;
+		clocks = <&k3_clks 157 0>;
+		assigned-clocks = <&k3_clks 157 0>;
+		assigned-clock-parents = <&k3_clks 157 16>;
+		#clock-cells = <0>;
+	};
 
-	main_pmx0_range: gpio-range {
-		#pinctrl-single,gpio-range-cells = <3>;
+	audio_refclk1: clock-controller@82e4 {
+		compatible = "ti,am62-audio-refclk";
+		reg = <0x82e4 0x4>;
+		clocks = <&k3_clks 157 18>;
+		assigned-clocks = <&k3_clks 157 18>;
+		assigned-clock-parents = <&k3_clks 157 34>;
+		#clock-cells = <0>;
 	};
 };
 
