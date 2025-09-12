@@ -156,12 +156,24 @@
 };
 
 &pmx0 {
-	main_uart0_pins_default: main-uart0-default-pins {
+	main_uart0_tx_pins_default: main-uart0-tx-default-pins {
 		pinctrl-single,pins = <
-			AM62LX_IOPAD(0x01b4, PIN_INPUT, 0)	/* (D13) UART0_RXD */
 			AM62LX_IOPAD(0x01b8, PIN_OUTPUT, 0)	/* (C13) UART0_TXD */
 		>;
 		bootph-all;
+	};
+
+	main_uart0_rx_pins_default: main-uart0-rx-default-pins {
+		pinctrl-single,pins = <
+			AM62LX_IOPAD(0x01b4, PIN_INPUT, 0)	/* (D13) UART0_RXD */
+		>;
+		bootph-all;
+	};
+
+	main_uart0_rx_pins_wakeup: main-uart0-rx-wakeup-pins {
+		pinctrl-single,pins = <
+			AM62LX_IOPAD(0x01b4, PIN_INPUT | PIN_WKUP_EN, 0)	/* (D13) UART0_RXD */
+		>;
 	};
 
 	main_uart1_pins_default: main-uart1-default-pins {
@@ -404,8 +416,10 @@
 };
 
 &main_uart0 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&main_uart0_pins_default>;
+	pinctrl-names = "default", "wakeup";
+	pinctrl-0 = <&main_uart0_tx_pins_default>, <&main_uart0_rx_pins_default>;
+	pinctrl-1 = <&main_uart0_tx_pins_default>, <&main_uart0_rx_pins_wakeup>;
+	wakeup-source  = <&system_deep_sleep>;
 	status = "okay";
 	bootph-all;
 };
