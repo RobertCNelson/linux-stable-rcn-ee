@@ -9,6 +9,7 @@
 #include <crypto/aead.h>
 #include <crypto/aes.h>
 #include <crypto/algapi.h>
+#include <crypto/engine.h>
 #include <crypto/internal/aead.h>
 #include <crypto/internal/skcipher.h>
 
@@ -78,103 +79,82 @@ enum aes_ctrl_mode_masks {
 
 static int cnt;
 
-static int dthe_cipher_cra_init(struct crypto_skcipher *tfm)
+static int dthe_cipher_init_tfm(struct crypto_skcipher *tfm)
 {
 	struct dthe_tfm_ctx *ctx = crypto_skcipher_ctx(tfm);
 	struct dthe_data *dev_data = dthe_get_dev(ctx);
 
-	void __iomem *aes_base_reg = dev_data->regs + DTHE_P_AES_BASE;
-	u32 aes_irqenable_val = readl_relaxed(aes_base_reg + DTHE_P_AES_IRQENABLE);
-	u32 aes_sysconfig_val = readl_relaxed(aes_base_reg + DTHE_P_AES_SYSCONFIG);
+	crypto_skcipher_set_reqsize(tfm, sizeof(struct dthe_aes_req_ctx));
 
-	memzero_explicit(ctx, sizeof(*ctx));
 	ctx->dev_data = dev_data;
-	ctx->ctx_info.aes_ctx = kzalloc(sizeof(*ctx->ctx_info.aes_ctx), GFP_KERNEL);
-	if (!ctx->ctx_info.aes_ctx)
-		return -ENOMEM;
-
-	aes_sysconfig_val |= DTHE_AES_SYSCONFIG_DMA_DATA_IN_OUT_EN;
-	writel_relaxed(aes_sysconfig_val, aes_base_reg + DTHE_P_AES_SYSCONFIG);
-
-	aes_irqenable_val |= DTHE_AES_IRQENABLE_EN_ALL;
-	writel_relaxed(aes_irqenable_val, aes_base_reg + DTHE_P_AES_IRQENABLE);
+	ctx->keylen = 0;
 
 	return 0;
 }
 
-static void dthe_cipher_cra_exit(struct crypto_skcipher *tfm)
-{
-	struct dthe_tfm_ctx *ctx = crypto_skcipher_ctx(tfm);
-	struct dthe_data *dev_data = dthe_get_dev(ctx);
-
-	void __iomem *aes_base_reg = dev_data->regs + DTHE_P_AES_BASE;
-
-	kfree(ctx->ctx_info.aes_ctx);
-	writel_relaxed(0, aes_base_reg + DTHE_P_AES_IRQENABLE);
-}
-
-static int dthe_ecb_aes_setkey(struct crypto_skcipher *tfm, const u8 *key, unsigned int keylen)
+static int dthe_aes_ecb_setkey(struct crypto_skcipher *tfm, const u8 *key, unsigned int keylen)
 {
 	struct dthe_tfm_ctx *ctx = crypto_skcipher_ctx(tfm);
 
 	if (keylen != AES_KEYSIZE_128 && keylen != AES_KEYSIZE_192 && keylen != AES_KEYSIZE_256)
 		return -EINVAL;
 
-	ctx->ctx_info.aes_ctx->mode = DTHE_AES_ECB;
-	ctx->ctx_info.aes_ctx->keylen = keylen;
-	memcpy(ctx->ctx_info.aes_ctx->key, key, keylen);
+	ctx->aes_mode = DTHE_AES_ECB;
+	ctx->keylen = keylen;
+	memcpy(ctx->key, key, keylen);
 
 	return 0;
 }
 
-static int dthe_cbc_aes_setkey(struct crypto_skcipher *tfm, const u8 *key, unsigned int keylen)
+static int dthe_aes_cbc_setkey(struct crypto_skcipher *tfm, const u8 *key, unsigned int keylen)
 {
 	struct dthe_tfm_ctx *ctx = crypto_skcipher_ctx(tfm);
 
 	if (keylen != AES_KEYSIZE_128 && keylen != AES_KEYSIZE_192 && keylen != AES_KEYSIZE_256)
 		return -EINVAL;
 
-	ctx->ctx_info.aes_ctx->mode = DTHE_AES_CBC;
-	ctx->ctx_info.aes_ctx->keylen = keylen;
-	memcpy(ctx->ctx_info.aes_ctx->key, key, keylen);
+	ctx->aes_mode = DTHE_AES_CBC;
+	ctx->keylen = keylen;
+	memcpy(ctx->key, key, keylen);
 
 	return 0;
 }
 
-static void dthe_aes_set_ctrl_key(struct dthe_tfm_ctx *ctx, u32 *iv_in)
+static void dthe_aes_set_ctrl_key(struct dthe_tfm_ctx *ctx,
+				  struct dthe_aes_req_ctx *rctx,
+				  u32 *iv_in)
 {
 	struct dthe_data *dev_data = dthe_get_dev(ctx);
-	struct dthe_aes_ctx *actx = ctx->ctx_info.aes_ctx;
 	void __iomem *aes_base_reg = dev_data->regs + DTHE_P_AES_BASE;
 	u32 ctrl_val = 0;
 
-	writel_relaxed(actx->key[0], aes_base_reg + DTHE_P_AES_KEY1_0);
-	writel_relaxed(actx->key[1], aes_base_reg + DTHE_P_AES_KEY1_1);
-	writel_relaxed(actx->key[2], aes_base_reg + DTHE_P_AES_KEY1_2);
-	writel_relaxed(actx->key[3], aes_base_reg + DTHE_P_AES_KEY1_3);
+	writel_relaxed(ctx->key[0], aes_base_reg + DTHE_P_AES_KEY1_0);
+	writel_relaxed(ctx->key[1], aes_base_reg + DTHE_P_AES_KEY1_1);
+	writel_relaxed(ctx->key[2], aes_base_reg + DTHE_P_AES_KEY1_2);
+	writel_relaxed(ctx->key[3], aes_base_reg + DTHE_P_AES_KEY1_3);
 
-	if (actx->keylen > AES_KEYSIZE_128) {
-		writel_relaxed(actx->key[4], aes_base_reg + DTHE_P_AES_KEY1_4);
-		writel_relaxed(actx->key[5], aes_base_reg + DTHE_P_AES_KEY1_5);
+	if (ctx->keylen > AES_KEYSIZE_128) {
+		writel_relaxed(ctx->key[4], aes_base_reg + DTHE_P_AES_KEY1_4);
+		writel_relaxed(ctx->key[5], aes_base_reg + DTHE_P_AES_KEY1_5);
 	}
-	if (actx->keylen == AES_KEYSIZE_256) {
-		writel_relaxed(actx->key[6], aes_base_reg + DTHE_P_AES_KEY1_6);
-		writel_relaxed(actx->key[7], aes_base_reg + DTHE_P_AES_KEY1_7);
+	if (ctx->keylen == AES_KEYSIZE_256) {
+		writel_relaxed(ctx->key[6], aes_base_reg + DTHE_P_AES_KEY1_6);
+		writel_relaxed(ctx->key[7], aes_base_reg + DTHE_P_AES_KEY1_7);
 	}
 
-	if (actx->enc)
+	if (rctx->enc)
 		ctrl_val |= DTHE_AES_CTRL_DIR_ENC;
 
-	if (actx->keylen == AES_KEYSIZE_128)
+	if (ctx->keylen == AES_KEYSIZE_128)
 		ctrl_val |= DTHE_AES_CTRL_KEYSIZE_16B;
-	else if (actx->keylen == AES_KEYSIZE_192)
+	else if (ctx->keylen == AES_KEYSIZE_192)
 		ctrl_val |= DTHE_AES_CTRL_KEYSIZE_24B;
 	else
 		ctrl_val |= DTHE_AES_CTRL_KEYSIZE_32B;
 
 	// Write AES mode
 	ctrl_val &= DTHE_AES_CTRL_MODE_CLEAR_MASK;
-	switch (ctx->ctx_info.aes_ctx->mode) {
+	switch (ctx->aes_mode) {
 	case DTHE_AES_ECB:
 		ctrl_val |= AES_CTRL_ECB_MASK;
 		break;
@@ -196,28 +176,17 @@ static void dthe_aes_set_ctrl_key(struct dthe_tfm_ctx *ctx, u32 *iv_in)
 static void dthe_aes_dma_in_callback(void *data)
 {
 	struct skcipher_request *req = (struct skcipher_request *)data;
-	struct dthe_tfm_ctx *ctx = crypto_skcipher_ctx(crypto_skcipher_reqtfm(req));
-	struct dthe_data *dev_data = dthe_get_dev(ctx);
+	struct dthe_aes_req_ctx *rctx = skcipher_request_ctx(req);
 
-	// For modes other than ECB, read IV_OUT
-	if (ctx->ctx_info.aes_ctx->mode != DTHE_AES_ECB) {
-		void __iomem *aes_base_reg = dev_data->regs + DTHE_P_AES_BASE;
-		u32 *iv_out = (u32 *)req->iv;
-
-		for (int i = 0; i < AES_IV_WORDS; ++i)
-			iv_out[i] = readl_relaxed(aes_base_reg +
-						  DTHE_P_AES_IV_IN_0 +
-						  (DTHE_REG_SIZE * i));
-	}
-
-	complete(&ctx->ctx_info.aes_ctx->aes_compl);
+	complete(&rctx->aes_compl);
 }
 
-static int dthe_aes_run(struct skcipher_request *req)
+static int dthe_aes_run(struct crypto_engine *engine, void *areq)
 {
+	struct skcipher_request *req = container_of(areq, struct skcipher_request, base);
 	struct dthe_tfm_ctx *ctx = crypto_skcipher_ctx(crypto_skcipher_reqtfm(req));
 	struct dthe_data *dev_data = dthe_get_dev(ctx);
-	struct dthe_aes_ctx *actx = ctx->ctx_info.aes_ctx;
+	struct dthe_aes_req_ctx *rctx = skcipher_request_ctx(req);
 
 	unsigned int len = req->cryptlen;
 	struct scatterlist *src = req->src;
@@ -239,6 +208,11 @@ static int dthe_aes_run(struct skcipher_request *req)
 
 	void __iomem *aes_base_reg = dev_data->regs + DTHE_P_AES_BASE;
 
+	u32 aes_sysconfig_val = readl_relaxed(aes_base_reg + DTHE_P_AES_SYSCONFIG);
+
+	aes_sysconfig_val |= DTHE_AES_SYSCONFIG_DMA_DATA_IN_OUT_EN;
+	writel_relaxed(aes_sysconfig_val, aes_base_reg + DTHE_P_AES_SYSCONFIG);
+
 	if (src == dst) {
 		diff_dst = false;
 		src_dir = DMA_BIDIRECTIONAL;
@@ -255,7 +229,7 @@ static int dthe_aes_run(struct skcipher_request *req)
 	src_mapped_nents = dma_map_sg(tx_dev, src, src_nents, src_dir);
 	if (src_mapped_nents == 0) {
 		ret = -EINVAL;
-		goto aes_err;
+		goto aes_map_src_err;
 	}
 
 	if (!diff_dst) {
@@ -267,7 +241,7 @@ static int dthe_aes_run(struct skcipher_request *req)
 		if (dst_mapped_nents == 0) {
 			dma_unmap_sg(tx_dev, src, src_nents, src_dir);
 			ret = -EINVAL;
-			goto aes_err;
+			goto aes_map_dst_err;
 		}
 	}
 
@@ -300,16 +274,15 @@ static int dthe_aes_run(struct skcipher_request *req)
 	desc_in->callback = dthe_aes_dma_in_callback;
 	desc_in->callback_param = req;
 
-	init_completion(&actx->aes_compl);
+	init_completion(&rctx->aes_compl);
 
-	mutex_lock(&dev_data->aes_mutex);
-
-	if (actx->mode == DTHE_AES_ECB)
-		dthe_aes_set_ctrl_key(ctx, NULL);
+	if (ctx->aes_mode == DTHE_AES_ECB)
+		dthe_aes_set_ctrl_key(ctx, rctx, NULL);
 	else
-		dthe_aes_set_ctrl_key(ctx, (u32 *)req->iv);
+		dthe_aes_set_ctrl_key(ctx, rctx, (u32 *)req->iv);
 
-	writel_relaxed(req->cryptlen, aes_base_reg + DTHE_P_AES_C_LENGTH_0);
+	writel_relaxed(lower_32_bits(req->cryptlen), aes_base_reg + DTHE_P_AES_C_LENGTH_0);
+	writel_relaxed(upper_32_bits(req->cryptlen), aes_base_reg + DTHE_P_AES_C_LENGTH_1);
 
 	dmaengine_submit(desc_in);
 	dmaengine_submit(desc_out);
@@ -317,112 +290,128 @@ static int dthe_aes_run(struct skcipher_request *req)
 	dma_async_issue_pending(dev_data->dma_aes_rx);
 	dma_async_issue_pending(dev_data->dma_aes_tx);
 
-	// Need to do a timeout to ensure mutex gets unlocked if DMA callback fails for any reason
-	ret = wait_for_completion_timeout(&actx->aes_compl, msecs_to_jiffies(DTHE_DMA_TIMEOUT_MS));
+	// Need to do a timeout to ensure finalise gets called if DMA callback fails for any reason
+	ret = wait_for_completion_timeout(&rctx->aes_compl, msecs_to_jiffies(DTHE_DMA_TIMEOUT_MS));
 	if (!ret) {
 		ret = -ETIMEDOUT;
+		dmaengine_terminate_sync(dev_data->dma_aes_rx);
+		dmaengine_terminate_sync(dev_data->dma_aes_tx);
 
 		for (int i = 0; i < AES_BLOCK_WORDS; ++i)
 			readl_relaxed(aes_base_reg + DTHE_P_AES_DATA_IN_OUT + (DTHE_REG_SIZE * i));
-		for (int i = 0; i < AES_IV_WORDS; ++i)
-			readl_relaxed(aes_base_reg + DTHE_P_AES_IV_IN_0 + (DTHE_REG_SIZE * i));
 	} else {
 		ret = 0;
 	}
 
-	mutex_unlock(&dev_data->aes_mutex);
+	// For modes other than ECB, read IV_OUT
+	if (ctx->aes_mode != DTHE_AES_ECB) {
+		u32 *iv_out = (u32 *)req->iv;
+
+		for (int i = 0; i < AES_IV_WORDS; ++i)
+			iv_out[i] = readl_relaxed(aes_base_reg +
+						  DTHE_P_AES_IV_IN_0 +
+						  (DTHE_REG_SIZE * i));
+	}
 
 aes_prep_err:
-	dma_unmap_sg(tx_dev, src, src_nents, src_dir);
 	if (dst_dir != DMA_BIDIRECTIONAL)
 		dma_unmap_sg(rx_dev, dst, dst_nents, dst_dir);
+aes_map_dst_err:
+	dma_unmap_sg(tx_dev, src, src_nents, src_dir);
 
-aes_err:
-	skcipher_request_complete(req, ret);
-	return ret;
+aes_map_src_err:
+	local_bh_disable();
+	crypto_finalize_skcipher_request(dev_data->aes_engine, req, ret);
+	local_bh_enable();
+	return 0;
 }
 
-static int dthe_aes_crypt(struct skcipher_request *req, int enc)
+static int dthe_aes_crypt(struct skcipher_request *req)
 {
 	struct dthe_tfm_ctx *ctx = crypto_skcipher_ctx(crypto_skcipher_reqtfm(req));
+	struct dthe_data *dev_data = dthe_get_dev(ctx);
+	struct crypto_engine *engine;
 
 	/*
 	 * If data is not a multiple of AES_BLOCK_SIZE, need to return -EINVAL
 	 * If data length input is zero, no need to do any operation.
 	 */
-	if (req->cryptlen % AES_BLOCK_SIZE) {
-		skcipher_request_complete(req, -EINVAL);
+	if (req->cryptlen % AES_BLOCK_SIZE)
 		return -EINVAL;
-	}
-	if (req->cryptlen == 0) {
-		skcipher_request_complete(req, 0);
-		return 0;
-	}
 
-	ctx->ctx_info.aes_ctx->enc = enc;
-	return dthe_aes_run(req);
+	if (req->cryptlen == 0)
+		return 0;
+
+	engine = dev_data->aes_engine;
+	return crypto_transfer_skcipher_request_to_engine(engine, req);
 }
 
 static int dthe_aes_encrypt(struct skcipher_request *req)
 {
-	return dthe_aes_crypt(req, 1);
+	struct dthe_aes_req_ctx *rctx = skcipher_request_ctx(req);
+
+	rctx->enc = 1;
+	return dthe_aes_crypt(req);
 }
 
 static int dthe_aes_decrypt(struct skcipher_request *req)
 {
-	return dthe_aes_crypt(req, 0);
+	struct dthe_aes_req_ctx *rctx = skcipher_request_ctx(req);
+
+	rctx->enc = 0;
+	return dthe_aes_crypt(req);
 }
 
-static struct skcipher_alg cipher_algs[] = {
+static struct skcipher_engine_alg cipher_algs[] = {
 	{
-		.setkey	= dthe_ecb_aes_setkey,
-		.encrypt	= dthe_aes_encrypt,
-		.decrypt	= dthe_aes_decrypt,
-		.min_keysize	= AES_MIN_KEY_SIZE,
-		.max_keysize	= AES_MAX_KEY_SIZE,
-		.base	= {
-			.cra_name	= "ecb(aes)",
+		.base.init			= dthe_cipher_init_tfm,
+		.base.setkey			= dthe_aes_ecb_setkey,
+		.base.encrypt			= dthe_aes_encrypt,
+		.base.decrypt			= dthe_aes_decrypt,
+		.base.min_keysize		= AES_MIN_KEY_SIZE,
+		.base.max_keysize		= AES_MAX_KEY_SIZE,
+		.base.base = {
+			.cra_name		= "ecb(aes)",
 			.cra_driver_name	= "ecb-aes-dthev2",
-			.cra_priority	= 30000,
-			.cra_flags	= CRYPTO_ALG_TYPE_SKCIPHER |
-					  CRYPTO_ALG_KERN_DRIVER_ONLY,
-			.cra_alignmask	= AES_BLOCK_SIZE - 1,
-			.cra_blocksize	= AES_BLOCK_SIZE,
-			.cra_ctxsize	= sizeof(struct dthe_tfm_ctx),
-			.cra_module	= THIS_MODULE,
+			.cra_priority		= 30000,
+			.cra_flags		= CRYPTO_ALG_TYPE_SKCIPHER |
+						  CRYPTO_ALG_KERN_DRIVER_ONLY,
+			.cra_alignmask		= AES_BLOCK_SIZE - 1,
+			.cra_blocksize		= AES_BLOCK_SIZE,
+			.cra_ctxsize		= sizeof(struct dthe_tfm_ctx),
+			.cra_module		= THIS_MODULE,
 		},
-		.init	= dthe_cipher_cra_init,
-		.exit	= dthe_cipher_cra_exit
-	}, /* ECB AES*/
+		.op.do_one_request = dthe_aes_run,
+	}, /* ECB AES */
 	{
-		.setkey = dthe_cbc_aes_setkey,
-		.encrypt	= dthe_aes_encrypt,
-		.decrypt	= dthe_aes_decrypt,
-		.min_keysize	= AES_MIN_KEY_SIZE,
-		.max_keysize	= AES_MAX_KEY_SIZE,
-		.ivsize		= AES_BLOCK_SIZE,
-		.base	= {
-			.cra_name	= "cbc(aes)",
-			.cra_driver_name	 = "cbc-aes-dthev2",
-			.cra_priority	= 30000,
-			.cra_flags	= CRYPTO_ALG_TYPE_SKCIPHER |
-					  CRYPTO_ALG_KERN_DRIVER_ONLY,
-			.cra_alignmask	= AES_BLOCK_SIZE - 1,
-			.cra_blocksize	= AES_BLOCK_SIZE,
-			.cra_ctxsize	= sizeof(struct dthe_tfm_ctx),
-			.cra_module	= THIS_MODULE,
+		.base.init			= dthe_cipher_init_tfm,
+		.base.setkey			= dthe_aes_cbc_setkey,
+		.base.encrypt			= dthe_aes_encrypt,
+		.base.decrypt			= dthe_aes_decrypt,
+		.base.min_keysize		= AES_MIN_KEY_SIZE,
+		.base.max_keysize		= AES_MAX_KEY_SIZE,
+		.base.ivsize			= AES_IV_SIZE,
+		.base.base = {
+			.cra_name		= "cbc(aes)",
+			.cra_driver_name	= "cbc-aes-dthev2",
+			.cra_priority		= 30000,
+			.cra_flags		= CRYPTO_ALG_TYPE_SKCIPHER |
+						  CRYPTO_ALG_KERN_DRIVER_ONLY,
+			.cra_alignmask		= AES_BLOCK_SIZE - 1,
+			.cra_blocksize		= AES_BLOCK_SIZE,
+			.cra_ctxsize		= sizeof(struct dthe_tfm_ctx),
+			.cra_module		= THIS_MODULE,
 		},
-		.init	= dthe_cipher_cra_init,
-		.exit	= dthe_cipher_cra_exit
-	}, /* CBC AES */
+		.op.do_one_request = dthe_aes_run,
+	} /* CBC AES */
 };
 
 int dthe_register_aes_algs(void)
 {
-	return crypto_register_skciphers(cipher_algs, ARRAY_SIZE(cipher_algs));
+	return crypto_engine_register_skciphers(cipher_algs, ARRAY_SIZE(cipher_algs));
 }
 
 void dthe_unregister_aes_algs(void)
 {
-	crypto_unregister_skciphers(cipher_algs, ARRAY_SIZE(cipher_algs));
+	crypto_engine_unregister_skciphers(cipher_algs, ARRAY_SIZE(cipher_algs));
 }

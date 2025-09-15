@@ -13,7 +13,10 @@ config CRYPTO_DEV_TI_MCRC64
 config CRYPTO_DEV_TI_DTHEV2
 	tristate "Support for TI DTHE V2 crypto accelerators"
 	depends on CRYPTO && CRYPTO_HW && ARCH_K3
+	select CRYPTO_ENGINE
 	select CRYPTO_SKCIPHER
+	select CRYPTO_ECB
+	select CRYPTO_CBC
 	select CRYPTO_SHA256
 	select CRYPTO_SHA512
 	select CRYPTO_MD5

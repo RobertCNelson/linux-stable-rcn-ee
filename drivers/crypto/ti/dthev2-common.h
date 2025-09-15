@@ -7,11 +7,12 @@
  */
 
 #ifndef __TI_DTHEV2_H__
-#define __TI_DTHE2V_H__
+#define __TI_DTHEV2_H__
 
 #include <crypto/aead.h>
 #include <crypto/aes.h>
 #include <crypto/algapi.h>
+#include <crypto/engine.h>
 #include <crypto/hash.h>
 #include <crypto/internal/aead.h>
 #include <crypto/internal/hash.h>
@@ -25,6 +26,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/io.h>
 #include <linux/scatterlist.h>
+#include <linux/types.h>
 
 #define DTHE_REG_SIZE		4
 #define DTHE_DMA_TIMEOUT_MS	2000
@@ -45,34 +47,28 @@ enum dthe_aes_mode {
 
 /* Driver specific struct definitions */
 
-struct dthe_tfm_ctx;
-
 /**
  * struct dthe_data - DTHE_V2 driver instance data
  * @dev: Device pointer
  * @regs: Base address of the register space
  * @list: list node for dev
+ * @aes_engine: Crypto engine instance for AES Engine
  * @dma_aes_rx: AES Rx DMA Channel
  * @dma_aes_tx: AES Tx DMA Channel
  * @dma_sha_tx: SHA Tx DMA Channel
- * @aes_mutex: Mutex protecting access to AES engine
  * @hash_mutex: Mutex protecting access to HASH engine
- * @ctx: Transform context struct
  */
 struct dthe_data {
 	struct device *dev;
 	void __iomem *regs;
 	struct list_head list;
+	struct crypto_engine *aes_engine;
 
 	struct dma_chan *dma_aes_rx;
 	struct dma_chan *dma_aes_tx;
 
 	struct dma_chan *dma_sha_tx;
-
-	struct mutex aes_mutex;
 	struct mutex hash_mutex;
-
-	struct dthe_tfm_ctx *ctx;
 };
 
 /**
@@ -114,32 +110,31 @@ struct dthe_hash_ctx {
 };
 
 /**
- * struct dthe_aes_ctx - AES engine ctx struct
- * @mode: AES mode
- * @keylen: AES key length
- * @key: AES key
- * @enc: flag indicating encryption or decryption operation
- * @aes_compl: Completion variable for use in manual completion in case of DMA callback failure
- */
-struct dthe_aes_ctx {
-	enum dthe_aes_mode mode;
-	unsigned int keylen;
-	u32 key[AES_KEYSIZE_256 / sizeof(u32)];
-	int enc;
-	struct completion aes_compl;
-};
-
-/**
  * struct dthe_tfm_ctx - Transform ctx struct containing ctx for all sub-components of DTHE V2
  * @dev_data: Device data struct pointer
+ * @keylen: AES key length
+ * @key: AES key
+ * @aes_mode: AES mode
  * @ctx_info: Union of ctx structs of various sub-components of DTHE_V2
  */
 struct dthe_tfm_ctx {
 	struct dthe_data *dev_data;
+	unsigned int keylen;
+	u32 key[AES_KEYSIZE_256 / sizeof(u32)];
+	enum dthe_aes_mode aes_mode;
 	union {
-		struct dthe_aes_ctx *aes_ctx;
 		struct dthe_hash_ctx *hash_ctx;
 	} ctx_info;
+};
+
+/**
+ * struct dthe_aes_req_ctx - AES engine req ctx struct
+ * @enc: flag indicating encryption or decryption operation
+ * @aes_compl: Completion variable for use in manual completion in case of DMA callback failure
+ */
+struct dthe_aes_req_ctx {
+	int enc;
+	struct completion aes_compl;
 };
 
 /* Struct definitions end */
