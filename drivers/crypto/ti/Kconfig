@@ -21,6 +21,7 @@ config CRYPTO_DEV_TI_DTHEV2
 	select CRYPTO_SHA256
 	select CRYPTO_SHA512
 	select CRYPTO_MD5
+	select CRYPTO_HMAC
 	select SG_SPLIT
 	help
 	  This enables support for the TI DTHE V2 hw crypto accelerator

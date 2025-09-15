@@ -24,6 +24,7 @@
 
 // Hashing Engine
 #define DTHE_P_HASH_BASE		0x5000
+#define DTHE_P_HASH512_ODIGEST_A	0x0200
 #define DTHE_P_HASH512_IDIGEST_A	0x0240
 #define DTHE_P_HASH512_DIGEST_COUNT	0x0280
 #define DTHE_P_HASH512_MODE		0x0284
@@ -44,11 +45,19 @@
 #define DTHE_HASH_IRQSTATUS_PH_READY		BIT(2)
 #define DTHE_HASH_IRQSTATUS_CTX_READY		BIT(3)
 
+#define DTHE_HASH_MODE_ALG_MASK			GENMASK(2, 0)
 #define DTHE_HASH_MODE_USE_ALG_CONST		BIT(3)
 #define DTHE_HASH_MODE_CLOSE_HASH		BIT(4)
+#define DTHE_HASH_MODE_HMAC_KEY_PROCESSING	BIT(5)
+#define DTHE_HASH_MODE_HMAC_OUTER_HASH		BIT(7)
+/* Flag to indicate HMAC mode. This bit is not written in hardware registers */
+#define DTHE_HASH_IS_HMAC			BIT(8)
 
 /* Misc */
 #define MD5_BLOCK_SIZE				(MD5_BLOCK_WORDS * 4)
+#define HMAC_SHA512_MAX_KEYSIZE			(SHA512_BLOCK_SIZE)
+#define HMAC_SHA256_MAX_KEYSIZE			(SHA256_BLOCK_SIZE)
+#define HMAC_MD5_MAX_KEYSIZE			(MD5_BLOCK_SIZE)
 
 enum dthe_hash_dma_callback_src {
 	DMA_CALLBACK_FROM_UPDATE = 0,
@@ -58,23 +67,51 @@ enum dthe_hash_dma_callback_src {
 
 struct sha512_export_state {
 	struct sha512_state state;
+	u32 odigest[SHA512_DIGEST_SIZE / sizeof(u32)];
+	u32 key[HMAC_SHA512_MAX_KEYSIZE / sizeof(u32)];
+	unsigned int keylen;
 	u8 buflen;
 	u8 flags;
 };
 
 struct sha256_export_state {
 	struct sha256_state state;
+	u32 odigest[SHA256_DIGEST_SIZE / sizeof(u32)];
+	u32 key[HMAC_SHA256_MAX_KEYSIZE / sizeof(u32)];
+	unsigned int keylen;
 	u8 buflen;
 	u8 flags;
 };
 
 struct md5_export_state {
 	struct md5_state state;
+	u32 odigest[MD5_DIGEST_SIZE / sizeof(u32)];
+	u32 key[HMAC_MD5_MAX_KEYSIZE / sizeof(u32)];
+	unsigned int keylen;
 	u8 buflen;
 	u8 flags;
 };
 
 static int cnt;
+
+static int dthe_ahash_init_fb(struct crypto_ahash *tfm)
+{
+	struct dthe_tfm_ctx *ctx = crypto_ahash_ctx(tfm);
+	struct dthe_data *dev_data = dthe_get_dev(ctx);
+	const char *alg_name = crypto_tfm_alg_name(&tfm->base);
+
+	ctx->ahash_fb = crypto_alloc_ahash(alg_name, 0, CRYPTO_ALG_ASYNC);
+	if (IS_ERR(ctx->ahash_fb)) {
+		dev_err(dev_data->dev, "Failed to allocate fallback driver: %s\n",
+			alg_name);
+		return PTR_ERR(ctx->ahash_fb);
+	}
+
+	crypto_ahash_set_reqsize(tfm, sizeof(struct ahash_request) +
+				 crypto_ahash_reqsize(ctx->ahash_fb));
+
+	return 0;
+}
 
 static void dthe_hash_write_zero_message(enum dthe_hash_alg_sel mode, void *dst)
 {
@@ -97,6 +134,22 @@ static void dthe_hash_write_zero_message(enum dthe_hash_alg_sel mode, void *dst)
 	default:
 		break;
 	}
+}
+
+static int dthe_hmac_write_zero_message(struct ahash_request *req, void *dst)
+{
+	struct dthe_tfm_ctx *ctx = crypto_ahash_ctx(crypto_ahash_reqtfm(req));
+	struct ahash_request *subreq = ahash_request_ctx(req);
+	int ret;
+
+	ahash_request_set_tfm(subreq, ctx->ahash_fb);
+	ahash_request_set_callback(subreq, req->base.flags & CRYPTO_TFM_REQ_MAY_SLEEP,
+				   req->base.complete, req->base.data);
+	ahash_request_set_crypt(subreq, req->src, dst, req->nbytes);
+
+	ret = crypto_ahash_digest(subreq);
+
+	return ret;
 }
 
 static int dthe_sha512_init_tfm(struct crypto_ahash *tfm)
@@ -189,6 +242,114 @@ static int dthe_md5_init_tfm(struct crypto_ahash *tfm)
 	return 0;
 }
 
+static int dthe_hmac_sha512_init_tfm(struct crypto_ahash *tfm)
+{
+	struct dthe_tfm_ctx *ctx = crypto_ahash_ctx(tfm);
+	struct dthe_data *dev_data = dthe_get_dev(ctx);
+	int ret;
+
+	if (!dev_data)
+		return -ENODEV;
+
+	crypto_ahash_set_reqsize(tfm, sizeof(struct dthe_hash_req_ctx));
+
+	ctx->hash_mode = DTHE_HASH_SHA512 | DTHE_HASH_IS_HMAC;
+	ctx->block_size = SHA512_BLOCK_SIZE;
+	ctx->digest_size = SHA512_DIGEST_SIZE;
+	ctx->phash_size = SHA512_DIGEST_SIZE;
+	ret = dthe_ahash_init_fb(tfm);
+
+	return ret;
+}
+
+static int dthe_hmac_sha384_init_tfm(struct crypto_ahash *tfm)
+{
+	struct dthe_tfm_ctx *ctx = crypto_ahash_ctx(tfm);
+	struct dthe_data *dev_data = dthe_get_dev(ctx);
+	int ret;
+
+	if (!dev_data)
+		return -ENODEV;
+
+	crypto_ahash_set_reqsize(tfm, sizeof(struct dthe_hash_req_ctx));
+
+	ctx->hash_mode = DTHE_HASH_SHA384 | DTHE_HASH_IS_HMAC;
+	ctx->block_size = SHA384_BLOCK_SIZE;
+	ctx->digest_size = SHA384_DIGEST_SIZE;
+	ctx->phash_size = SHA512_DIGEST_SIZE;
+	ret = dthe_ahash_init_fb(tfm);
+
+	return ret;
+}
+
+static int dthe_hmac_sha256_init_tfm(struct crypto_ahash *tfm)
+{
+	struct dthe_tfm_ctx *ctx = crypto_ahash_ctx(tfm);
+	struct dthe_data *dev_data = dthe_get_dev(ctx);
+	int ret;
+
+	if (!dev_data)
+		return -ENODEV;
+
+	crypto_ahash_set_reqsize(tfm, sizeof(struct dthe_hash_req_ctx));
+
+	ctx->hash_mode = DTHE_HASH_SHA256 | DTHE_HASH_IS_HMAC;
+	ctx->block_size = SHA256_BLOCK_SIZE;
+	ctx->digest_size = SHA256_DIGEST_SIZE;
+	ctx->phash_size = SHA256_DIGEST_SIZE;
+	ret = dthe_ahash_init_fb(tfm);
+
+	return ret;
+}
+
+static int dthe_hmac_sha224_init_tfm(struct crypto_ahash *tfm)
+{
+	struct dthe_tfm_ctx *ctx = crypto_ahash_ctx(tfm);
+	struct dthe_data *dev_data = dthe_get_dev(ctx);
+	int ret;
+
+	if (!dev_data)
+		return -ENODEV;
+
+	crypto_ahash_set_reqsize(tfm, sizeof(struct dthe_hash_req_ctx));
+
+	ctx->hash_mode = DTHE_HASH_SHA224 | DTHE_HASH_IS_HMAC;
+	ctx->block_size = SHA224_BLOCK_SIZE;
+	ctx->digest_size = SHA224_DIGEST_SIZE;
+	ctx->phash_size = SHA256_DIGEST_SIZE;
+	ret = dthe_ahash_init_fb(tfm);
+
+	return ret;
+}
+
+static int dthe_hmac_md5_init_tfm(struct crypto_ahash *tfm)
+{
+	struct dthe_tfm_ctx *ctx = crypto_ahash_ctx(tfm);
+	struct dthe_data *dev_data = dthe_get_dev(ctx);
+	int ret;
+
+	if (!dev_data)
+		return -ENODEV;
+
+	crypto_ahash_set_reqsize(tfm, sizeof(struct dthe_hash_req_ctx));
+
+	ctx->hash_mode = DTHE_HASH_MD5 | DTHE_HASH_IS_HMAC;
+	ctx->block_size = MD5_BLOCK_SIZE;
+	ctx->digest_size = MD5_DIGEST_SIZE;
+	ctx->phash_size = MD5_DIGEST_SIZE;
+	ret = dthe_ahash_init_fb(tfm);
+
+	return ret;
+}
+
+static void dthe_hash_exit_tfm(struct crypto_ahash *tfm)
+{
+	struct dthe_tfm_ctx *ctx = crypto_ahash_ctx(tfm);
+
+	if (ctx->hash_mode & DTHE_HASH_IS_HMAC)
+		crypto_free_ahash(ctx->ahash_fb);
+}
+
 static void dthe_hash_dma_in_callback(void *data)
 {
 	struct ahash_request *req = (struct ahash_request *)data;
@@ -269,9 +430,13 @@ static int dthe_hash_dma_start(struct ahash_request *req, struct scatterlist *sr
 	writel_relaxed(hash_sysconfig_val, sha_base_reg + DTHE_P_HASH_SYSCONFIG);
 	writel_relaxed(hash_irqenable_val, sha_base_reg + DTHE_P_HASH_IRQENABLE);
 
-	hash_mode = ctx->hash_mode;
-	if (rctx->flags == DMA_CALLBACK_FROM_FINAL || rctx->flags == DMA_CALLBACK_FROM_FINUP)
+	hash_mode = (ctx->hash_mode & DTHE_HASH_MODE_ALG_MASK);
+
+	if (rctx->flags == DMA_CALLBACK_FROM_FINAL || rctx->flags == DMA_CALLBACK_FROM_FINUP) {
 		hash_mode |= DTHE_HASH_MODE_CLOSE_HASH;
+		if (ctx->hash_mode & DTHE_HASH_IS_HMAC)
+			hash_mode |= DTHE_HASH_MODE_HMAC_OUTER_HASH;
+	}
 
 	if (rctx->phash_available) {
 		for (int i = 0; i < ctx->phash_size / sizeof(u32); ++i)
@@ -279,9 +444,29 @@ static int dthe_hash_dma_start(struct ahash_request *req, struct scatterlist *sr
 				       sha_base_reg +
 				       DTHE_P_HASH512_IDIGEST_A +
 				       (DTHE_REG_SIZE * i));
+		if (ctx->hash_mode & DTHE_HASH_IS_HMAC) {
+			for (int i = 0; i < ctx->phash_size / sizeof(u32); ++i)
+				writel_relaxed(rctx->odigest[i],
+					       sha_base_reg +
+					       DTHE_P_HASH512_ODIGEST_A +
+					       (DTHE_REG_SIZE * i));
+		}
 
 		writel_relaxed(rctx->digestcnt,
 			       sha_base_reg + DTHE_P_HASH512_DIGEST_COUNT);
+	} else if (ctx->hash_mode & DTHE_HASH_IS_HMAC) {
+		hash_mode |= DTHE_HASH_MODE_HMAC_KEY_PROCESSING;
+
+		for (int i = 0; i < (ctx->keylen / 2) / sizeof(u32); ++i)
+			writel_relaxed(ctx->key[i],
+				       sha_base_reg +
+				       DTHE_P_HASH512_ODIGEST_A +
+				       (DTHE_REG_SIZE * i));
+		for (int i = 0; i < (ctx->keylen / 2) / sizeof(u32); ++i)
+			writel_relaxed(ctx->key[i + (ctx->keylen / 2) / sizeof(u32)],
+				       sha_base_reg +
+				       DTHE_P_HASH512_IDIGEST_A +
+				       (DTHE_REG_SIZE * i));
 	} else {
 		hash_mode |= DTHE_HASH_MODE_USE_ALG_CONST;
 	}
@@ -314,8 +499,15 @@ static int dthe_hash_dma_start(struct ahash_request *req, struct scatterlist *sr
 
 	for (int i = 0; i < dst_len; ++i)
 		dst[i] = readl_relaxed(sha_base_reg +
-					   DTHE_P_HASH512_IDIGEST_A +
-					   (DTHE_REG_SIZE * i));
+				       DTHE_P_HASH512_IDIGEST_A +
+				       (DTHE_REG_SIZE * i));
+
+	if (ctx->hash_mode & DTHE_HASH_IS_HMAC) {
+		for (int i = 0; i < dst_len; ++i)
+			rctx->odigest[i] = readl_relaxed(sha_base_reg +
+							 DTHE_P_HASH512_ODIGEST_A +
+							 (DTHE_REG_SIZE * i));
+	}
 
 	rctx->digestcnt = readl_relaxed(sha_base_reg + DTHE_P_HASH512_DIGEST_COUNT);
 	rctx->phash_available = 1;
@@ -354,10 +546,14 @@ static int dthe_hash_update(struct ahash_request *req)
 	int ret = 0;
 
 	if (req->nbytes == 0) {
-		if (!rctx->phash_available && !rctx->buflen)
-			dthe_hash_write_zero_message(ctx->hash_mode, rctx->phash);
+		if (!rctx->phash_available && !rctx->buflen) {
+			if (ctx->hash_mode & DTHE_HASH_IS_HMAC)
+				ret = dthe_hmac_write_zero_message(req, rctx->phash);
+			else
+				dthe_hash_write_zero_message(ctx->hash_mode, rctx->phash);
+		}
 
-		return 0;
+		return ret;
 	}
 
 	tot_len = rctx->buflen + req->nbytes;
@@ -415,7 +611,7 @@ static int dthe_hash_final(struct ahash_request *req)
 	struct dthe_hash_req_ctx *rctx = ahash_request_ctx(req);
 	struct scatterlist *src;
 
-	int ret;
+	int ret = 0;
 
 	if (rctx->buflen > 0) {
 		src = kzalloc(sizeof(*src), GFP_KERNEL);
@@ -438,7 +634,12 @@ static int dthe_hash_final(struct ahash_request *req)
 
 		return ret;
 	} else if (!rctx->phash_available) {
-		dthe_hash_write_zero_message(ctx->hash_mode, req->result);
+		if (ctx->hash_mode & DTHE_HASH_IS_HMAC)
+			ret = dthe_hmac_write_zero_message(req, req->result);
+		else
+			dthe_hash_write_zero_message(ctx->hash_mode, req->result);
+
+		return ret;
 	}
 
 	memcpy(req->result, rctx->phash, ctx->digest_size);
@@ -461,10 +662,12 @@ static int dthe_hash_finup(struct ahash_request *req)
 	if (tot_len == 0) {
 		if (rctx->phash_available)
 			memcpy(req->result, rctx->phash, ctx->digest_size);
+		else if (ctx->hash_mode & DTHE_HASH_IS_HMAC)
+			ret = dthe_hmac_write_zero_message(req, req->result);
 		else
 			dthe_hash_write_zero_message(ctx->hash_mode, req->result);
 
-		return 0;
+		return ret;
 	}
 
 	if (tot_len % ctx->block_size)
@@ -509,6 +712,56 @@ static int dthe_hash_digest(struct ahash_request *req)
 {
 	dthe_hash_init(req);
 	return dthe_hash_finup(req);
+}
+
+static int dthe_hmac_setkey(struct crypto_ahash *tfm, const u8 *key,
+			    unsigned int keylen)
+{
+	struct dthe_tfm_ctx *ctx = crypto_ahash_ctx(tfm);
+	unsigned int max_keysize;
+	const char *hash_alg_name, *alg_name;
+
+	memzero_explicit(ctx->key, HMAC_SHA512_MAX_KEYSIZE);
+	alg_name = crypto_ahash_alg_name(tfm);
+
+	if (strcmp(alg_name, "hmac(sha512)") == 0) {
+		max_keysize = HMAC_SHA512_MAX_KEYSIZE;
+		hash_alg_name = "sha512";
+	} else if (strcmp(alg_name, "hmac(sha384)") == 0) {
+		max_keysize = HMAC_SHA512_MAX_KEYSIZE;
+		hash_alg_name = "sha384";
+	} else if (strcmp(alg_name, "hmac(sha256)") == 0) {
+		max_keysize = HMAC_SHA256_MAX_KEYSIZE;
+		hash_alg_name = "sha256";
+	} else if (strcmp(alg_name, "hmac(sha224)") == 0) {
+		max_keysize = HMAC_SHA256_MAX_KEYSIZE;
+		hash_alg_name = "sha224";
+	} else if (strcmp(alg_name, "hmac(md5)") == 0) {
+		max_keysize = MD5_BLOCK_SIZE;
+		hash_alg_name = "md5";
+	} else {
+		return -EINVAL;
+	}
+
+	if (keylen > max_keysize) {
+		struct crypto_shash *ktfm = crypto_alloc_shash(hash_alg_name, 0, 0);
+		SHASH_DESC_ON_STACK(desc, ktfm);
+		int err;
+
+		desc->tfm = ktfm;
+		err = crypto_shash_digest(desc, key, keylen, (u8 *)ctx->key);
+
+		crypto_free_shash(ktfm);
+
+		if (err)
+			return err;
+	} else {
+		memcpy(ctx->key, key, keylen);
+	}
+
+	ctx->keylen = max_keysize;
+
+	return crypto_ahash_setkey(ctx->ahash_fb, key, keylen);
 }
 
 static int dthe_sha512_export(struct ahash_request *req, void *out)
@@ -656,6 +909,175 @@ static int dthe_md5_import(struct ahash_request *req, const void *in)
 	return 0;
 }
 
+static int dthe_hmac_sha512_export(struct ahash_request *req, void *out)
+{
+	struct dthe_tfm_ctx *ctx = crypto_ahash_ctx(crypto_ahash_reqtfm(req));
+	struct dthe_hash_req_ctx *rctx = ahash_request_ctx(req);
+	struct sha512_export_state *state = out;
+
+	state->state.count[0] = rctx->digestcnt;
+	state->buflen = rctx->buflen;
+	state->flags = rctx->flags;
+	memcpy(state->state.state, rctx->phash, ctx->phash_size);
+	memcpy(state->state.buf, rctx->data_buf, rctx->buflen);
+	memcpy(state->key, ctx->key, HMAC_SHA512_MAX_KEYSIZE);
+	memcpy(state->odigest, rctx->odigest, SHA512_DIGEST_SIZE);
+	state->keylen = ctx->keylen;
+
+	return 0;
+}
+
+static int dthe_hmac_sha512_import(struct ahash_request *req, const void *in)
+{
+	struct dthe_tfm_ctx *ctx = crypto_ahash_ctx(crypto_ahash_reqtfm(req));
+	struct dthe_hash_req_ctx *rctx = ahash_request_ctx(req);
+	const struct sha512_export_state *state = in;
+
+	rctx->buflen = state->buflen;
+	rctx->digestcnt = state->state.count[0];
+	rctx->flags = state->flags;
+	rctx->phash_available = ((rctx->digestcnt) ? 1 : 0);
+	ctx->hash_mode = DTHE_HASH_SHA512 | DTHE_HASH_IS_HMAC;
+	ctx->block_size = SHA512_BLOCK_SIZE;
+	ctx->digest_size = SHA512_DIGEST_SIZE;
+	ctx->phash_size = SHA512_DIGEST_SIZE;
+	memcpy(rctx->phash, state->state.state, ctx->phash_size);
+	memcpy(rctx->data_buf, state->state.buf, rctx->buflen);
+	memcpy(ctx->key, state->key, HMAC_SHA512_MAX_KEYSIZE);
+	memcpy(rctx->odigest, state->odigest, SHA512_DIGEST_SIZE);
+	ctx->keylen = state->keylen;
+
+	return 0;
+}
+
+static int dthe_hmac_sha384_import(struct ahash_request *req, const void *in)
+{
+	struct dthe_tfm_ctx *ctx = crypto_ahash_ctx(crypto_ahash_reqtfm(req));
+	struct dthe_hash_req_ctx *rctx = ahash_request_ctx(req);
+	const struct sha512_export_state *state = in;
+
+	rctx->buflen = state->buflen;
+	rctx->digestcnt = state->state.count[0];
+	rctx->flags = state->flags;
+	rctx->phash_available = ((rctx->digestcnt) ? 1 : 0);
+	ctx->hash_mode = DTHE_HASH_SHA384 | DTHE_HASH_IS_HMAC;
+	ctx->block_size = SHA384_BLOCK_SIZE;
+	ctx->digest_size = SHA384_DIGEST_SIZE;
+	ctx->phash_size = SHA512_DIGEST_SIZE;
+	memcpy(rctx->phash, state->state.state, ctx->phash_size);
+	memcpy(rctx->data_buf, state->state.buf, rctx->buflen);
+	memcpy(ctx->key, state->key, HMAC_SHA512_MAX_KEYSIZE);
+	memcpy(rctx->odigest, state->odigest, SHA512_DIGEST_SIZE);
+	ctx->keylen = state->keylen;
+
+	return 0;
+}
+
+static int dthe_hmac_sha256_export(struct ahash_request *req, void *out)
+{
+	struct dthe_tfm_ctx *ctx = crypto_ahash_ctx(crypto_ahash_reqtfm(req));
+	struct dthe_hash_req_ctx *rctx = ahash_request_ctx(req);
+	struct sha256_export_state *state = out;
+
+	state->state.count = rctx->digestcnt;
+	state->buflen = rctx->buflen;
+	state->flags = rctx->flags;
+	memcpy(state->state.state, rctx->phash, ctx->phash_size);
+	memcpy(state->state.buf, rctx->data_buf, rctx->buflen);
+	memcpy(state->key, ctx->key, HMAC_SHA256_MAX_KEYSIZE);
+	memcpy(state->odigest, rctx->odigest, SHA256_DIGEST_SIZE);
+	state->keylen = ctx->keylen;
+
+	return 0;
+}
+
+static int dthe_hmac_sha256_import(struct ahash_request *req, const void *in)
+{
+	struct dthe_tfm_ctx *ctx = crypto_ahash_ctx(crypto_ahash_reqtfm(req));
+	struct dthe_hash_req_ctx *rctx = ahash_request_ctx(req);
+	const struct sha256_export_state *state = in;
+
+	rctx->buflen = state->buflen;
+	rctx->digestcnt = state->state.count;
+	rctx->flags = state->flags;
+	rctx->phash_available = ((rctx->digestcnt) ? 1 : 0);
+	ctx->hash_mode = DTHE_HASH_SHA256 | DTHE_HASH_IS_HMAC;
+	ctx->block_size = SHA256_BLOCK_SIZE;
+	ctx->digest_size = SHA256_DIGEST_SIZE;
+	ctx->phash_size = SHA256_DIGEST_SIZE;
+	memcpy(rctx->phash, state->state.state, ctx->phash_size);
+	memcpy(rctx->data_buf, state->state.buf, rctx->buflen);
+	memcpy(ctx->key, state->key, HMAC_SHA256_MAX_KEYSIZE);
+	memcpy(rctx->odigest, state->odigest, SHA256_DIGEST_SIZE);
+	ctx->keylen = state->keylen;
+
+	return 0;
+}
+
+static int dthe_hmac_sha224_import(struct ahash_request *req, const void *in)
+{
+	struct dthe_tfm_ctx *ctx = crypto_ahash_ctx(crypto_ahash_reqtfm(req));
+	struct dthe_hash_req_ctx *rctx = ahash_request_ctx(req);
+	const struct sha256_export_state *state = in;
+
+	rctx->buflen = state->buflen;
+	rctx->digestcnt = state->state.count;
+	rctx->flags = state->flags;
+	rctx->phash_available = ((rctx->digestcnt) ? 1 : 0);
+	ctx->hash_mode = DTHE_HASH_SHA224 | DTHE_HASH_IS_HMAC;
+	ctx->block_size = SHA224_BLOCK_SIZE;
+	ctx->digest_size = SHA224_DIGEST_SIZE;
+	ctx->phash_size = SHA256_DIGEST_SIZE;
+	memcpy(rctx->phash, state->state.state, ctx->phash_size);
+	memcpy(rctx->data_buf, state->state.buf, rctx->buflen);
+	memcpy(ctx->key, state->key, HMAC_SHA256_MAX_KEYSIZE);
+	memcpy(rctx->odigest, state->odigest, SHA256_DIGEST_SIZE);
+	ctx->keylen = state->keylen;
+
+	return 0;
+}
+
+static int dthe_hmac_md5_export(struct ahash_request *req, void *out)
+{
+	struct dthe_tfm_ctx *ctx = crypto_ahash_ctx(crypto_ahash_reqtfm(req));
+	struct dthe_hash_req_ctx *rctx = ahash_request_ctx(req);
+	struct md5_export_state *state = out;
+
+	state->state.byte_count = rctx->digestcnt;
+	state->buflen = rctx->buflen;
+	state->flags = rctx->flags;
+	memcpy(state->state.hash, rctx->phash, ctx->phash_size);
+	memcpy(state->state.block, rctx->data_buf, rctx->buflen);
+	memcpy(state->key, ctx->key, MD5_BLOCK_SIZE);
+	memcpy(state->odigest, rctx->odigest, MD5_DIGEST_SIZE);
+	state->keylen = ctx->keylen;
+
+	return 0;
+}
+
+static int dthe_hmac_md5_import(struct ahash_request *req, const void *in)
+{
+	struct dthe_tfm_ctx *ctx = crypto_ahash_ctx(crypto_ahash_reqtfm(req));
+	struct dthe_hash_req_ctx *rctx = ahash_request_ctx(req);
+	const struct md5_export_state *state = in;
+
+	rctx->buflen = state->buflen;
+	rctx->digestcnt = state->state.byte_count;
+	rctx->flags = state->flags;
+	rctx->phash_available = ((rctx->digestcnt) ? 1 : 0);
+	ctx->hash_mode = DTHE_HASH_MD5 | DTHE_HASH_IS_HMAC;
+	ctx->block_size = MD5_BLOCK_SIZE;
+	ctx->digest_size = MD5_DIGEST_SIZE;
+	ctx->phash_size = MD5_DIGEST_SIZE;
+	memcpy(rctx->phash, state->state.hash, ctx->phash_size);
+	memcpy(rctx->data_buf, state->state.block, rctx->buflen);
+	memcpy(ctx->key, state->key, MD5_BLOCK_SIZE);
+	memcpy(rctx->odigest, state->odigest, MD5_DIGEST_SIZE);
+	ctx->keylen = state->keylen;
+
+	return 0;
+}
+
 static struct ahash_alg hash_algs[] = {
 	{
 		.init_tfm	= dthe_sha512_init_tfm,
@@ -784,6 +1206,151 @@ static struct ahash_alg hash_algs[] = {
 				.cra_flags	 = CRYPTO_ALG_TYPE_AHASH |
 						   CRYPTO_ALG_ASYNC |
 						   CRYPTO_ALG_OPTIONAL_KEY |
+						   CRYPTO_ALG_KERN_DRIVER_ONLY |
+						   CRYPTO_ALG_ALLOCATES_MEMORY,
+				.cra_blocksize	 = MD5_BLOCK_SIZE,
+				.cra_ctxsize	 = sizeof(struct dthe_tfm_ctx),
+				.cra_module	 = THIS_MODULE,
+			}
+		},
+	},
+	{
+		.init_tfm	= dthe_hmac_sha512_init_tfm,
+		.exit_tfm	= dthe_hash_exit_tfm,
+		.init		= dthe_hash_init,
+		.update		= dthe_hash_update,
+		.final		= dthe_hash_final,
+		.finup		= dthe_hash_finup,
+		.digest		= dthe_hash_digest,
+		.export		= dthe_hmac_sha512_export,
+		.import		= dthe_hmac_sha512_import,
+		.setkey		= dthe_hmac_setkey,
+		.halg	= {
+			.digestsize = SHA512_DIGEST_SIZE,
+			.statesize = sizeof(struct sha512_export_state),
+			.base = {
+				.cra_name	 = "hmac(sha512)",
+				.cra_driver_name = "hmac-sha512-dthev2",
+				.cra_priority	 = 400,
+				.cra_flags	 = CRYPTO_ALG_TYPE_AHASH |
+						   CRYPTO_ALG_ASYNC |
+						   CRYPTO_ALG_NEED_FALLBACK |
+						   CRYPTO_ALG_KERN_DRIVER_ONLY |
+						   CRYPTO_ALG_ALLOCATES_MEMORY,
+				.cra_blocksize	 = SHA512_BLOCK_SIZE,
+				.cra_ctxsize	 = sizeof(struct dthe_tfm_ctx),
+				.cra_module	 = THIS_MODULE,
+			}
+		},
+	},
+	{
+		.init_tfm	= dthe_hmac_sha384_init_tfm,
+		.exit_tfm	= dthe_hash_exit_tfm,
+		.init		= dthe_hash_init,
+		.update		= dthe_hash_update,
+		.final		= dthe_hash_final,
+		.finup		= dthe_hash_finup,
+		.digest		= dthe_hash_digest,
+		.export		= dthe_hmac_sha512_export,
+		.import		= dthe_hmac_sha384_import,
+		.setkey		= dthe_hmac_setkey,
+		.halg	= {
+			.digestsize = SHA384_DIGEST_SIZE,
+			.statesize = sizeof(struct sha512_export_state),
+			.base = {
+				.cra_name	 = "hmac(sha384)",
+				.cra_driver_name = "hmac-sha384-dthev2",
+				.cra_priority	 = 400,
+				.cra_flags	 = CRYPTO_ALG_TYPE_AHASH |
+						   CRYPTO_ALG_ASYNC |
+						   CRYPTO_ALG_NEED_FALLBACK |
+						   CRYPTO_ALG_KERN_DRIVER_ONLY |
+						   CRYPTO_ALG_ALLOCATES_MEMORY,
+				.cra_blocksize	 = SHA384_BLOCK_SIZE,
+				.cra_ctxsize	 = sizeof(struct dthe_tfm_ctx),
+				.cra_module	 = THIS_MODULE,
+			}
+		},
+	},
+	{
+		.init_tfm	= dthe_hmac_sha256_init_tfm,
+		.exit_tfm	= dthe_hash_exit_tfm,
+		.init		= dthe_hash_init,
+		.update		= dthe_hash_update,
+		.final		= dthe_hash_final,
+		.finup		= dthe_hash_finup,
+		.digest		= dthe_hash_digest,
+		.export		= dthe_hmac_sha256_export,
+		.import		= dthe_hmac_sha256_import,
+		.setkey		= dthe_hmac_setkey,
+		.halg	= {
+			.digestsize = SHA256_DIGEST_SIZE,
+			.statesize = sizeof(struct sha256_export_state),
+			.base = {
+				.cra_name	 = "hmac(sha256)",
+				.cra_driver_name = "hmac-sha256-dthev2",
+				.cra_priority	 = 400,
+				.cra_flags	 = CRYPTO_ALG_TYPE_AHASH |
+						   CRYPTO_ALG_ASYNC |
+						   CRYPTO_ALG_NEED_FALLBACK |
+						   CRYPTO_ALG_KERN_DRIVER_ONLY |
+						   CRYPTO_ALG_ALLOCATES_MEMORY,
+				.cra_blocksize	 = SHA256_BLOCK_SIZE,
+				.cra_ctxsize	 = sizeof(struct dthe_tfm_ctx),
+				.cra_module	 = THIS_MODULE,
+			}
+		},
+	},
+	{
+		.init_tfm	= dthe_hmac_sha224_init_tfm,
+		.exit_tfm	= dthe_hash_exit_tfm,
+		.init		= dthe_hash_init,
+		.update		= dthe_hash_update,
+		.final		= dthe_hash_final,
+		.finup		= dthe_hash_finup,
+		.digest		= dthe_hash_digest,
+		.export		= dthe_hmac_sha256_export,
+		.import		= dthe_hmac_sha224_import,
+		.setkey		= dthe_hmac_setkey,
+		.halg	= {
+			.digestsize = SHA224_DIGEST_SIZE,
+			.statesize = sizeof(struct sha256_export_state),
+			.base = {
+				.cra_name	 = "hmac(sha224)",
+				.cra_driver_name = "hmac-sha224-dthev2",
+				.cra_priority	 = 400,
+				.cra_flags	 = CRYPTO_ALG_TYPE_AHASH |
+						   CRYPTO_ALG_ASYNC |
+						   CRYPTO_ALG_NEED_FALLBACK |
+						   CRYPTO_ALG_KERN_DRIVER_ONLY |
+						   CRYPTO_ALG_ALLOCATES_MEMORY,
+				.cra_blocksize	 = SHA224_BLOCK_SIZE,
+				.cra_ctxsize	 = sizeof(struct dthe_tfm_ctx),
+				.cra_module	 = THIS_MODULE,
+			}
+		},
+	},
+	{
+		.init_tfm	= dthe_hmac_md5_init_tfm,
+		.exit_tfm	= dthe_hash_exit_tfm,
+		.init		= dthe_hash_init,
+		.update		= dthe_hash_update,
+		.final		= dthe_hash_final,
+		.finup		= dthe_hash_finup,
+		.digest		= dthe_hash_digest,
+		.export		= dthe_hmac_md5_export,
+		.import		= dthe_hmac_md5_import,
+		.setkey		= dthe_hmac_setkey,
+		.halg	= {
+			.digestsize = MD5_DIGEST_SIZE,
+			.statesize = sizeof(struct md5_export_state),
+			.base = {
+				.cra_name	 = "hmac(md5)",
+				.cra_driver_name = "hmac-md5-dthev2",
+				.cra_priority	 = 400,
+				.cra_flags	 = CRYPTO_ALG_TYPE_AHASH |
+						   CRYPTO_ALG_ASYNC |
+						   CRYPTO_ALG_NEED_FALLBACK |
 						   CRYPTO_ALG_KERN_DRIVER_ONLY |
 						   CRYPTO_ALG_ALLOCATES_MEMORY,
 				.cra_blocksize	 = MD5_BLOCK_SIZE,
