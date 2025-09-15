@@ -19,6 +19,7 @@ properties:
   compatible:
     enum:
       - ti,am62-rtc
+      - ti,am62l-rtc
 
   reg:
     maxItems: 1
