@@ -225,8 +225,8 @@ static int dthe_hash_dma_start(struct ahash_request *req, struct scatterlist *sr
 
 	// HACK: Delay to workaround DMA driver issue
 	cnt++;
-	if (cnt % 50 == 0) {
-		unsigned long delay = jiffies + usecs_to_jiffies(100);
+	if (cnt % 20 == 0) {
+		unsigned long delay = jiffies + usecs_to_jiffies(1000);
 
 		while (time_before(jiffies, delay))
 			cond_resched();

@@ -267,8 +267,8 @@ static int dthe_aes_run(struct crypto_engine *engine, void *areq)
 
 	// HACK: Delay to workaround DMA driver issue
 	cnt++;
-	if (cnt % 50 == 0) {
-		unsigned long delay = jiffies + usecs_to_jiffies(100);
+	if (cnt % 20 == 0) {
+		unsigned long delay = jiffies + usecs_to_jiffies(1000);
 
 		while (time_before(jiffies, delay))
 			cond_resched();
@@ -744,6 +744,16 @@ static int dthe_aead_run(struct crypto_engine *engine, void *areq)
 
 	tx_dev = dmaengine_get_dma_device(dev_data->dma_aes_tx);
 	rx_dev = dmaengine_get_dma_device(dev_data->dma_aes_rx);
+
+	// HACK: Delay to workaround DMA driver issue
+	cnt++;
+	if (cnt % 20 == 0) {
+		unsigned long delay = jiffies + usecs_to_jiffies(1000);
+
+		while (time_before(jiffies, delay))
+			cond_resched();
+		cnt = 0;
+	}
 
 	src_mapped_nents = dma_map_sg(tx_dev, src, src_nents, src_dir);
 	if (src_mapped_nents == 0) {
