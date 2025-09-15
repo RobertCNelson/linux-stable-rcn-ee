@@ -82,49 +82,27 @@ struct dthe_list {
 };
 
 /**
- * struct dthe_hash_ctx - Hashing engine ctx struct
- * @mode: Hashing Engine mode
- * @block_size: block size of hash algorithm selected
- * @digest_size: digest size of hash algorithm selected
- * @phash_available: flag indicating if a partial hash from a previous operation is available
- * @phash: buffer to store a partial hash from a previous operation
- * @phash_size: partial hash size of the hash algorithm selected
- * @digestcnt: stores the digest count from a previous operation
- * @data_buf: buffer to store part of input data to be carried over to next operation
- * @buflen: length of input data stored in data_buf
- * @flags: flags for internal use
- * @hash_compl: Completion variable for use in manual completion in case of DMA callback failure
- */
-struct dthe_hash_ctx {
-	enum dthe_hash_alg_sel mode;
-	u16 block_size;
-	u8 digest_size;
-	u8 phash_available;
-	u32 phash[SHA512_DIGEST_SIZE / sizeof(u32)];
-	u32 phash_size;
-	u32 digestcnt;
-	u8 data_buf[SHA512_BLOCK_SIZE];
-	u8 buflen;
-	u8 flags;
-	struct completion hash_compl;
-};
-
-/**
  * struct dthe_tfm_ctx - Transform ctx struct containing ctx for all sub-components of DTHE V2
  * @dev_data: Device data struct pointer
  * @keylen: AES key length
  * @key: AES key
  * @aes_mode: AES mode
- * @ctx_info: Union of ctx structs of various sub-components of DTHE_V2
+ * @hash_mode: Hashing Engine mode
+ * @block_size: block size of hash algorithm selected
+ * @digest_size: digest size of hash algorithm selected
+ * @phash_size: partial hash size of the hash algorithm selected
  */
 struct dthe_tfm_ctx {
 	struct dthe_data *dev_data;
 	unsigned int keylen;
 	u32 key[AES_KEYSIZE_256 / sizeof(u32)];
-	enum dthe_aes_mode aes_mode;
 	union {
-		struct dthe_hash_ctx *hash_ctx;
-	} ctx_info;
+		enum dthe_aes_mode aes_mode;
+		enum dthe_hash_alg_sel hash_mode;
+	};
+	u32 block_size;
+	u32 digest_size;
+	u32 phash_size;
 };
 
 /**
@@ -137,9 +115,43 @@ struct dthe_aes_req_ctx {
 	struct completion aes_compl;
 };
 
+/**
+ * struct dthe_hash_req_ctx - Hashing engine req ctx struct
+ * @phash: buffer to store a partial hash from a previous operation
+ * @data_buf: buffer to store part of input data to be carried over to next operation
+ * @digestcnt: stores the digest count from a previous operation
+ * @phash_available: flag indicating if a partial hash from a previous operation is available
+ * @buflen: length of input data stored in data_buf
+ * @flags: flags for internal use
+ * @hash_compl: Completion variable for use in manual completion in case of DMA callback failure
+ */
+struct dthe_hash_req_ctx {
+	u32 phash[SHA512_DIGEST_SIZE / sizeof(u32)];
+	u8 data_buf[SHA512_BLOCK_SIZE];
+	u32 digestcnt;
+	u8 phash_available;
+	u8 buflen;
+	u8 flags;
+	struct completion hash_compl;
+};
+
 /* Struct definitions end */
 
 struct dthe_data *dthe_get_dev(struct dthe_tfm_ctx *ctx);
+
+/**
+ * dthe_copy_sg - Copy sg entries from src to dst
+ * @dst:		Destination sg to be filled
+ * @src:		Source sg to be copied from
+ * @buflen:		Number of bytes to be copied
+ *
+ * Description:
+ *   Copy buflen bytes of data from src to dst.
+ *
+ **/
+struct scatterlist *dthe_copy_sg(struct scatterlist *dst,
+				 struct scatterlist *src,
+				 int buflen);
 
 int dthe_register_aes_algs(void);
 void dthe_unregister_aes_algs(void);
