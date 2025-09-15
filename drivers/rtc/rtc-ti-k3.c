@@ -6,9 +6,11 @@
  */
 
 #include <linux/clk.h>
+#include <linux/cleanup.h>
 #include <linux/delay.h>
 #include <linux/mod_devicetable.h>
 #include <linux/module.h>
+#include <linux/mutex.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/sys_soc.h>
@@ -22,6 +24,7 @@
 #define REG_K3RTC_COMP			0x10
 #define REG_K3RTC_ON_OFF_S_CNT_LSW	0x20
 #define REG_K3RTC_ON_OFF_S_CNT_MSW	0x24
+#define REG_ANALOG			0x2c
 #define REG_K3RTC_SCRATCH0		0x30
 #define REG_K3RTC_SCRATCH7		0x4c
 #define REG_K3RTC_GENERAL_CTL		0x50
@@ -32,6 +35,11 @@
 #define REG_K3RTC_SYNCPEND		0x68
 #define REG_K3RTC_KICK0			0x70
 #define REG_K3RTC_KICK1			0x74
+#define REG_LFXOSC_CTRL			0x80
+#define REG_LFXOSC_TRIM			0x84
+
+/* Low freq oscillator trim value */
+#define LFXOSC_TRIM_VAL			0x00121203
 
 /* Freeze when lsw is read and unfreeze when msw is read */
 #define K3RTC_CNT_FMODE_S_CNT_VALUE	(0x2 << 24)
@@ -51,7 +59,7 @@ static const struct regmap_config ti_k3_rtc_regmap_config = {
 	.reg_bits = 32,
 	.val_bits = 32,
 	.reg_stride = 4,
-	.max_register = REG_K3RTC_KICK1,
+	.max_register = REG_LFXOSC_TRIM,
 };
 
 enum ti_k3_rtc_fields {
@@ -75,6 +83,13 @@ enum ti_k3_rtc_fields {
 
 	K3RTC_IRQ_STATUS_ALT,
 	K3RTC_IRQ_ENABLE_CLR_ALT,
+
+	K3RTC_AUX_32K_EN,
+	K3RTC_GEN_WKUP_POL,
+	K3RTC_GEN_PWR_OFF,
+	K3RTC_IRQ_ENABLE_WKUP,
+	K3RTC_GEN_WKUP_EN,
+	K3RTC_GEN_SW_OFF,
 
 	K3_RTC_MAX_FIELDS
 };
@@ -101,11 +116,28 @@ static const struct reg_field ti_rtc_reg_fields[] = {
 	/* Off to on is alternate */
 	[K3RTC_IRQ_STATUS_ALT] = REG_FIELD(REG_K3RTC_IRQSTATUS_SYS, 1, 1),
 	[K3RTC_IRQ_ENABLE_CLR_ALT] = REG_FIELD(REG_K3RTC_IRQENABLE_CLR_SYS, 1, 1),
+
+	[K3RTC_AUX_32K_EN] = REG_FIELD(REG_K3RTC_GENERAL_CTL, 22, 22),
+	[K3RTC_GEN_WKUP_POL] = REG_FIELD(REG_K3RTC_GENERAL_CTL, 4, 7),
+	[K3RTC_GEN_PWR_OFF] = REG_FIELD(REG_K3RTC_GENERAL_CTL, 16, 16),
+	[K3RTC_IRQ_ENABLE_WKUP] = REG_FIELD(REG_K3RTC_IRQENABLE_SET_SYS, 1, 5),
+	[K3RTC_GEN_WKUP_EN] = REG_FIELD(REG_K3RTC_GENERAL_CTL, 0, 3),
+	[K3RTC_GEN_SW_OFF] = REG_FIELD(REG_K3RTC_GENERAL_CTL, 17, 17),
+};
+
+/**
+ * struct k3_rtc_soc_data
+ * @has_analog_block:	presence of analog IP block in the subsystem
+ */
+struct k3_rtc_soc_data {
+	bool has_analog_block;
 };
 
 /**
  * struct ti_k3_rtc - Private data for ti-k3-rtc
  * @irq:		IRQ
+ * @has_analog_block:	presence of analog IP block in the subsystem
+ * @mutex_lock:		mutex lock to sync access to CORE+ON MMR regs
  * @sync_timeout_us:	data sync timeout period in uSec
  * @rate_32k:		32k clock rate in Hz
  * @rtc_dev:		rtc device
@@ -114,6 +146,8 @@ static const struct reg_field ti_rtc_reg_fields[] = {
  */
 struct ti_k3_rtc {
 	unsigned int irq;
+	bool has_analog_block;
+	struct mutex mutex_lock;
 	u32 sync_timeout_us;
 	unsigned long rate_32k;
 	struct rtc_device *rtc_dev;
@@ -168,13 +202,21 @@ static inline int k3rtc_check_unlocked(struct ti_k3_rtc *priv)
 	return (ret) ? 0 : 1;
 }
 
-static int k3rtc_unlock_rtc(struct ti_k3_rtc *priv)
+static int k3rtc_unlock_rtc(struct device *dev, struct ti_k3_rtc *priv)
 {
 	int ret;
 
 	ret = k3rtc_check_unlocked(priv);
 	if (!ret)
-		return ret;
+		goto out;
+
+	/* 60usec delay is needed between a lock and unlock operations.
+	 * This can be ensured by checking RTC_SYNCPEND for write pending
+	 * transfers.
+	 */
+	ret = k3rtc_fence(priv);
+	if (ret)
+		goto out;
 
 	k3rtc_field_write(priv, K3RTC_KICK0, K3RTC_KICK0_UNLOCK_VALUE);
 	k3rtc_field_write(priv, K3RTC_KICK1, K3RTC_KICK1_UNLOCK_VALUE);
@@ -182,6 +224,27 @@ static int k3rtc_unlock_rtc(struct ti_k3_rtc *priv)
 	/* Skip fence since we are going to check the unlock bit as fence */
 	ret = regmap_field_read_poll_timeout(priv->r_fields[K3RTC_UNLOCK], ret,
 					     ret, 2, priv->sync_timeout_us);
+
+	if (!ret)
+		return ret;
+
+out:
+	dev_err(dev, "Failed to unlock(%d)!\n", ret);
+	return ret;
+}
+
+static int k3rtc_lock_rtc(struct device *dev, struct ti_k3_rtc *priv)
+{
+	int ret;
+
+	regmap_write(priv->regmap, REG_K3RTC_KICK0, 0x0);
+
+	/* Skip fence since we are going to check the lock bit as fence */
+	ret = regmap_field_read_poll_timeout(priv->r_fields[K3RTC_UNLOCK], ret,
+					     !ret, 2, priv->sync_timeout_us);
+
+	if (ret)
+		dev_err(dev, "Failed to lock(%d)!\n", ret);
 
 	return ret;
 }
@@ -220,15 +283,17 @@ static int k3rtc_configure(struct device *dev)
 		}
 	} else {
 		/* May need to explicitly unlock first time */
-		ret = k3rtc_unlock_rtc(priv);
+		ret = k3rtc_unlock_rtc(dev, priv);
 		if (ret) {
 			dev_err(dev, "Failed to unlock(%d)!\n", ret);
 			return ret;
 		}
 	}
 
-	/* Enable Shadow register sync on 32k clock boundary */
-	k3rtc_field_write(priv, K3RTC_O32K_OSC_DEP_EN, 0x1);
+	if (!priv->has_analog_block) {
+		/* Enable Shadow register sync on 32k clock boundary */
+		k3rtc_field_write(priv, K3RTC_O32K_OSC_DEP_EN, 0x1);
+	}
 
 	/*
 	 * Wait at least clock sync time before proceeding further programming.
@@ -258,6 +323,12 @@ static int k3rtc_configure(struct device *dev)
 	k3rtc_field_write(priv, K3RTC_IRQ_ENABLE_CLR_ALT, 0x1);
 	k3rtc_field_write(priv, K3RTC_IRQ_ENABLE_CLR, 0x1);
 
+	if (priv->has_analog_block) {
+		ret = k3rtc_lock_rtc(dev, priv);
+		if (ret)
+			return ret;
+	}
+
 	/* And.. Let us Sync the writes in */
 	return k3rtc_fence(priv);
 }
@@ -279,8 +350,17 @@ static int ti_k3_rtc_set_time(struct device *dev, struct rtc_time *tm)
 {
 	struct ti_k3_rtc *priv = dev_get_drvdata(dev);
 	time64_t seconds;
+	int ret;
 
 	seconds = rtc_tm_to_time64(tm);
+
+	guard(mutex)(&priv->mutex_lock);
+
+	if (priv->has_analog_block) {
+		ret = k3rtc_unlock_rtc(dev, priv);
+		if (ret)
+			return ret;
+	}
 
 	/*
 	 * Read operation on LSW will freeze the RTC, so to update
@@ -289,6 +369,12 @@ static int ti_k3_rtc_set_time(struct device *dev, struct rtc_time *tm)
 	 */
 	regmap_write(priv->regmap, REG_K3RTC_S_CNT_LSW, seconds);
 	regmap_write(priv->regmap, REG_K3RTC_S_CNT_MSW, seconds >> 32);
+
+	if (priv->has_analog_block) {
+		ret = k3rtc_lock_rtc(dev, priv);
+		if (ret)
+			return ret;
+	}
 
 	return k3rtc_fence(priv);
 }
@@ -336,8 +422,22 @@ static int ti_k3_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alarm)
 
 	seconds = rtc_tm_to_time64(&alarm->time);
 
+	guard(mutex)(&priv->mutex_lock);
+
+	if (priv->has_analog_block) {
+		ret = k3rtc_unlock_rtc(dev, priv);
+		if (ret)
+			return ret;
+	}
+
 	k3rtc_field_write(priv, K3RTC_ALM_S_CNT_LSW, seconds);
 	k3rtc_field_write(priv, K3RTC_ALM_S_CNT_MSW, (seconds >> 32));
+
+	if (priv->has_analog_block) {
+		ret = k3rtc_lock_rtc(dev, priv);
+		if (ret)
+			return ret;
+	}
 
 	/* Make sure the alarm time is synced in */
 	ret = k3rtc_fence(priv);
@@ -379,6 +479,7 @@ static int ti_k3_rtc_set_offset(struct device *dev, long offset)
 	u32 ticks_per_hr = priv->rate_32k * 3600;
 	int comp;
 	s64 tmp;
+	int ret;
 
 	/* Make sure offset value is within supported range */
 	if (offset < K3RTC_MIN_OFFSET || offset > K3RTC_MAX_OFFSET)
@@ -395,7 +496,21 @@ static int ti_k3_rtc_set_offset(struct device *dev, long offset)
 	/* Offset value operates in negative way, so swap sign */
 	comp = (int)-tmp;
 
+	guard(mutex)(&priv->mutex_lock);
+
+	if (priv->has_analog_block) {
+		ret = k3rtc_unlock_rtc(dev, priv);
+		if (ret)
+			return ret;
+	}
+
 	k3rtc_field_write(priv, K3RTC_COMP, comp);
+
+	if (priv->has_analog_block) {
+		ret = k3rtc_lock_rtc(dev, priv);
+		if (ret)
+			return ret;
+	}
 
 	return k3rtc_fence(priv);
 }
@@ -420,6 +535,8 @@ static irqreturn_t ti_k3_rtc_interrupt(s32 irq, void *dev_id)
 	 */
 	usleep_range(priv->sync_timeout_us, priv->sync_timeout_us + 2);
 
+	guard(mutex)(&priv->mutex_lock);
+
 	/* Lets make sure that this is a valid interrupt */
 	reg = k3rtc_field_read(priv, K3RTC_IRQ_STATUS);
 
@@ -430,6 +547,12 @@ static irqreturn_t ti_k3_rtc_interrupt(s32 irq, void *dev_id)
 			HW_ERR
 			"Erratum i2327/IRQ trig: status: 0x%08x / 0x%08x\n", reg, raw);
 		return IRQ_NONE;
+	}
+
+	if (priv->has_analog_block) {
+		ret = k3rtc_unlock_rtc(dev, priv);
+		if (ret)
+			return IRQ_NONE;
 	}
 
 	/*
@@ -457,6 +580,12 @@ static irqreturn_t ti_k3_rtc_interrupt(s32 irq, void *dev_id)
 	if (ret) {
 		dev_err(dev, "Failed to fence reload from bbd(%d)!\n", ret);
 		return IRQ_NONE;
+	}
+
+	if (priv->has_analog_block) {
+		ret = k3rtc_lock_rtc(dev, priv);
+		if (ret)
+			return IRQ_NONE;
 	}
 
 	/* Now we ensure that the status bit is cleared */
@@ -495,11 +624,26 @@ static int ti_k3_rtc_scratch_write(void *priv_data, unsigned int offset,
 				   void *val, size_t bytes)
 {
 	struct ti_k3_rtc *priv = (struct ti_k3_rtc *)priv_data;
+	struct device *dev = &priv->rtc_dev->dev;
 	int ret;
+
+	guard(mutex)(&priv->mutex_lock);
+
+	if (priv->has_analog_block) {
+		ret = k3rtc_unlock_rtc(dev, priv);
+		if (ret)
+			return ret;
+	}
 
 	ret = regmap_bulk_write(priv->regmap, REG_K3RTC_SCRATCH0 + offset, val, bytes / 4);
 	if (ret)
 		return ret;
+
+	if (priv->has_analog_block) {
+		ret = k3rtc_lock_rtc(dev, priv);
+		if (ret)
+			return ret;
+	}
 
 	return k3rtc_fence(priv);
 }
@@ -512,6 +656,61 @@ static struct nvmem_config ti_k3_rtc_nvmem_config = {
 	.reg_read = ti_k3_rtc_scratch_read,
 	.reg_write = ti_k3_rtc_scratch_write,
 };
+
+static int ti_k3_rtc_analog_config(struct device *dev, struct ti_k3_rtc *priv)
+{
+	int ret;
+	u32 temp;
+
+	regmap_read(priv->regmap, REG_K3RTC_SYNCPEND, &temp);
+	ret = k3rtc_unlock_rtc(dev, priv);
+	if (ret) {
+		dev_err(dev, "Failed to unlock(%d)!\n", ret);
+		return ret;
+	}
+	regmap_write(priv->regmap, REG_ANALOG, 0x0);
+	regmap_write(priv->regmap, REG_LFXOSC_CTRL, 0x0);
+	regmap_write(priv->regmap, REG_LFXOSC_TRIM, LFXOSC_TRIM_VAL);
+
+	ret = k3rtc_lock_rtc(dev, priv);
+	if (ret) {
+		dev_err(dev, "Lock Failed (%d)!\n", ret);
+		return ret;
+	}
+	ret = k3rtc_fence(priv);
+	if (ret) {
+		dev_err(dev, "Fence sync Failed (%d)!\n", ret);
+		return ret;
+	}
+
+	dev_dbg(dev, "Configured RTC ANALOG!\n");
+
+	ret = k3rtc_unlock_rtc(dev, priv);
+	if (ret) {
+		dev_err(dev, "Failed to unlock(%d)!\n", ret);
+		return ret;
+	}
+
+	k3rtc_field_write(priv, K3RTC_AUX_32K_EN, 0x0);
+	/* Enable Shadow register sync on 32k clock boundary */
+	k3rtc_field_write(priv, K3RTC_O32K_OSC_DEP_EN, 0x1);
+	usleep_range(priv->sync_timeout_us, priv->sync_timeout_us + 5);
+
+	ret = k3rtc_lock_rtc(dev, priv);
+	if (ret) {
+		dev_err(dev, "Lock2 Failed (%d)!\n", ret);
+		return ret;
+	}
+
+	ret = k3rtc_fence(priv);
+	if (ret) {
+		dev_err(dev, "Fence sync Failed (%d)!\n", ret);
+		return ret;
+	}
+	dev_err(dev, "Configured RTC !\n");
+
+	return 0;
+}
 
 static int k3rtc_get_32kclk(struct device *dev, struct ti_k3_rtc *priv)
 {
@@ -553,13 +752,23 @@ static int k3rtc_get_vbusclk(struct device *dev, struct ti_k3_rtc *priv)
 static int ti_k3_rtc_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
+	const struct k3_rtc_soc_data *soc_data;
 	struct ti_k3_rtc *priv;
 	void __iomem *rtc_base;
 	int ret;
 
+	soc_data = device_get_match_data(&pdev->dev);
+	if (!soc_data) {
+		dev_err(dev, "SoC-specific data is not defined\n");
+		return -ENODEV;
+	}
+
 	priv = devm_kzalloc(dev, sizeof(struct ti_k3_rtc), GFP_KERNEL);
 	if (!priv)
 		return -ENOMEM;
+
+	priv->has_analog_block = soc_data->has_analog_block;
+	devm_mutex_init(dev, &priv->mutex_lock);
 
 	rtc_base = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(rtc_base))
@@ -573,6 +782,12 @@ static int ti_k3_rtc_probe(struct platform_device *pdev)
 					   ti_rtc_reg_fields, K3_RTC_MAX_FIELDS);
 	if (ret)
 		return ret;
+
+	/* Initialize sync timeout value, gets updated after configuring analog IP */
+	priv->sync_timeout_us = (u32)3 * 1000 * 1000;
+
+	if (priv->has_analog_block)
+		ti_k3_rtc_analog_config(dev, priv);
 
 	ret = k3rtc_get_32kclk(dev, priv);
 	if (ret)
@@ -621,8 +836,17 @@ static int ti_k3_rtc_probe(struct platform_device *pdev)
 	return devm_rtc_nvmem_register(priv->rtc_dev, &ti_k3_rtc_nvmem_config);
 }
 
+static const struct k3_rtc_soc_data am62_rtc_data = {
+	.has_analog_block = false,
+};
+
+static const struct k3_rtc_soc_data am62l_rtc_data = {
+	.has_analog_block = true,
+};
+
 static const struct of_device_id ti_k3_rtc_of_match_table[] = {
-	{.compatible = "ti,am62-rtc" },
+	{.compatible = "ti,am62-rtc", .data = &am62_rtc_data, },
+	{.compatible = "ti,am62l-rtc", .data = &am62l_rtc_data, },
 	{}
 };
 MODULE_DEVICE_TABLE(of, ti_k3_rtc_of_match_table);
@@ -630,6 +854,44 @@ MODULE_DEVICE_TABLE(of, ti_k3_rtc_of_match_table);
 static int __maybe_unused ti_k3_rtc_suspend(struct device *dev)
 {
 	struct ti_k3_rtc *priv = dev_get_drvdata(dev);
+	int ret;
+	u32 temp;
+
+	if (priv->has_analog_block) {
+		guard(mutex)(&priv->mutex_lock);
+
+		ret = k3rtc_unlock_rtc(dev, priv);
+		if (ret)
+			return ret;
+
+		regmap_read(priv->regmap, REG_K3RTC_GENERAL_CTL, &temp);
+		temp |= 0x10040;
+		regmap_write(priv->regmap, REG_K3RTC_GENERAL_CTL, temp);
+
+		regmap_read(priv->regmap, REG_K3RTC_IRQENABLE_SET_SYS, &temp);
+		temp |= 0x1C;
+		regmap_write(priv->regmap, REG_K3RTC_IRQENABLE_SET_SYS, temp);
+
+		ret = k3rtc_lock_rtc(dev, priv);
+		if (ret)
+			return ret;
+
+		ret = k3rtc_unlock_rtc(dev, priv);
+		if (ret)
+			return ret;
+
+		regmap_read(priv->regmap, REG_K3RTC_GENERAL_CTL, &temp);
+		temp |= 0x20007;
+		regmap_write(priv->regmap, REG_K3RTC_GENERAL_CTL, temp);
+
+		ret = k3rtc_fence(priv);
+		if (ret) {
+			dev_err(dev, "fence failed\n");
+			return ret;
+		}
+	}
+
+	dev_dbg(dev, "suspend complete\n");
 
 	if (device_may_wakeup(dev))
 		return enable_irq_wake(priv->irq);
@@ -640,6 +902,109 @@ static int __maybe_unused ti_k3_rtc_suspend(struct device *dev)
 static int __maybe_unused ti_k3_rtc_resume(struct device *dev)
 {
 	struct ti_k3_rtc *priv = dev_get_drvdata(dev);
+	u32 temp;
+	int ret;
+	u32 intr_src;
+
+	if (priv->has_analog_block) {
+		guard(mutex)(&priv->mutex_lock);
+
+		/* Explicitly clear SW_OFF on rtc_cd side */
+		regmap_read(priv->regmap, REG_K3RTC_GENERAL_CTL, &temp);
+		temp = temp & (~(1 << 17));
+		regmap_write(priv->regmap, REG_K3RTC_GENERAL_CTL, temp);
+
+		ret = k3rtc_fence(priv);
+		if (ret) {
+			dev_err(dev, "fence failed\n");
+			return ret;
+		}
+
+		ret = k3rtc_lock_rtc(dev, priv);
+		if (ret)
+			return ret;
+
+		ret = k3rtc_fence(priv);
+		if (ret) {
+			dev_err(dev, "fence failed\n");
+			return ret;
+		}
+		/* read the IRQ source */
+		regmap_read(priv->regmap, REG_K3RTC_IRQSTATUS_RAW_SYS, &temp);
+
+		/* clear write error condition */
+		ret = k3rtc_unlock_rtc(dev, priv);
+		if (ret)
+			return ret;
+
+		regmap_write(priv->regmap, REG_K3RTC_SYNCPEND, 0x08);
+		/* Disable wakeup interrupts */
+		regmap_write(priv->regmap, REG_K3RTC_IRQENABLE_CLR_SYS, 0x1f);
+
+		ret = k3rtc_lock_rtc(dev, priv);
+		if (ret)
+			return ret;
+
+		ret = k3rtc_fence(priv);
+		if (ret) {
+			dev_err(dev, "fence failed\n");
+			return ret;
+		}
+		/* Read RTC's interrupt register to check the wake up source */
+		regmap_read(priv->regmap, REG_K3RTC_IRQSTATUS_RAW_SYS, &intr_src);
+
+		/* clear wakeup enable */
+		regmap_read(priv->regmap, REG_K3RTC_GENERAL_CTL, &temp);
+		temp = temp & (~(0xF));
+
+		ret = k3rtc_unlock_rtc(dev, priv);
+		if (ret)
+			return ret;
+
+		regmap_write(priv->regmap, REG_K3RTC_GENERAL_CTL, temp);
+		ret = k3rtc_lock_rtc(dev, priv);
+		if (ret)
+			return ret;
+
+		ret = k3rtc_fence(priv);
+		if (ret) {
+			dev_err(dev, "fence failed\n");
+			return ret;
+		}
+
+		/* clear wakeup interrupt */
+		ret = k3rtc_unlock_rtc(dev, priv);
+		if (ret)
+			return ret;
+
+		regmap_write(priv->regmap, REG_K3RTC_IRQSTATUS_SYS, intr_src);
+		ret = k3rtc_lock_rtc(dev, priv);
+		if (ret)
+			return ret;
+
+		ret = k3rtc_fence(priv);
+		if (ret) {
+			dev_err(dev, "fence failed\n");
+			return ret;
+		}
+
+		ret = k3rtc_unlock_rtc(dev, priv);
+		if (ret)
+			return ret;
+
+		k3rtc_field_write(priv, K3RTC_RELOAD_FROM_BBD, 0x1);
+		ret = k3rtc_fence(priv);
+		if (ret) {
+			dev_err(dev, "fence failed\n");
+			return ret;
+		}
+
+		ret = k3rtc_lock_rtc(dev, priv);
+		if (ret)
+			return ret;
+	}
+
+	dev_dbg(dev, "Resume complete\n");
 
 	if (device_may_wakeup(dev))
 		disable_irq_wake(priv->irq);
