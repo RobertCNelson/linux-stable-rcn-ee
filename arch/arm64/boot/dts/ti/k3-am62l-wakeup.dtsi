@@ -112,6 +112,18 @@
 		};
 	};
 
+	wkup_rtc0: rtc@2b1f0000 {
+		compatible = "ti,am62l-rtc";
+		reg = <0x00 0x2b1f0000 0x00 0x100>;
+		interrupts = <GIC_SPI 28 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&scmi_clk 271> , <&scmi_clk 268>;
+		clock-names = "vbus", "osc32k";
+		assigned-clocks = <&scmi_clk 484>;
+		assigned-clock-parents = <&scmi_clk 3>;
+		power-domains = <&scmi_pds 59>;
+		wakeup-source;
+	};
+
 	wkup_conf: bus@43000000 {
 		compatible = "simple-bus";
 		ranges = <0x0 0x00 0x43000000 0x80000>;
