@@ -123,3 +123,11 @@
 		};
 	};
 };
+
+&dphy_tx0 {
+	status = "okay";
+};
+
+&dsi0 {
+	status = "okay";
+};

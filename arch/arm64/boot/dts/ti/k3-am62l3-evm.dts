@@ -804,16 +804,6 @@
 	};
 };
 
-&dphy_tx0 {
-	status = "okay";
-	bootph-all;
-};
-
-&dsi0 {
-	status = "okay";
-	bootph-all;
-};
-
 &main_mcan0 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&main_mcan0_pins_default>;

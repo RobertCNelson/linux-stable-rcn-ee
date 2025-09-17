@@ -631,6 +631,7 @@
 		assigned-clock-parents = <&scmi_clk 341>;
 		assigned-clock-rates = <25000000>;
 		status = "disabled";
+		bootph-all;
 	};
 
 	dss: dss@30200000 {
@@ -665,6 +666,7 @@
 		phys = <&dphy_tx0>;
 		phy-names = "dphy";
 		status = "disabled";
+		bootph-all;
 	};
 
 	gpmc0: memory-controller@3b000000 {
