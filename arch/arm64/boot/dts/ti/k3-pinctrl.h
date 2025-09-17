@@ -111,8 +111,6 @@
 #define PIN_WKUP_EN_LEVEL_HIGH          (WKUP_ENABLE | WKUP_ON_LEVEL | WKUP_LEVEL_HIGH)
 #define PIN_WKUP_EN                     (WKUP_ENABLE | WKUP_ON_EDGE)
 
-#define WKUP_EN			(1 << WKUP_EN_SHIFT)
-
 /* Default mux configuration for gpio-ranges to use with pinctrl */
 #define PIN_GPIO_RANGE_IOPAD	(PIN_INPUT | 7)
 
