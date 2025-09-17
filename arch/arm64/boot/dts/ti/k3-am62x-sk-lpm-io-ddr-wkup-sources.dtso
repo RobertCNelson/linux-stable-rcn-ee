@@ -32,7 +32,7 @@
 
         mcu_mcan0_rx_pins_wakeup: mcu-mcan0-rx-pins-wakeup {
                 pinctrl-single,pins = <
-                        AM62X_IOPAD(0x038, PIN_INPUT | WKUP_EN, 0) /* (B3) MCU_MCAN0_RX */
+                        AM62X_IOPAD(0x038, PIN_INPUT | PIN_WKUP_EN, 0) /* (B3) MCU_MCAN0_RX */
                 >;
         };
 
@@ -50,7 +50,7 @@
 
         mcu_mcan1_rx_pins_wakeup: mcu-mcan1-rx-pins-wakeup {
                 pinctrl-single,pins = <
-                        AM62X_IOPAD(0x040, PIN_INPUT | WKUP_EN, 0) /* (D4) MCU_MCAN1_RX */
+                        AM62X_IOPAD(0x040, PIN_INPUT | PIN_WKUP_EN, 0) /* (D4) MCU_MCAN1_RX */
                 >;
         };
 };
