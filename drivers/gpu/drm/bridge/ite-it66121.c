@@ -1703,12 +1703,14 @@ static int it66121_probe(struct i2c_client *client)
 	return 0;
 }
 
-static void it66121_remove(struct i2c_client *client)
+static int it66121_remove(struct i2c_client *client)
 {
 	struct it66121_ctx *ctx = i2c_get_clientdata(client);
 
 	drm_bridge_remove(&ctx->bridge);
 	mutex_destroy(&ctx->lock);
+
+	return 0;
 }
 
 static const struct it66121_chip_info it66121_chip_info = {
