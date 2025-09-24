@@ -10,7 +10,7 @@
 #include <dt-bindings/leds/common.h>
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/net/ti-dp83867.h>
-#include "k3-am62a7.dtsi"
+#include "k3-am62d2.dtsi"
 
 / {
 	compatible = "ti,am62d2-evm", "ti,am62d2";
@@ -120,7 +120,7 @@
 		};
 	};
 
-	vout_pd: regulator-1 {
+	vout_pd: regulator-0 {
 		/* TPS65988 PD CONTROLLER OUTPUT */
 		compatible = "regulator-fixed";
 		regulator-name = "vout_pd";
@@ -131,7 +131,7 @@
 		bootph-all;
 	};
 
-	vmain_pd: load-switch {
+	vmain_pd: regulator-1 {
 		/* Output of TPS22811 */
 		compatible = "regulator-fixed";
 		regulator-name = "vmain_pd";
@@ -155,7 +155,19 @@
 		bootph-all;
 	};
 
-	vdd_mmc1: regulator-3 {
+	vcc_3v3_main: regulator-3 {
+		/* output of LM5141-Q1 */
+		compatible = "regulator-fixed";
+		regulator-name = "vcc_3v3_main";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		vin-supply = <&vmain_pd>;
+		regulator-always-on;
+		regulator-boot-on;
+		bootph-all;
+	};
+
+	vdd_mmc1: regulator-4 {
 		/* TPS22918DBVR */
 		compatible = "regulator-fixed";
 		regulator-name = "vdd_mmc1";
@@ -167,7 +179,19 @@
 		bootph-all;
 	};
 
-	vddshv_sdio: regulator-4 {
+	vcc_3v3_sys: regulator-5 {
+		/* output of TPS222965DSGT */
+		compatible = "regulator-fixed";
+		regulator-name = "vcc_3v3_sys";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		vin-supply = <&vcc_3v3_main>;
+		regulator-always-on;
+		regulator-boot-on;
+		bootph-all;
+	};
+
+	vddshv_sdio: regulator-6 {
 		compatible = "regulator-gpio";
 		regulator-name = "vddshv_sdio";
 		pinctrl-names = "default";
@@ -230,8 +254,8 @@
 &wkup_uart0 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&wkup_uart0_pins_default>;
-	status = "reserved";
 	bootph-all;
+	status = "reserved";
 };
 
 &main_pmx0 {
@@ -287,9 +311,9 @@
 			AM62DX_IOPAD(0x023c, PIN_INPUT, 0) /* (C21) MMC1_CMD */
 			AM62DX_IOPAD(0x0234, PIN_OUTPUT, 0) /* (E22) MMC1_CLK */
 			AM62DX_IOPAD(0x0230, PIN_INPUT, 0) /* (B22) MMC1_DAT0 */
-			AM62DX_IOPAD(0x022c, PIN_INPUT_PULLUP, 0) /* (D21) MMC1_DAT1 */
-			AM62DX_IOPAD(0x0228, PIN_INPUT_PULLUP, 0) /* (C22) MMC1_DAT2 */
-			AM62DX_IOPAD(0x0224, PIN_INPUT_PULLUP, 0) /* (D22) MMC1_DAT3 */
+			AM62DX_IOPAD(0x022c, PIN_INPUT, 0) /* (D21) MMC1_DAT1 */
+			AM62DX_IOPAD(0x0228, PIN_INPUT, 0) /* (C22) MMC1_DAT2 */
+			AM62DX_IOPAD(0x0224, PIN_INPUT, 0) /* (D22) MMC1_DAT3 */
 			AM62DX_IOPAD(0x0240, PIN_INPUT, 0) /* (E18) MMC1_SDCD */
 		>;
 		bootph-all;
@@ -364,7 +388,7 @@
 
 	vddshv_sdio_pins_default: vddshv-sdio-default-pins {
 		pinctrl-single,pins = <
-			AM62DX_IOPAD(0x1F4, PIN_OUTPUT, 7) /* (M19) GPMC0_CLK.GPIO1_31 */
+			AM62DX_IOPAD(0x1f4, PIN_OUTPUT, 7) /* (M19) GPMC0_CLK.GPIO1_31 */
 		>;
 		bootph-all;
 	};
@@ -411,11 +435,11 @@
 };
 
 &main_i2c0 {
-	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&main_i2c0_pins_default>;
 	clock-frequency = <400000>;
 	bootph-all;
+	status = "okay";
 
 	typec_pd0: usb-power-controller@3f {
 		compatible = "ti,tps6598x";
@@ -449,16 +473,17 @@
 		bootph-all;
 
 		gpio-line-names = "GPIO_CPSW2_RST", "GPIO_CPSW1_RST",
-			"MMC1_SD_EN", "VPP_EN",
-			"GPIO_DIX_RST", "IO_EXP_OPT_EN",
-			"DIX_INT", "GPIO_eMMC_RSTn",
-			"CPLD2_DONE", "CPLD2_INTN",
-			"CPLD1_DONE", "CPLD1_INTN",
-			"USB_TYPEA_OC_INDICATION", "PCM1_INT",
-			"PCM2_INT", "GPIO_PCM1_RST",
-			"TEST_GPIO2", "GPIO_PCM2_RST",
-			"IO_MCAN0_STB", "IO_MCAN1_STB",
-			"PD_I2C_IRQ", "IO_EXP_TEST_LED";
+				  "","MMC1_SD_EN",
+				  "VPP_EN", "GPIO_DIX_RST",
+				  "IO_EXP_OPT_EN", "DIX_INT",
+				  "GPIO_eMMC_RSTn", "CPLD2_DONE",
+				  "CPLD2_INTN", "CPLD1_DONE",
+				  "CPLD1_INTN", "USB_TYPEA_OC_INDICATION",
+				  "PCM1_INT", "PCM2_INT",
+				  "GPIO_PCM1_RST", "TEST_GPIO2",
+				  "GPIO_PCM2_RST", "",
+				  "IO_MCAN0_STB", "IO_MCAN1_STB",
+				  "PD_I2C_IRQ", "IO_EXP_TEST_LED";
 	};
 
 	exp2: gpio@20 {
@@ -467,16 +492,16 @@
 		gpio-controller;
 		#gpio-cells = <2>;
 
-		gpio-line-names = "", "DAC_LAT_CTRL",
-			"CPLD1_JTAGENB", "CPLD1_PROGRAMN",
-			"CPLD2_JTAGENB", "CPLD2_PROGRAMN",
-			"", "",
-			"", "",
-			"", "",
-			"", "",
-			"", "",
-			"", "",
-			"SoC_I2C0_SCL", "SoC_I2C0_SDA";
+		gpio-line-names = "PCM6240_BUF_IO_EN", "",
+				  "CPLD1_JTAGENB", "CPLD1_PROGRAMN",
+				  "CPLD2_JTAGENB", "CPLD2_PROGRAMN",
+				  "", "",
+				  "", "CPLD1_TCK",
+				  "CPLD1_TMS", "CPLD1_TDI",
+				  "CPLD1_TDO", "CPLD2_TCK",
+				  "CPLD2_TMS", "CPLD2_TDI",
+				  "CPLD2_TDO", "ADDR1_IO_EXP",
+				  "SoC_I2C0_SCL", "SoC_I2C0_SDA";
 	};
 
 	tad5212: dac@50 {
@@ -488,17 +513,17 @@
 };
 
 &main_i2c1 {
-	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&main_i2c1_pins_default>;
 	clock-frequency = <100000>;
+	status = "okay";
 };
 
 &main_i2c2 {
-	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&main_i2c2_pins_default>;
 	clock-frequency = <400000>;
+	status = "okay";
 };
 
 &mcasp2 {
@@ -522,23 +547,23 @@
 
 &sdhci0 {
 	/* eMMC */
-	bootph-all;
-	status = "okay";
 	non-removable;
 	pinctrl-names = "default";
 	pinctrl-0 = <&main_mmc0_pins_default>;
 	disable-wp;
+	bootph-all;
+	status = "okay";
 };
 
 &sdhci1 {
 	/* SD/MMC */
-	status = "okay";
 	vmmc-supply = <&vdd_mmc1>;
 	vqmmc-supply = <&vddshv_sdio>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&main_mmc1_pins_default>;
 	disable-wp;
 	bootph-all;
+	status = "okay";
 };
 
 &main_gpio0 {
@@ -556,10 +581,10 @@
 };
 
 &main_uart0 {
-	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&main_uart0_pins_default>;
 	bootph-all;
+	status = "okay";
 };
 
 &usbss0 {
@@ -648,9 +673,10 @@
 };
 
 &cpsw3g {
-	status = "okay";
 	pinctrl-names = "default";
-	pinctrl-0 = <&main_rgmii1_pins_default &main_rgmii2_pins_default>;
+	pinctrl-0 = <&main_rgmii1_pins_default>,
+		    <&main_rgmii2_pins_default>;
+	status = "okay";
 
 	cpts@3d000 {
 		/* MAP HW3_TS_PUSH to GENF1 */
@@ -659,23 +685,23 @@
 };
 
 &cpsw_port1 {
-	status = "okay";
 	phy-mode = "rgmii-rxid";
 	phy-handle = <&cpsw3g_phy0>;
+	status = "okay";
 };
 
 &cpsw_port2 {
-	status = "okay";
 	phy-mode = "rgmii-rxid";
 	phy-handle = <&cpsw3g_phy1>;
+	status = "okay";
 };
 
 &cpsw3g_mdio {
-	status = "okay";
 	#address-cells = <1>;
 	#size-cells = <0>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&main_mdio0_pins_default>;
+	status = "okay";
 
 	cpsw3g_phy0: ethernet-phy@0 {
 		reg = <0>;
@@ -700,18 +726,6 @@
 /* main_timer2 is used by C7x DSP */
 &main_timer2 {
 	status = "reserved";
-};
-
-&vpu {
-	status = "disabled";
-};
-
-&e5010 {
-	status = "disabled";
-};
-
-&wkup_uart_conf{
-	status = "disabled";
 };
 
 &fss {
