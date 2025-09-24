@@ -490,7 +490,14 @@ static int genpd_set_performance_state(struct device *dev, unsigned int state)
 
 static int genpd_drop_performance_state(struct device *dev)
 {
-	unsigned int prev_state = dev_gpd_data(dev)->performance_state;
+	unsigned int prev_state;
+
+	if (!dev->power.subsys_data) {
+		dev_dbg(dev, "Trying to drop performance state with NULL subsys_data\n");
+		return 0;
+	}
+
+	prev_state = dev_gpd_data(dev)->performance_state;
 
 	if (!genpd_set_performance_state(dev, 0))
 		return prev_state;
