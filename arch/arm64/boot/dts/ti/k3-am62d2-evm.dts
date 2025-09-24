@@ -382,7 +382,7 @@
 
 	main_usb1_pins_default: main-usb1-default-pins {
 			pinctrl-single,pins = <
-			AM62DX_IOPAD(0x0280, PIN_OUTPUT, 0) /* (D19) USB1_DRVVBUS */
+			AM62DX_IOPAD(0x0258, PIN_OUTPUT, 0) /* (D19) USB1_DRVVBUS */
 		>;
 	};
 
