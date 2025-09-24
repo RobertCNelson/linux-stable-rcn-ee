@@ -22,6 +22,8 @@
 #define REG_K3RTC_S_CNT_LSW		0x08
 #define REG_K3RTC_S_CNT_MSW		0x0c
 #define REG_K3RTC_COMP			0x10
+#define REG_K3RTC_OFF_ON_S_CNT_LSW	0x18
+#define REG_K3RTC_OFF_ON_S_CNT_MSW	0x1C
 #define REG_K3RTC_ON_OFF_S_CNT_LSW	0x20
 #define REG_K3RTC_ON_OFF_S_CNT_MSW	0x24
 #define REG_ANALOG			0x2c
@@ -81,7 +83,9 @@ enum ti_k3_rtc_fields {
 	K3RTC_IRQ_ENABLE_SET,
 	K3RTC_IRQ_ENABLE_CLR,
 
+	K3RTC_IRQ_STATUS_RAW_ALT,
 	K3RTC_IRQ_STATUS_ALT,
+	K3RTC_IRQ_ENABLE_SET_ALT,
 	K3RTC_IRQ_ENABLE_CLR_ALT,
 
 	K3RTC_AUX_32K_EN,
@@ -106,15 +110,17 @@ static const struct reg_field ti_rtc_reg_fields[] = {
 	[K3RTC_RELOAD_FROM_BBD] = REG_FIELD(REG_K3RTC_SYNCPEND, 31, 31),
 	[K3RTC_COMP] = REG_FIELD(REG_K3RTC_COMP, 0, 31),
 
-	/* We use on to off as alarm trigger */
-	[K3RTC_ALM_S_CNT_LSW] = REG_FIELD(REG_K3RTC_ON_OFF_S_CNT_LSW, 0, 31),
-	[K3RTC_ALM_S_CNT_MSW] = REG_FIELD(REG_K3RTC_ON_OFF_S_CNT_MSW, 0, 15),
+	/* We use off to on as alarm trigger */
+	[K3RTC_ALM_S_CNT_LSW] = REG_FIELD(REG_K3RTC_OFF_ON_S_CNT_LSW, 0, 31),
+	[K3RTC_ALM_S_CNT_MSW] = REG_FIELD(REG_K3RTC_OFF_ON_S_CNT_MSW, 0, 15),
 	[K3RTC_IRQ_STATUS_RAW] = REG_FIELD(REG_K3RTC_IRQSTATUS_RAW_SYS, 0, 0),
 	[K3RTC_IRQ_STATUS] = REG_FIELD(REG_K3RTC_IRQSTATUS_SYS, 0, 0),
 	[K3RTC_IRQ_ENABLE_SET] = REG_FIELD(REG_K3RTC_IRQENABLE_SET_SYS, 0, 0),
 	[K3RTC_IRQ_ENABLE_CLR] = REG_FIELD(REG_K3RTC_IRQENABLE_CLR_SYS, 0, 0),
 	/* Off to on is alternate */
+	[K3RTC_IRQ_STATUS_RAW_ALT] = REG_FIELD(REG_K3RTC_IRQSTATUS_RAW_SYS, 1, 1),
 	[K3RTC_IRQ_STATUS_ALT] = REG_FIELD(REG_K3RTC_IRQSTATUS_SYS, 1, 1),
+	[K3RTC_IRQ_ENABLE_SET_ALT] = REG_FIELD(REG_K3RTC_IRQENABLE_SET_SYS, 1, 1),
 	[K3RTC_IRQ_ENABLE_CLR_ALT] = REG_FIELD(REG_K3RTC_IRQENABLE_CLR_SYS, 1, 1),
 
 	[K3RTC_AUX_32K_EN] = REG_FIELD(REG_K3RTC_GENERAL_CTL, 22, 22),
@@ -383,9 +389,9 @@ static int ti_k3_rtc_alarm_irq_enable(struct device *dev, unsigned int enabled)
 {
 	struct ti_k3_rtc *priv = dev_get_drvdata(dev);
 	u32 reg;
-	u32 offset = enabled ? K3RTC_IRQ_ENABLE_SET : K3RTC_IRQ_ENABLE_CLR;
+	u32 offset = enabled ? K3RTC_IRQ_ENABLE_SET_ALT : K3RTC_IRQ_ENABLE_CLR_ALT;
 
-	reg = k3rtc_field_read(priv, K3RTC_IRQ_ENABLE_SET);
+	reg = k3rtc_field_read(priv, K3RTC_IRQ_ENABLE_SET_ALT);
 	if ((enabled && reg) || (!enabled && !reg))
 		return 0;
 
@@ -409,7 +415,7 @@ static int ti_k3_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alarm)
 
 	rtc_time64_to_tm((((time64_t)seconds_hi) << 32) | (time64_t)seconds_lo, &alarm->time);
 
-	alarm->enabled = k3rtc_field_read(priv, K3RTC_IRQ_ENABLE_SET);
+	alarm->enabled = k3rtc_field_read(priv, K3RTC_IRQ_ENABLE_SET_ALT);
 
 	return 0;
 }
