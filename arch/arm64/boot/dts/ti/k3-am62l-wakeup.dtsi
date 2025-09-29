@@ -118,8 +118,8 @@
 		interrupts = <GIC_SPI 28 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&scmi_clk 271> , <&scmi_clk 268>;
 		clock-names = "vbus", "osc32k";
-		assigned-clocks = <&scmi_clk 484>;
-		assigned-clock-parents = <&scmi_clk 3>;
+		assigned-clocks = <&scmi_clk 488>;
+		assigned-clock-parents = <&scmi_clk 487>;
 		power-domains = <&scmi_pds 59>;
 		wakeup-source;
 	};
