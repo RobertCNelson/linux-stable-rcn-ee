@@ -940,4 +940,11 @@
 		       <&main_bcdma 0 0 0xc700 0>;
 		dma-names = "rx", "tx1", "tx2";
 	};
+
+	rng: rng@3b100000 {
+		compatible = "inside-secure,safexcel-eip76";
+		reg = <0x00 0x3b100000 0x00 0x7d>;
+		interrupts = <GIC_SPI 47 IRQ_TYPE_LEVEL_HIGH>;
+		status = "reserved"; /* Reserved for OP-TEE */
+	};
 };
