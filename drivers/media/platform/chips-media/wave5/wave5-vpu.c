@@ -159,7 +159,7 @@ static int wave5_vpu_load_firmware(struct device *dev, const char *fw_name,
 	return 0;
 }
 
-static int wave5_pm_suspend(struct device *dev)
+static __maybe_unused int wave5_pm_suspend(struct device *dev)
 {
 	struct vpu_device *vpu = dev_get_drvdata(dev);
 
@@ -175,7 +175,7 @@ static int wave5_pm_suspend(struct device *dev)
 	return 0;
 }
 
-static int wave5_pm_resume(struct device *dev)
+static __maybe_unused int wave5_pm_resume(struct device *dev)
 {
 	struct vpu_device *vpu = dev_get_drvdata(dev);
 	int ret = 0;
