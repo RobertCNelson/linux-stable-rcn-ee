@@ -70,12 +70,6 @@ int wave5_vpu_release_device(struct file *filp,
 	int ret = 0;
 	unsigned long flags;
 
-	if (inst->run_thread) {
-		kthread_stop(inst->run_thread);
-		up(&inst->run_sem);
-		inst->run_thread = NULL;
-	}
-
 	v4l2_m2m_ctx_release(inst->v4l2_fh.m2m_ctx);
 	/*
 	 * To prevent Null reference exception, the existing irq handler were
