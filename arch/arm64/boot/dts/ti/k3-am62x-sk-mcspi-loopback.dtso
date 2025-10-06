@@ -2,7 +2,7 @@
 
 // SPDX-License-Identifier: GPL-2.0
 /**
- * DT Overlay for using McSPI on the RPi header on AM625-SK board.
+ * DT Overlay for using McSPI on AM62, AM62 SIP, AM62 LP, AM62A, AM62P SK boards
  *
  * Copyright (C) 2022 Texas Instruments Incorporated - https://www.ti.com/
  */
@@ -16,9 +16,10 @@
 &main_pmx0 {
 	main_spi0_pins_default: main-spi0-pins-default {
 		pinctrl-single,pins = <
-			AM62X_IOPAD(0x01bc, PIN_INPUT, 0) /* (A14) SPI0_CLK */
+			/* P19, P21, P23, P24 of J3/J4 */
 			AM62X_IOPAD(0x01c0, PIN_INPUT, 0) /* (B13) SPI0_D0 */
 			AM62X_IOPAD(0x01c4, PIN_INPUT, 0) /* (B14) SPI0_D1 */
+			AM62X_IOPAD(0x01bc, PIN_INPUT, 0) /* (A14) SPI0_CLK */
 			AM62X_IOPAD(0x01b4, PIN_INPUT, 0) /* (A13) SPI0_CS0 */
 		>;
 	};
@@ -33,6 +34,16 @@
 			line-name = "EXP_PS_3V3_EN";
 		};
 	};
+};
+
+&epwm0 {
+	/* Conflict with SPI0_CS0 on am62p SK */
+	status = "disabled";
+};
+
+&epwm1 {
+	/* Conflict with SPI0_D0/SPI0_CLK on AM62p SK */
+	status = "disabled";
 };
 
 &main_spi0 {
@@ -52,4 +63,3 @@
 		reg = <0>;
 	};
 };
-
