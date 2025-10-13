@@ -1841,7 +1841,6 @@ static void cdns_mhdp_atomic_enable(struct drm_bridge *bridge,
 	struct drm_atomic_state *state = bridge_state->base.state;
 	struct cdns_mhdp_bridge_state *mhdp_state;
 	struct drm_crtc_state *crtc_state;
-	struct drm_connector *connector;
 	struct drm_connector_state *conn_state;
 	struct drm_bridge_state *new_state;
 	const struct drm_display_mode *mode;
@@ -1871,12 +1870,12 @@ static void cdns_mhdp_atomic_enable(struct drm_bridge *bridge,
 	cdns_mhdp_reg_write(mhdp, CDNS_DPTX_CAR,
 			    resp | CDNS_VIF_CLK_EN | CDNS_VIF_CLK_RSTN);
 
-	connector = drm_atomic_get_new_connector_for_encoder(state,
-							     bridge->encoder);
-	if (WARN_ON(!connector))
+	mhdp->connector = drm_atomic_get_new_connector_for_encoder(state,
+								   bridge->encoder);
+	if (WARN_ON(!mhdp->connector))
 		goto out;
 
-	conn_state = drm_atomic_get_new_connector_state(state, connector);
+	conn_state = drm_atomic_get_new_connector_state(state, mhdp->connector);
 	if (WARN_ON(!conn_state))
 		goto out;
 
@@ -1939,6 +1938,7 @@ static void cdns_mhdp_atomic_disable(struct drm_bridge *bridge,
 		cdns_mhdp_hdcp_disable(mhdp);
 
 	mhdp->bridge_enabled = false;
+	mhdp->connector = NULL;
 	cdns_mhdp_reg_read(mhdp, CDNS_DP_FRAMER_GLOBAL_CONFIG, &resp);
 	resp &= ~CDNS_DP_FRAMER_EN;
 	resp |= CDNS_DP_NO_VIDEO_MODE;
@@ -2076,7 +2076,7 @@ static enum drm_connector_status cdns_mhdp_bridge_detect(struct drm_bridge *brid
 	if (mhdp->no_hpd) {
 		int ret = cdns_mhdp_update_link_status(mhdp);
 
-		if (mhdp->connector.dev) {
+		if (mhdp->connector->dev) {
 			if (ret < 0)
 				schedule_work(&mhdp->modeset_retry_work);
 			else
@@ -2241,8 +2241,8 @@ static void cdns_mhdp_modeset_retry_fn(struct work_struct *work)
 
 	mhdp = container_of(work, typeof(*mhdp), modeset_retry_work);
 
-	if (mhdp->connector.dev) {
-		conn = &mhdp->connector;
+	if (mhdp->connector->dev) {
+		conn = mhdp->connector;
 		/* Grab the locks before changing connector property */
 		mutex_lock(&conn->dev->mode_config.mutex);
 
