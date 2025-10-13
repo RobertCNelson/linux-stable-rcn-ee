@@ -532,6 +532,7 @@ DTC_FLAGS_k3-am62-lp-sk += -@
 DTC_FLAGS_k3-am654-base-board += -@
 DTC_FLAGS_k3-am62x-sk-csi2-v3link-fusion += -@
 DTC_FLAGS_k3-am62a7-sk-fusion += -@
+DTC_FLAGS_k3-am62a7-sk-fusion-2 += -@
 DTC_FLAGS_k3-am62a7-sk-ub954-evm += -@
 DTC_FLAGS_k3-am62a7-sk += -@
 DTC_FLAGS_k3-am62d2-evm += -@
