@@ -692,7 +692,8 @@ static void hsr_forward_do(struct hsr_frame_info *frame)
 				skip_tx_duplicate = hsr_xmit(skb, port, frame);
 				if (port->type == HSR_PT_SLAVE_A ||
 				    port->type == HSR_PT_SLAVE_B)
-					sent = true;
+					if (skip_tx_duplicate == NETDEV_TX_OK)
+						sent = true;
 			}
 		}
 	}
