@@ -534,6 +534,7 @@ DTC_FLAGS_k3-am62x-sk-csi2-v3link-fusion += -@
 DTC_FLAGS_k3-am62a7-sk-fusion += -@
 DTC_FLAGS_k3-am62a7-sk-ub954-evm += -@
 DTC_FLAGS_k3-am62a7-sk += -@
+DTC_FLAGS_k3-am62d2-evm += -@
 DTC_FLAGS_k3-am62p5-sk += -@
 DTC_FLAGS_k3-am642-evm += -@
 DTC_FLAGS_k3-am642-phyboard-electra-rdk += -@
