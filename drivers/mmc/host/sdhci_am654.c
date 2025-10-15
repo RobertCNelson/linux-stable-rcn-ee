@@ -824,7 +824,7 @@ static int sdhci_am654_init(struct sdhci_host *host)
 
 	if (sdhci_am654->quirks & SDHCI_AM654_QUIRK_DISABLE_HS400 &&
 	    host->mmc->caps2 & (MMC_CAP2_HS400 | MMC_CAP2_HS400_ES)) {
-		dev_info(dev, "Disable descoped HS400 mode for this silicon revision\n");
+		dev_info(dev, "HS400 mode not supported on this silicon revision, disabling it\n");
 		host->mmc->caps2 &= ~(MMC_CAP2_HS400 | MMC_CAP2_HS400_ES);
 	}
 

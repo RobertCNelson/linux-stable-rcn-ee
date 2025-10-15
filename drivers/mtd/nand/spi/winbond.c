@@ -155,8 +155,14 @@ static int w25n01jw_ooblayout_free(struct mtd_info *mtd, int section,
 	if (section > 3)
 		return -ERANGE;
 
-	region->offset = (16 * section) + 2;
-	region->length = 10;
+	region->offset = (16 * section);
+	region->length = 12;
+
+	/* Extract BBM */
+	if (!section) {
+		region->offset += 2;
+		region->length -= 2;
+	}
 
 	return 0;
 }

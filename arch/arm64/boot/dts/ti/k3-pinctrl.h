@@ -30,6 +30,10 @@
 #define ST_DISABLE		(0 << ST_EN_SHIFT)
 #define ST_ENABLE		(1 << ST_EN_SHIFT)
 
+/* Schmitt trigger configuration */
+#define ST_DISABLE		(0 << ST_EN_SHIFT)
+#define ST_ENABLE		(1 << ST_EN_SHIFT)
+
 #define PULL_DISABLE		(1 << PULLUDEN_SHIFT)
 #define PULL_ENABLE		(0 << PULLUDEN_SHIFT)
 
