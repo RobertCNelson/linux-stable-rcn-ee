@@ -208,18 +208,69 @@
 	codec_audio: sound {
 		compatible = "simple-audio-card";
 		simple-audio-card,name = "AM62D2-EVM";
-		simple-audio-card,format = "i2s";
-		simple-audio-card,bitclock-master = <&sound_master1>;
-		simple-audio-card,frame-master = <&sound_master1>;
-		simple-audio-card,bitclock-inversion;
 
-		sound_master1: simple-audio-card,cpu {
-			sound-dai = <&mcasp2>;
-			system-clock-direction-out;
+		simple-audio-card,dai-link@0 {
+			format = "dsp_b";
+			bitclock-master = <&master0>;
+			frame-master = <&master0>;
+
+			master0: cpu {
+				sound-dai = <&mcasp2>;
+				system-clock-direction-out;
+			};
+
+			codec@0 {
+				sound-dai = <&tad5x1x_50>;
+				playback-only;
+			};
 		};
 
-		simple-audio-card,codec {
-			sound-dai = <&tad5212>;
+		simple-audio-card,dai-link@1 {
+			format = "dsp_b";
+			bitclock-master = <&master1>;
+			frame-master = <&master1>;
+
+			master1: cpu {
+				sound-dai = <&mcasp2>;
+				system-clock-direction-out;
+			};
+
+			codec@1 {
+				sound-dai = <&tad5x1x_51>;
+				playback-only;
+			};
+		};
+
+		simple-audio-card,dai-link@2 {
+			format = "dsp_b";
+			bitclock-master = <&master2>;
+			frame-master = <&master2>;
+
+			master2: cpu {
+			sound-dai = <&mcasp2>;
+				system-clock-direction-out;
+			};
+
+			codec@2 {
+				sound-dai = <&tad5x1x_52>;
+				playback-only;
+			};
+		};
+
+		simple-audio-card,dai-link@3 {
+			format = "dsp_b";
+			bitclock-master = <&master3>;
+			frame-master = <&master3>;
+
+			master3: cpu {
+				sound-dai = <&mcasp2>;
+				system-clock-direction-out;
+			};
+
+			codec@3 {
+				sound-dai = <&tad5x1x_53>;
+				playback-only;
+			};
 		};
 	};
 
@@ -504,11 +555,40 @@
 				  "SoC_I2C0_SCL", "SoC_I2C0_SDA";
 	};
 
-	tad5212: dac@50 {
+	tad5x1x_50: tad5x1x@50 {
 		compatible = "ti,tad5212";
-		reg = <0x50>, <0x51>, <0x52>, <0x53>;
-		sound-name-prefix = "tad5212_04";
+		reg = <0x50>;
 		#sound-dai-cells = <0>;
+		ti,vref = <0>;
+		ti,micbias-vg = <3>;
+		sound-name-prefix = "J3A";
+	};
+
+	tad5x1x_51: tad5x1x@51 {
+		compatible = "ti,tad5212";
+		reg = <0x51>;
+		#sound-dai-cells = <0>;
+		ti,vref = <0>;
+		ti,micbias-vg = <3>;
+		sound-name-prefix = "J3B";
+	};
+
+	tad5x1x_52: tad5x1x@52 {
+		compatible = "ti,tad5212";
+		reg = <0x52>;
+		#sound-dai-cells = <0>;
+		ti,vref = <0>;
+		ti,micbias-vg = <3>;
+		sound-name-prefix = "J4A";
+	};
+
+	tad5x1x_53: tad5x1x@53 {
+		compatible = "ti,tad5212";
+		reg = <0x53>;
+		#sound-dai-cells = <0>;
+		ti,vref = <0>;
+		ti,micbias-vg = <3>;
+		sound-name-prefix = "J4B";
 	};
 };
 
