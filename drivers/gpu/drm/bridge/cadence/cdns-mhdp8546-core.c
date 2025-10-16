@@ -2101,7 +2101,7 @@ static enum drm_connector_status cdns_mhdp_bridge_detect(struct drm_bridge *brid
 	if (mhdp->no_hpd) {
 		int ret = cdns_mhdp_update_link_status(mhdp);
 
-		if (mhdp->connector->dev) {
+		if (mhdp->connector && mhdp->connector->dev) {
 			if (ret < 0)
 				schedule_work(&mhdp->modeset_retry_work);
 			else
@@ -2286,7 +2286,7 @@ static void cdns_mhdp_modeset_retry_fn(struct work_struct *work)
 
 	mhdp = container_of(work, typeof(*mhdp), modeset_retry_work);
 
-	if (mhdp->connector->dev) {
+	if (mhdp->connector && mhdp->connector->dev) {
 		conn = mhdp->connector;
 		/* Grab the locks before changing connector property */
 		mutex_lock(&conn->dev->mode_config.mutex);
