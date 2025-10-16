@@ -316,43 +316,43 @@ static const struct drm_bridge_funcs tidss_oldi_bridge_funcs = {
 	.atomic_reset = drm_atomic_helper_bridge_reset,
 };
 
-static int get_oldi_mode(struct device_node *oldi_tx, u32 *companion_instance)
+static int get_oldi_mode(struct device_node *oldi_tx, int *companion_instance)
 {
 	struct device_node *companion;
 	struct device_node *port0, *port1;
+	u32 companion_reg;
+	bool secondary_oldi = false;
 	int pixel_order;
 
 	/*
 	 * Find if the OLDI is paired with another OLDI for combined OLDI
-	 * operation (dual-lvds or clone).
+	 * operation (dual-link or clone).
 	 */
 	companion = of_parse_phandle(oldi_tx, "ti,companion-oldi", 0);
-	if (!companion) {
-		/*
-		 * OLDI TXes in Single Link mode do not have companion
-		 * OLDI TXes and, Secondary OLDI nodes don't need this
-		 * information.
-		 */
-		*companion_instance = -1;
-
-		if (of_property_read_bool(oldi_tx, "ti,secondary-oldi"))
-			return OLDI_MODE_SECONDARY;
-
+	if (!companion)
 		/*
 		 * The OLDI TX does not have a companion, nor is it a
 		 * secondary OLDI. It will operate independently.
 		 */
 		return OLDI_MODE_SINGLE_LINK;
-	}
 
-	if (of_property_read_u32(companion, "reg", companion_instance))
+	if (of_property_read_u32(companion, "reg", &companion_reg))
 		return OLDI_MODE_UNSUPPORTED;
+
+	if (companion_reg > (TIDSS_MAX_OLDI_TXES - 1))
+		/* Invalid companion OLDI reg value. */
+		return OLDI_MODE_UNSUPPORTED;
+
+	*companion_instance = (int)companion_reg;
+
+	if (of_property_read_bool(oldi_tx, "ti,secondary-oldi"))
+		secondary_oldi = true;
 
 	/*
 	 * We need to work out if the sink is expecting us to function in
-	 * dual-link mode. We do this by looking at the DT port nodes we are
-	 * connected to, if they are marked as expecting even pixels and
-	 * odd pixels than we need to enable vertical stripe output.
+	 * dual-link mode. We do this by looking at the DT port nodes, the
+	 * OLDI TX ports are connected to. If they are marked as expecting
+	 * even pixels and odd pixels, then we need to enable dual-link.
 	 */
 	port0 = of_graph_get_port_by_id(oldi_tx, 1);
 	port1 = of_graph_get_port_by_id(companion, 1);
@@ -364,18 +364,30 @@ static int get_oldi_mode(struct device_node *oldi_tx, u32 *companion_instance)
 	switch (pixel_order) {
 	case -EINVAL:
 		/*
-		 * The dual link properties were not found in at least
+		 * The dual-link properties were not found in at least
 		 * one of the sink nodes. Since 2 OLDI ports are present
 		 * in the DT, it can be safely assumed that the required
 		 * configuration is Clone Mode.
 		 */
-		return OLDI_MODE_CLONE_SINGLE_LINK;
+		return (secondary_oldi ? OLDI_MODE_SECONDARY_CLONE_SINGLE_LINK :
+					 OLDI_MODE_CLONE_SINGLE_LINK);
 
 	case DRM_LVDS_DUAL_LINK_ODD_EVEN_PIXELS:
-		return OLDI_MODE_DUAL_LINK;
+		/*
+		 * Primary OLDI can only support "ODD" pixels. So, from its
+		 * perspective, the pixel order has to be ODD-EVEN.
+		 */
+		return (secondary_oldi ? OLDI_MODE_UNSUPPORTED :
+					 OLDI_MODE_DUAL_LINK);
 
-	/* Unsupported OLDI Modes */
 	case DRM_LVDS_DUAL_LINK_EVEN_ODD_PIXELS:
+		/*
+		 * Secondary OLDI can only support "EVEN" pixels. So, from its
+		 * perspective, the pixel order has to be EVEN-ODD.
+		 */
+		return (secondary_oldi ? OLDI_MODE_SECONDARY_DUAL_LINK :
+					 OLDI_MODE_UNSUPPORTED);
+
 	default:
 		return OLDI_MODE_UNSUPPORTED;
 	}
@@ -485,11 +497,33 @@ int tidss_oldi_init(struct tidss_device *tidss)
 					    "OLDI%u: Unsupported OLDI connection.\n",
 					    oldi_instance);
 			goto err_put_node;
-		} else if (link_type == OLDI_MODE_SECONDARY) {
+		} else if ((link_type == OLDI_MODE_SECONDARY_CLONE_SINGLE_LINK) ||
+			   (link_type == OLDI_MODE_CLONE_SINGLE_LINK)) {
+			/*
+			 * The OLDI driver cannot support OLDI clone mode
+			 * properly at present.
+			 * The clone mode requires 2 working encoder-bridge
+			 * pipelines, generating from the same crtc. The DRM
+			 * framework does not support this at present. If
+			 * there were to be, say, 2 OLDI sink bridges each
+			 * connected to an OLDI TXes, they couldn't both be
+			 * supported simultaneously.
+			 * This driver still has some code pertaining to OLDI
+			 * clone mode configuration in DSS hardware for future,
+			 * when there is a better infrastructure in the DRM
+			 * framework to support 2 encoder-bridge pipelines
+			 * simultaneously.
+			 * Till that time, this driver shall error out if it
+			 * detects a clone mode configuration.
+			 */
+			ret = dev_err_probe(tidss->dev, -EOPNOTSUPP,
+					    "The OLDI driver does not support Clone Mode at present.\n");
+			goto err_put_node;
+		} else if (link_type == OLDI_MODE_SECONDARY_DUAL_LINK) {
 			/*
 			 * This is the secondary OLDI node, which serves as a
-			 * companinon to the primary OLDI, when it is configured
-			 * for the dual-lvds mode. Since the primary OLDI will
+			 * companion to the primary OLDI, when it is configured
+			 * for the dual-link mode. Since the primary OLDI will
 			 * be a part of bridge chain, no need to put this one
 			 * too. Continue onto the next OLDI node.
 			 */
