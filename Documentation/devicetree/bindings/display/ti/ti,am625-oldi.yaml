@@ -32,10 +32,9 @@ properties:
   ti,companion-oldi:
     $ref: /schemas/types.yaml#/definitions/phandle
     description:
-      phandle to companion OLDI transmitter. This property is mandatory for the
-      primarty OLDI TX if the OLDI TXes are expected to work either in dual-lvds
-      mode or in clone mode. This property should point to the secondary OLDI
-      TX.
+      phandle to companion OLDI transmitter. This property is required for both
+      the OLDI TXes if they are expected to work either in dual-lvds mode or in
+      clone mode. This property should point to the other OLDI TX's phandle.
 
   ti,secondary-oldi:
     type: boolean
