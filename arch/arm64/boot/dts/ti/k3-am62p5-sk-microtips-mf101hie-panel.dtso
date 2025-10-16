@@ -63,6 +63,7 @@
 &oldi1_dss0 {
 	status = "okay";
 	ti,secondary-oldi;
+	ti,companion-oldi = <&oldi0_dss0>;
 };
 
 &oldi0_dss0_ports {
