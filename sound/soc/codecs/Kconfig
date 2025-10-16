@@ -248,6 +248,7 @@ config SND_SOC_ALL_CODECS
 	imply SND_SOC_STA529
 	imply SND_SOC_STAC9766
 	imply SND_SOC_STI_SAS
+	imply SND_SOC_TAC5X1X_I2C
 	imply SND_SOC_TAS2552
 	imply SND_SOC_TAS2562
 	imply SND_SOC_TAS2764
@@ -1905,6 +1906,16 @@ config SND_SOC_STAC9766
 
 config SND_SOC_STI_SAS
 	tristate "codec Audio support for STI SAS codec"
+
+config SND_SOC_TAC5X1X_I2C
+	tristate "Texas Instruments TAC5X1X family driver based on I2C"
+	depends on I2C && REGMAP_I2C
+	help
+	  Enable support for Texas Instruments TAC5X1X family Audio chips.
+	  The family consists mono/stereo audio codecs, DACs and ADCs.
+	  Includes support for TAC5311-Q1, TAC5411-Q1, TAC5111, TAC5211,
+	  TAA5212, TAA5412-Q1, TAD5112, TAD5212, TAC5312, TAC5412-Q1,
+	  TAC5112, TAC5212
 
 config SND_SOC_TAS2552
 	tristate "Texas Instruments TAS2552 Mono Audio amplifier"
