@@ -2178,6 +2178,8 @@ static s32 tac5x1x_probe(struct device *dev, struct regmap *regmap,
 	struct device_node *np = dev->of_node;
 	struct tac5x1x_priv *tac5x1x;
 	s32 ret;
+	struct i2c_client *i2c = to_i2c_client(dev);
+	struct snd_soc_dai_driver *dai;
 
 	if (IS_ERR(regmap))
 		return PTR_ERR(regmap);
@@ -2226,15 +2228,24 @@ static s32 tac5x1x_probe(struct device *dev, struct regmap *regmap,
 					      tac5x1x->out2x_vcom_cfg);
 	}
 
+	/* Allocate unique DAI for each codec instance to avoid naming conflicts */
+	dai = devm_kzalloc(dev, sizeof(*dai), GFP_KERNEL);
+	if (!dai) {
+		ret = -ENOMEM;
+		goto err_disable_regulators;
+	}
+
 	switch (tac5x1x->codec_type) {
 	case TAA5212:
 	case TAA5412:
-		ret = devm_snd_soc_register_component(dev, &component_taa5x1x,
-						      &taa5x1x_dai, 1);
-		if (ret) {
-			dev_err(dev, "Failed to register component\n");
+		/* Copy from TAA template */
+		memcpy(dai, &taa5x1x_dai, sizeof(*dai));
+		dai->name = devm_kasprintf(dev, GFP_KERNEL, "taa5x1x-hifi-%02x", i2c->addr);
+		if (!dai->name) {
+			ret = -ENOMEM;
 			goto err_disable_regulators;
 		}
+		ret = devm_snd_soc_register_component(dev, &component_taa5x1x, dai, 1);
 		break;
 	case TAC5111:
 	case TAC5112:
@@ -2244,23 +2255,33 @@ static s32 tac5x1x_probe(struct device *dev, struct regmap *regmap,
 	case TAC5312:
 	case TAC5411:
 	case TAC5412:
-		ret = devm_snd_soc_register_component(dev, &component_tac5x1x,
-						      &tac5x1x_dai, 1);
-		if (ret) {
-			dev_err(dev, "Failed to register component\n");
+		/* Copy from TAC template */
+		memcpy(dai, &tac5x1x_dai, sizeof(*dai));
+		dai->name = devm_kasprintf(dev, GFP_KERNEL, "tac5x1x-hifi-%02x", i2c->addr);
+		if (!dai->name) {
+			ret = -ENOMEM;
 			goto err_disable_regulators;
 		}
+		ret = devm_snd_soc_register_component(dev, &component_tac5x1x, dai, 1);
 		break;
 	case TAD5112:
 	case TAD5212:
-		ret = devm_snd_soc_register_component(dev, &component_tad5x1x,
-						      &tad5x1x_dai, 1);
-		if (ret) {
-			dev_err(dev, "Failed to register component\n");
+		/* Copy from TAD template */
+		memcpy(dai, &tad5x1x_dai, sizeof(*dai));
+		dai->name = devm_kasprintf(dev, GFP_KERNEL, "tad5x1x-hifi-%02x", i2c->addr);
+		if (!dai->name) {
+			ret = -ENOMEM;
 			goto err_disable_regulators;
 		}
+		ret = devm_snd_soc_register_component(dev, &component_tad5x1x, dai, 1);
 		break;
 	}
+
+	if (ret) {
+		dev_err(dev, "Failed to register component\n");
+		goto err_disable_regulators;
+	}
+
 	return 0;
 
 err_disable_regulators:
