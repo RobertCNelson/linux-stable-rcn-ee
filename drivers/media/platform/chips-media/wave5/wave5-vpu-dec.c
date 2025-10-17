@@ -221,12 +221,17 @@ static void wave5_handle_src_buffer(struct vpu_instance *inst, dma_addr_t rd_ptr
 		dev_dbg(inst->dev->dev, "%s: removing src buffer %i",
 			__func__, src_buf->vb2_buf.index);
 		src_buf = v4l2_m2m_src_buf_remove(m2m_ctx);
-		head = inst->time_stamp.head;
-		inst->time_stamp.buf[head] = src_buf->vb2_buf.timestamp;
-		inst->time_stamp.head++;
 
-		if (IS_WRAP(inst->time_stamp.head, MAX_TIMESTAMP_CIR_BUF) == 0)
-			inst->time_stamp.head = 0;
+		inst->timestamp = src_buf->vb2_buf.timestamp;
+		if(inst->cap_io_mode == VB2_MEMORY_DMABUF) {
+			head = inst->time_stamp.head;
+			inst->time_stamp.buf[head] = src_buf->vb2_buf.timestamp;
+			inst->time_stamp.head++;
+
+			if (IS_WRAP(inst->time_stamp.head, MAX_TIMESTAMP_CIR_BUF) == 0)
+				inst->time_stamp.head = 0;
+		}
+
 		v4l2_m2m_buf_done(src_buf, VB2_BUF_STATE_DONE);
 		consumed_bytes -= src_size;
 
@@ -421,7 +426,7 @@ static void wave5_vpu_dec_finish_decode(struct vpu_instance *inst)
 						       dec_info.index_frame_decoded);
 		if (vb) {
 			dec_buf = to_vb2_v4l2_buffer(vb);
-			//dec_buf->vb2_buf.timestamp = inst->timestamp;
+			dec_buf->vb2_buf.timestamp = inst->timestamp;
 		} else {
 			dev_warn(inst->dev->dev, "%s: invalid decoded frame index %i",
 				 __func__, dec_info.index_frame_decoded);
@@ -463,12 +468,14 @@ static void wave5_vpu_dec_finish_decode(struct vpu_instance *inst)
 					      inst->dst_fmt.plane_fmt[2].sizeimage);
 		}
 
-		tail = inst->time_stamp.tail;
-		disp_buf->vb2_buf.timestamp = inst->time_stamp.buf[tail];
-		inst->time_stamp.tail++;
+		if (inst->cap_io_mode == VB2_MEMORY_DMABUF) {
+			tail = inst->time_stamp.tail;
+			disp_buf->vb2_buf.timestamp = inst->time_stamp.buf[tail];
+			inst->time_stamp.tail++;
 
-		if (IS_WRAP(inst->time_stamp.tail, MAX_TIMESTAMP_CIR_BUF) == 0)
-			inst->time_stamp.tail = 0;
+			if (IS_WRAP(inst->time_stamp.tail, MAX_TIMESTAMP_CIR_BUF) == 0)
+				inst->time_stamp.tail = 0;
+		}
 
 		/* TODO implement interlace support */
 		disp_buf->field = V4L2_FIELD_NONE;
