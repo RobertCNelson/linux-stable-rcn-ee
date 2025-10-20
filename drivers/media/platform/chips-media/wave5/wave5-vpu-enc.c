@@ -705,6 +705,11 @@ static int wave5_vpu_enc_encoder_cmd(struct file *file, void *fh, struct v4l2_en
 
 		m2m_ctx->last_src_buf = v4l2_m2m_last_src_buf(m2m_ctx);
 		m2m_ctx->is_draining = true;
+
+		if (v4l2_m2m_num_dst_bufs_ready(m2m_ctx) > 0) {
+			dev_dbg(inst->dev->dev, "Forcing job run for draining\n");
+			v4l2_m2m_try_schedule(m2m_ctx);
+		}
 		break;
 	case V4L2_ENC_CMD_START:
 		break;
@@ -1411,6 +1416,34 @@ free_buffers:
 	return ret;
 }
 
+static int wave5_vpu_enc_prepare_cap_seq(struct vpu_instance *inst)
+{
+	int ret = 0;
+
+	ret = initialize_sequence(inst);
+	if (ret) {
+		dev_warn(inst->dev->dev, "Sequence not found: %d\n", ret);
+		return ret;
+	}
+	ret = switch_state(inst, VPU_INST_STATE_INIT_SEQ);
+	if (ret)
+		return ret;
+
+	/*
+	 * The sequence must be analyzed first to calculate the proper
+	 * size of the auxiliary buffers.
+	 */
+	ret = prepare_fb(inst);
+	if (ret) {
+		dev_warn(inst->dev->dev, "Framebuffer preparation, fail: %d\n", ret);
+		return ret;
+	}
+
+	ret = switch_state(inst, VPU_INST_STATE_PIC_RUN);
+
+	return ret;
+}
+
 static int wave5_vpu_enc_start_streaming(struct vb2_queue *q, unsigned int count)
 {
 	struct vpu_instance *inst = vb2_get_drv_priv(q);
@@ -1453,27 +1486,8 @@ static int wave5_vpu_enc_start_streaming(struct vb2_queue *q, unsigned int count
 		if (ret)
 			goto return_buffers;
 	}
-	if (inst->state == VPU_INST_STATE_OPEN && m2m_ctx->cap_q_ctx.q.streaming) {
-		ret = initialize_sequence(inst);
-		if (ret) {
-			dev_warn(inst->dev->dev, "Sequence not found: %d\n", ret);
-			goto return_buffers;
-		}
-		ret = switch_state(inst, VPU_INST_STATE_INIT_SEQ);
-		if (ret)
-			goto return_buffers;
-		/*
-		 * The sequence must be analyzed first to calculate the proper
-		 * size of the auxiliary buffers.
-		 */
-		ret = prepare_fb(inst);
-		if (ret) {
-			dev_warn(inst->dev->dev, "Framebuffer preparation, fail: %d\n", ret);
-			goto return_buffers;
-		}
-
-		ret = switch_state(inst, VPU_INST_STATE_PIC_RUN);
-	}
+	if (inst->state == VPU_INST_STATE_OPEN && m2m_ctx->cap_q_ctx.q.streaming)
+		ret = wave5_vpu_enc_prepare_cap_seq(inst);
 	if (ret)
 		goto return_buffers;
 
@@ -1598,6 +1612,14 @@ static void wave5_vpu_enc_device_run(void *priv)
 
 	pm_runtime_resume_and_get(inst->dev->dev);
 	switch (inst->state) {
+	case VPU_INST_STATE_OPEN:
+		ret = wave5_vpu_enc_prepare_cap_seq(inst);
+		if (ret) {
+			dev_warn(inst->dev->dev, "Framebuffer preparation, fail: %d\n", ret);
+			switch_state(inst, VPU_INST_STATE_STOP);
+			break;
+		}
+		fallthrough;
 	case VPU_INST_STATE_PIC_RUN:
 		ret = start_encode(inst, &fail_res);
 		if (ret) {
@@ -1633,6 +1655,12 @@ static int wave5_vpu_enc_job_ready(void *priv)
 	case VPU_INST_STATE_NONE:
 		dev_dbg(inst->dev->dev, "Encoder must be open to start queueing M2M jobs!\n");
 		return false;
+	case VPU_INST_STATE_OPEN:
+		if (wave5_vpu_both_queues_are_streaming(inst)) {
+			dev_dbg(inst->dev->dev, "Both queues have been turned on now, M2M job can occur\n");
+			return true;
+		}
+		return false;
 	case VPU_INST_STATE_PIC_RUN:
 		if (m2m_ctx->is_draining || v4l2_m2m_num_src_bufs_ready(m2m_ctx)) {
 			dev_dbg(inst->dev->dev, "Encoder ready for a job, state: %s\n",
@@ -1642,9 +1670,9 @@ static int wave5_vpu_enc_job_ready(void *priv)
 		fallthrough;
 	default:
 		dev_dbg(inst->dev->dev,
-			"Encoder not ready for a job, state: %s, %s draining, %d src bufs ready\n",
+			"Encoder not ready for a job, state: %s, %s draining, %d src bufs ready, %d dst bufs ready\n",
 			state_to_str(inst->state), m2m_ctx->is_draining ? "is" : "is not",
-			v4l2_m2m_num_src_bufs_ready(m2m_ctx));
+			v4l2_m2m_num_src_bufs_ready(m2m_ctx), v4l2_m2m_num_dst_bufs_ready(m2m_ctx));
 		break;
 	}
 	return false;
