@@ -55,6 +55,11 @@
 	};
 };
 
+&pruss_uart {
+	/* Conflict with MCAN0 */
+	status = "disabled";
+};
+
 &main_mcan0 {
 	/* RX pin 8 & TX pin 10 of J3 */
 	pinctrl-names = "default";
