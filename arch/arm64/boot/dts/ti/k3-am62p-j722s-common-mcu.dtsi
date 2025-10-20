@@ -177,7 +177,6 @@
 		interrupts = <GIC_SPI 26 IRQ_TYPE_LEVEL_HIGH>,
 			     <GIC_SPI 27 IRQ_TYPE_LEVEL_HIGH>;
 		interrupt-names = "int0", "int1";
-		wakeup-source = "suspend", "poweroff";
 		status = "disabled";
 	};
 
@@ -193,7 +192,6 @@
 		interrupts = <GIC_SPI 28 IRQ_TYPE_LEVEL_HIGH>,
 			     <GIC_SPI 29 IRQ_TYPE_LEVEL_HIGH>;
 		interrupt-names = "int0", "int1";
-		wakeup-source = "suspend", "poweroff";
 		status = "disabled";
 	};
 
