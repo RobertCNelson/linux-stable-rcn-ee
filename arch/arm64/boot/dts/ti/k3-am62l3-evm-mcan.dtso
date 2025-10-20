@@ -1,0 +1,100 @@
+// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
+/*
+ * DT Overlay for enabling MCAN for AM62L-EVM.
+ *
+ * Copyright (C) 2025 Texas Instruments Incorporated - http://www.ti.com/
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include "k3-pinctrl.h"
+
+&{/} {
+	transceiver1: can-phy0 {
+		compatible = "ti,tcan1042";
+		#phy-cells = <0>;
+		max-bitrate = <5000000>;
+	};
+
+	transceiver2: can-phy1 {
+		compatible = "ti,tcan1042";
+		#phy-cells = <0>;
+		max-bitrate = <5000000>;
+	};
+
+	transceiver3: can-phy2 {
+		compatible = "ti,tcan1042";
+		#phy-cells = <0>;
+		max-bitrate = <5000000>;
+	};
+};
+
+&pmx0 {
+	main_mcan0_pins_default: main-mcan0-default-pins {
+		pinctrl-single,pins = <
+			AM62LX_IOPAD(0x01c8, PIN_INPUT, 0) /* (B15) MCAN0_RX */
+			AM62LX_IOPAD(0x01c4, PIN_OUTPUT, 0) /* (B16) MCAN0_TX */
+		>;
+	};
+
+	main_mcan1_pins_default: main-mcan1-default-pins {
+		pinctrl-single,pins = <
+			AM62LX_IOPAD(0x0180, PIN_INPUT, 5) /* (A8) MCASP0_AXR3.MCAN1_RX */
+			AM62LX_IOPAD(0x0184, PIN_OUTPUT, 5) /* (B10) MCASP0_AXR2.MCAN1_TX */
+		>;
+	};
+
+	main_mcan2_pins_default: main-mcan2-default-pins {
+		pinctrl-single,pins = <
+			AM62LX_IOPAD(0x01bc, PIN_INPUT, 6) /* (B14) UART0_CTSn.MCAN2_RX */
+			AM62LX_IOPAD(0x01c0, PIN_OUTPUT, 6) /* (B13) UART0_RTSn.MCAN2_TX */
+		>;
+	};
+};
+
+&main_uart1 {
+	/* Conflict with main_mcan1 */
+	status = "disabled";
+};
+
+&main_i2c1 {
+	/*
+	* Set UART1_FET_SEL low to route
+	* MCAN1 signals to MCAN1 HDR
+	*/
+	gpio@22 {
+		p02-hog {
+			/* P02 - UART1_FET_SEL */
+			gpio-hog;
+			gpios = <2 GPIO_ACTIVE_HIGH>;
+			output-low;
+			line-name = "UART1_FET_SEL";
+		};
+	};
+};
+
+&main_mcan0 {
+	/* RX p3 & TX p2 of J16 */
+	pinctrl-names = "default";
+	pinctrl-0 = <&main_mcan0_pins_default>;
+	phys = <&transceiver1>;
+	status = "okay";
+};
+
+&main_mcan1 {
+	/* RX p3 & TX p2 of J6 */
+	pinctrl-names = "default";
+	pinctrl-0 = <&main_mcan1_pins_default>;
+	phys = <&transceiver2>;
+	status = "okay";
+};
+
+&main_mcan2 {
+	/* RX p3 & TX p2 of J18 */
+	pinctrl-names = "default";
+	pinctrl-0 = <&main_mcan2_pins_default>;
+	phys = <&transceiver3>;
+	status = "okay";
+};
