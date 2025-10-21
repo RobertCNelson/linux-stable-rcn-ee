@@ -171,11 +171,11 @@ static void tilcdc_fini(struct drm_device *dev)
 	if (priv->crtc)
 		tilcdc_crtc_shutdown(priv->crtc);
 
-	if (priv->is_registered)
+	if (priv->is_registered) {
 		drm_dev_unregister(dev);
-
-	drm_kms_helper_poll_fini(dev);
-	drm_atomic_helper_shutdown(dev);
+		drm_kms_helper_poll_fini(dev);
+		drm_atomic_helper_shutdown(dev);
+	}
 	tilcdc_irq_uninstall(dev);
 	drm_mode_config_cleanup(dev);
 
