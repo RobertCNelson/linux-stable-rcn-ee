@@ -11,6 +11,7 @@
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/net/ti-dp83867.h>
 #include "k3-am62d2.dtsi"
+#include "k3-timesync-router.h"
 
 / {
 	compatible = "ti,am62d2-evm", "ti,am62d2";
@@ -872,4 +873,13 @@
 			};
 		};
 	};
+};
+
+&timesync_router {
+	/* Use Time Sync Router to map GENF1 input to HW3_TS_PUSH output */
+	mux-reg-masks-state = <
+		/* pps [cpsw cpts genf1] in17 -> out12 [cpsw cpts hw3_push] */
+		K3_TS_OFFSET(12, 0x0001ffff, 17)
+		>;
+	status = "okay";
 };
