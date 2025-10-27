@@ -20,8 +20,11 @@
 #include "testmode.h"
 #include "scan.h"
 #include "event.h"
+#include "debugfs.h"
 
 #define CC33XX_FW_RX_PACKET_RAM (9 * 1024)
+#define CC33XX_GENERAL_ERROR_READ_TIMEOUT_MSEC	(3000)
+
 static int no_recovery     = -1;
 
 u32 cc33xx_debug_level = DEBUG_NO_DATAPATH;
@@ -226,20 +229,20 @@ static struct ieee80211_rate cc33xx_rates[] = {
 };
 
 /* can't be const, mac80211 writes to this */
-static struct ieee80211_channel cc33xx_channels[] = {
-	{ .hw_value = 1, .center_freq = 2412, .max_power = CC33XX_MAX_TXPWR },
-	{ .hw_value = 2, .center_freq = 2417, .max_power = CC33XX_MAX_TXPWR },
-	{ .hw_value = 3, .center_freq = 2422, .max_power = CC33XX_MAX_TXPWR },
-	{ .hw_value = 4, .center_freq = 2427, .max_power = CC33XX_MAX_TXPWR },
-	{ .hw_value = 5, .center_freq = 2432, .max_power = CC33XX_MAX_TXPWR },
+static struct ieee80211_channel cc33xx_channels_2ghz[] = {
 	{ .hw_value = 6, .center_freq = 2437, .max_power = CC33XX_MAX_TXPWR },
-	{ .hw_value = 7, .center_freq = 2442, .max_power = CC33XX_MAX_TXPWR },
-	{ .hw_value = 8, .center_freq = 2447, .max_power = CC33XX_MAX_TXPWR },
-	{ .hw_value = 9, .center_freq = 2452, .max_power = CC33XX_MAX_TXPWR },
-	{ .hw_value = 10, .center_freq = 2457, .max_power = CC33XX_MAX_TXPWR },
+	{ .hw_value = 1, .center_freq = 2412, .max_power = CC33XX_MAX_TXPWR },
 	{ .hw_value = 11, .center_freq = 2462, .max_power = CC33XX_MAX_TXPWR },
-	{ .hw_value = 12, .center_freq = 2467, .max_power = CC33XX_MAX_TXPWR },
+	{ .hw_value = 3, .center_freq = 2422, .max_power = CC33XX_MAX_TXPWR },
+	{ .hw_value = 5, .center_freq = 2432, .max_power = CC33XX_MAX_TXPWR },
+	{ .hw_value = 7, .center_freq = 2442, .max_power = CC33XX_MAX_TXPWR },
+	{ .hw_value = 9, .center_freq = 2452, .max_power = CC33XX_MAX_TXPWR },
 	{ .hw_value = 13, .center_freq = 2472, .max_power = CC33XX_MAX_TXPWR },
+	{ .hw_value = 2, .center_freq = 2417, .max_power = CC33XX_MAX_TXPWR },
+	{ .hw_value = 4, .center_freq = 2427, .max_power = CC33XX_MAX_TXPWR },
+	{ .hw_value = 8, .center_freq = 2447, .max_power = CC33XX_MAX_TXPWR },
+	{ .hw_value = 10, .center_freq = 2457, .max_power = CC33XX_MAX_TXPWR },
+	{ .hw_value = 12, .center_freq = 2467, .max_power = CC33XX_MAX_TXPWR },
 };
 
 static const struct ieee80211_sband_iftype_data iftype_data_2ghz[] = {{
@@ -302,7 +305,8 @@ static const struct ieee80211_sband_iftype_data iftype_data_2ghz[] = {{
 			IEEE80211_HE_PHY_CAP9_NON_TRIGGERED_CQI_FEEDBACK |
 			IEEE80211_HE_PHY_CAP9_RX_FULL_BW_SU_USING_MU_WITH_COMP_SIGB |
 			IEEE80211_HE_PHY_CAP9_RX_FULL_BW_SU_USING_MU_WITH_NON_COMP_SIGB |
-			IEEE80211_HE_PHY_CAP9_NOMINAL_PKT_PADDING_16US,
+			(IEEE80211_HE_PHY_CAP9_NOMINAL_PKT_PADDING_16US <<
+				IEEE80211_HE_PHY_CAP9_NOMINAL_PKT_PADDING_POS),
 		},
 		/* Set default Tx/Rx HE MCS NSS Support field.
 		 * Indicate support for up to 2 spatial streams and all
@@ -325,10 +329,33 @@ static const struct ieee80211_sband_iftype_data iftype_data_2ghz[] = {{
 
 /* can't be const, mac80211 writes to this */
 static struct ieee80211_supported_band cc33xx_band_2ghz = {
-	.channels = cc33xx_channels,
-	.n_channels = ARRAY_SIZE(cc33xx_channels),
+	.channels = cc33xx_channels_2ghz,
+	.n_channels = ARRAY_SIZE(cc33xx_channels_2ghz),
 	.bitrates = cc33xx_rates,
 	.n_bitrates = ARRAY_SIZE(cc33xx_rates),
+};
+
+static struct ieee80211_supported_band cc33xx_band_2ghz_non_he = {
+	.channels = cc33xx_channels_2ghz,
+	.n_channels = ARRAY_SIZE(cc33xx_channels_2ghz),
+	.bitrates = cc33xx_rates,
+	.n_bitrates = ARRAY_SIZE(cc33xx_rates),
+};
+
+static const u8 he_if_types_ext_capa_sta[] = {
+	 [0] = WLAN_EXT_CAPA1_EXT_CHANNEL_SWITCHING,
+	 [2] = WLAN_EXT_CAPA3_MULTI_BSSID_SUPPORT,
+	 [7] = WLAN_EXT_CAPA8_OPMODE_NOTIF,
+	 [9] = WLAN_EXT_CAPA10_TWT_REQUESTER_SUPPORT,
+};
+
+static const struct wiphy_iftype_ext_capab he_iftypes_ext_capa[] = {
+	{
+		.iftype = NL80211_IFTYPE_STATION,
+		.extended_capabilities = he_if_types_ext_capa_sta,
+		.extended_capabilities_mask = he_if_types_ext_capa_sta,
+		.extended_capabilities_len = sizeof(he_if_types_ext_capa_sta),
+	},
 };
 
 /* 5 GHz data rates for cc33xx */
@@ -380,6 +407,7 @@ static struct ieee80211_channel cc33xx_channels_5ghz[] = {
 	{ .hw_value = 132, .center_freq = 5660, .max_power = CC33XX_MAX_TXPWR },
 	{ .hw_value = 136, .center_freq = 5680, .max_power = CC33XX_MAX_TXPWR },
 	{ .hw_value = 140, .center_freq = 5700, .max_power = CC33XX_MAX_TXPWR },
+	{ .hw_value = 144, .center_freq = 5720, .max_power = CC33XX_MAX_TXPWR },
 	{ .hw_value = 149, .center_freq = 5745, .max_power = CC33XX_MAX_TXPWR },
 	{ .hw_value = 153, .center_freq = 5765, .max_power = CC33XX_MAX_TXPWR },
 	{ .hw_value = 157, .center_freq = 5785, .max_power = CC33XX_MAX_TXPWR },
@@ -447,7 +475,8 @@ static const struct ieee80211_sband_iftype_data iftype_data_5ghz[] = {{
 			IEEE80211_HE_PHY_CAP9_NON_TRIGGERED_CQI_FEEDBACK |
 			IEEE80211_HE_PHY_CAP9_RX_FULL_BW_SU_USING_MU_WITH_COMP_SIGB |
 			IEEE80211_HE_PHY_CAP9_RX_FULL_BW_SU_USING_MU_WITH_NON_COMP_SIGB |
-			IEEE80211_HE_PHY_CAP9_NOMINAL_PKT_PADDING_16US,
+			(IEEE80211_HE_PHY_CAP9_NOMINAL_PKT_PADDING_16US <<
+				IEEE80211_HE_PHY_CAP9_NOMINAL_PKT_PADDING_POS),
 		},
 		/* Set default Tx/Rx HE MCS NSS Support field.
 		 * Indicate support for up to 2 spatial streams and all
@@ -484,6 +513,13 @@ static struct ieee80211_supported_band cc33xx_band_5ghz = {
 			.tx_highest = cpu_to_le16(7),
 		},
 	},
+};
+
+static struct ieee80211_supported_band cc33xx_band_5ghz_non_he = {
+	.channels = cc33xx_channels_5ghz,
+	.n_channels = ARRAY_SIZE(cc33xx_channels_5ghz),
+	.bitrates = cc33xx_rates_5ghz,
+	.n_bitrates = ARRAY_SIZE(cc33xx_rates_5ghz),
 };
 
 static void __cc33xx_op_remove_interface(struct cc33xx *cc,
@@ -800,6 +836,74 @@ static int read_control_message(struct cc33xx *cc, u8 *read_buffer,
 	return le16_to_cpu(nab_header->len);
 }
 
+static int general_error_event_get_log(struct cc33xx *cc,
+			struct core_status *core_status)
+{
+	int ret = 0;
+	u8 *read_buffer;
+	const size_t buffer_size = 5000;
+	unsigned long end_time = jiffies + msecs_to_jiffies(CC33XX_GENERAL_ERROR_READ_TIMEOUT_MSEC);
+	u8 isGeneralError = 0;
+	u32 isTimeout = 0;
+	void *pFwCrashLogs;
+
+
+	read_buffer = kmalloc(buffer_size, GFP_KERNEL);
+	if (!read_buffer)
+		return -ENOMEM;
+
+
+	cc33xx_debug(DEBUG_CMD, "Attempting to Get FW Crash Logs Before Starting Recovery Work");
+	while ((isGeneralError != true) && (isTimeout != true)) {
+		ret = read_control_message(cc, read_buffer, buffer_size);
+		if (ret > 0) {
+			struct NAB_header *nab_header = (struct NAB_header *)read_buffer;
+			if (nab_header->opcode == NAB_GENERAL_ERROR_FW_LOGS_OPCODE) {
+				cc33xx_debug(DEBUG_CMD, "successfully received GENERAL ERROR CRASH FW_LOGS");
+				isGeneralError = 1;
+				break;
+			}
+		}
+		//should sleep here for 100ms if reading is zero
+		if (isGeneralError != true) {
+			msleep(100);
+			isTimeout = time_is_before_eq_jiffies(end_time);
+		}
+
+	}
+
+	if (isTimeout) {
+		cc33xx_debug(DEBUG_CMD, "Timed Out Attempting to read  CRASH FW Logs");
+		goto out;
+	}
+
+	pFwCrashLogs = read_buffer;
+	pFwCrashLogs += sizeof(struct NAB_header);
+
+	if (cc->fw_crash_logs == NULL) {
+		cc->fw_crash_logs = kzalloc(CC33XX_MAX_FW_LOGS_BUFFER_SIZE, GFP_KERNEL);
+		if (!cc->fw_crash_logs) {
+			ret = -ENOMEM;
+			goto err_crashfwlog;
+		}
+	} else {
+		memset(cc->fw_crash_logs, 0, CC33XX_MAX_FW_LOGS_BUFFER_SIZE);
+	}
+
+	//store crash logs into WL
+	memcpy(cc->fw_crash_logs, pFwCrashLogs, CC33XX_MAX_FW_LOGS_BUFFER_SIZE);
+	goto out;
+
+
+err_crashfwlog:
+	kfree(cc->fw_crash_logs);
+	cc->fw_crash_logs = NULL;
+
+out:
+	kfree(read_buffer);
+	return ret;
+}
+
 static int process_event_and_cmd_result(struct cc33xx *cc,
 					struct core_status *core_status)
 {
@@ -979,10 +1083,15 @@ static void cc33xx_get_vif_count(struct ieee80211_hw *hw,
 void cc33xx_queue_recovery_work(struct cc33xx *cc)
 {
 	/* Avoid a recursive recovery */
-	if (cc->state == CC33XX_STATE_ON) {
+	if (cc->state == CC33XX_STATE_ON && cc->mac80211_registered) {
 		cc->state = CC33XX_STATE_RESTARTING;
 		set_bit(CC33XX_FLAG_RECOVERY_IN_PROGRESS, &cc->flags);
+		cc33xx_disable_interrupts_nosync(cc);
 		ieee80211_queue_work(cc->hw, &cc->recovery_work);
+	} else if (cc->state == CC33XX_STATE_OFF || cc->state == CC33XX_STATE_ON) {
+		cc33xx_error("Fatal error during driver init, cannot recover");
+		cc->state = CC33XX_STATE_FAILED;
+		cc33xx_disable_interrupts_nosync(cc);
 	}
 }
 
@@ -1035,6 +1144,11 @@ static void cc33xx_recovery_work(struct work_struct *work)
 
 	if (cc->conf.core.no_recovery) {
 		cc33xx_info("Recovery disabled by configuration, driver will not restart.");
+		mutex_lock(&cc->mutex);
+
+		general_error_event_get_log(cc, cc->core_status);
+
+		mutex_unlock(&cc->mutex);
 		return;
 	}
 
@@ -1047,6 +1161,9 @@ static void cc33xx_recovery_work(struct work_struct *work)
 	set_bit(CC33XX_FLAG_RECOVERY_IN_PROGRESS, &cc->flags);
 
 	mutex_lock(&cc->mutex);
+
+	general_error_event_get_log(cc, cc->core_status);
+
 	while (!list_empty(&cc->wlvif_list)) {
 		wlvif = list_first_entry(&cc->wlvif_list,
 					 struct cc33xx_vif, list);
@@ -1058,6 +1175,8 @@ static void cc33xx_recovery_work(struct work_struct *work)
 		__cc33xx_op_remove_interface(cc, vif, false);
 	}
 	mutex_unlock(&cc->mutex);
+
+	cc33xx_sync_interrupts(cc);
 
 	cc33xx_turn_off(cc);
 	msleep(500);
@@ -1809,11 +1928,6 @@ static void cc33xx_turn_off(struct cc33xx *cc)
 	 */
 	cc->state = CC33XX_STATE_OFF;
 
-	/* Use the nosync variant to disable interrupts, so the mutex could be
-	 * held while doing so without deadlocking.
-	 */
-	cc33xx_disable_interrupts_nosync(cc);
-
 	mutex_unlock(&cc->mutex);
 
 	if (!test_bit(CC33XX_FLAG_RECOVERY_IN_PROGRESS, &cc->flags))
@@ -1863,6 +1977,8 @@ static void cc33xx_turn_off(struct cc33xx *cc)
 
 	for (i = 0; i < NUM_TX_QUEUES; i++)
 		cc->tx_allocated_pkts[i] = 0;
+
+	cc33xx_debugfs_reset(cc);
 
 	kfree(cc->target_mem_map);
 	cc->target_mem_map = NULL;
@@ -2289,11 +2405,6 @@ static int cc33xx_op_add_interface(struct ieee80211_hw *hw,
 	} else {
 		ret = cc33xx_cmd_role_enable(cc, vif->addr, CC33XX_ROLE_DEVICE,
 					     &wlvif->dev_role_id);
-		if (ret < 0)
-			goto out;
-
-		/* needed mainly for configuring rate policies */
-		ret = cc33xx_acx_config_ps(cc, wlvif);
 		if (ret < 0)
 			goto out;
 	}
@@ -2988,6 +3099,7 @@ static int cc33xx_set_key(struct cc33xx *cc, enum set_key_cmd cmd,
 	case WLAN_CIPHER_SUITE_TKIP:
 		key_type = KEY_TKIP;
 		key_conf->hw_key_idx = key_conf->keyidx;
+		key_conf->flags |= IEEE80211_KEY_FLAG_PUT_IV_SPACE;
 		break;
 	case WLAN_CIPHER_SUITE_CCMP:
 		key_type = KEY_AES;
@@ -3737,35 +3849,20 @@ static void cc33xx_bss_info_changed_sta(struct cc33xx *cc,
 	}
 
 	if (changed & BSS_CHANGED_PS) {
-		if (vif->cfg.ps &&
-		    test_bit(WLVIF_FLAG_STA_ASSOCIATED, &wlvif->flags) &&
-		    !test_bit(WLVIF_FLAG_IN_PS, &wlvif->flags)) {
-			int ps_mode;
-			char *ps_mode_str;
+		ret = 0;
 
-			if (cc->conf.host_conf.conn.forced_ps) {
-				ps_mode = STATION_POWER_SAVE_MODE;
-				ps_mode_str = "forced";
-			} else {
-				ps_mode = STATION_AUTO_PS_MODE;
-				ps_mode_str = "auto";
+		if (cc->conf.mac.ps_mode == STATION_AUTO_PS_MODE) {
+			if (vif->cfg.ps && test_bit(WLVIF_FLAG_STA_ASSOCIATED, &wlvif->flags)) {
+				ret = cc33xx_ps_set_mode(cc, wlvif, STATION_AUTO_PS_MODE);
+			} else if (!vif->cfg.ps) {
+				ret = cc33xx_ps_set_mode(cc, wlvif, STATION_ACTIVE_MODE);
 			}
-
-			cc33xx_debug(DEBUG_PSM, "%s ps enabled", ps_mode_str);
-
-			ret = cc33xx_ps_set_mode(cc, wlvif, ps_mode);
-			if (ret < 0)
-				cc33xx_warning("enter %s ps failed %d",
-					       ps_mode_str, ret);
-		} else if (!vif->cfg.ps && test_bit(WLVIF_FLAG_IN_PS,
-						     &wlvif->flags)) {
-			cc33xx_debug(DEBUG_PSM, "auto ps disabled");
-
-			ret = cc33xx_ps_set_mode(cc, wlvif,
-						 STATION_ACTIVE_MODE);
-			if (ret < 0)
-				cc33xx_warning("exit auto ps failed %d", ret);
+		} else {
+			ret = cc33xx_ps_set_mode(cc, wlvif, cc->conf.mac.ps_mode);
 		}
+
+		if (ret < 0)
+			cc33xx_warning("exit auto ps failed %d", ret);
 	}
 
 	/* Handle new association with HT. Do this after join. */
@@ -4091,7 +4188,6 @@ out:
 static u64 cc33xx_op_get_tsf(struct ieee80211_hw *hw, struct ieee80211_vif *vif)
 {
 	struct cc33xx *cc = hw->priv;
-	struct cc33xx_vif *wlvif = cc33xx_vif_to_data(vif);
 	u64 mactime = ULLONG_MAX;
 
 	cc33xx_debug(DEBUG_MAC80211, "mac80211 get tsf");
@@ -4100,8 +4196,6 @@ static u64 cc33xx_op_get_tsf(struct ieee80211_hw *hw, struct ieee80211_vif *vif)
 
 	if (unlikely(cc->state != CC33XX_STATE_ON))
 		goto out;
-
-	cc33xx_acx_tsf_info(cc, wlvif, &mactime);
 
 out:
 	mutex_unlock(&cc->mutex);
@@ -5025,6 +5119,8 @@ static int cc33xx_register_hw(struct cc33xx *cc)
 
 	cc->mac80211_registered = true;
 
+	cc33xx_debugfs_init(cc);
+
 out:
 	return ret;
 }
@@ -5119,7 +5215,7 @@ static int cc33xx_init_ieee80211(struct cc33xx *cc)
 	/* clear channel flags from the previous usage
 	 * and restore max_power & max_antenna_gain values.
 	 */
-	for (i = 0; i < ARRAY_SIZE(cc33xx_channels); i++) {
+	for (i = 0; i < ARRAY_SIZE(cc33xx_channels_2ghz); i++) {
 		cc33xx_band_2ghz.channels[i].flags = 0;
 		cc33xx_band_2ghz.channels[i].max_power = CC33XX_MAX_TXPWR;
 		cc33xx_band_2ghz.channels[i].max_antenna_gain = 0;
@@ -5132,7 +5228,11 @@ static int cc33xx_init_ieee80211(struct cc33xx *cc)
 	}
 
 	/* Enable/Disable He based on conf file params */
-	if (!cc->conf.mac.he_enable) {
+	if ((!cc->disable_wifi6) && (cc->conf.mac.he_enable)) {
+		cc->hw->wiphy->iftype_ext_capab = he_iftypes_ext_capa;
+		cc->hw->wiphy->num_iftype_ext_capab =
+			ARRAY_SIZE(he_iftypes_ext_capa);
+	} else {
 		cc33xx_band_2ghz.iftype_data = NULL;
 		cc33xx_band_2ghz.n_iftype_data = 0;
 
@@ -5143,17 +5243,31 @@ static int cc33xx_init_ieee80211(struct cc33xx *cc)
 	/* We keep local copies of the band structs because we need to
 	 * modify them on a per-device basis.
 	 */
-	memcpy(&cc->bands[NL80211_BAND_2GHZ], &cc33xx_band_2ghz,
-	       sizeof(cc33xx_band_2ghz));
-	memcpy(&cc->bands[NL80211_BAND_2GHZ].ht_cap,
+	if (!cc->disable_wifi6 && (cc->conf.mac.he_enable)) {
+		memcpy(&cc->bands[NL80211_BAND_2GHZ], &cc33xx_band_2ghz,
+			sizeof(cc33xx_band_2ghz));
+		memcpy(&cc->bands[NL80211_BAND_2GHZ].ht_cap,
+			&cc->ht_cap[NL80211_BAND_2GHZ],
+			sizeof(*cc->ht_cap));
+
+		memcpy(&cc->bands[NL80211_BAND_5GHZ], &cc33xx_band_5ghz,
+			sizeof(cc33xx_band_5ghz));
+		memcpy(&cc->bands[NL80211_BAND_5GHZ].ht_cap,
+			&cc->ht_cap[NL80211_BAND_5GHZ],
+			sizeof(*cc->ht_cap));
+	} else {
+		memcpy(&cc->bands[NL80211_BAND_2GHZ], &cc33xx_band_2ghz_non_he,
+	       sizeof(cc33xx_band_2ghz_non_he));
+	    memcpy(&cc->bands[NL80211_BAND_2GHZ].ht_cap,
 	       &cc->ht_cap[NL80211_BAND_2GHZ],
 	       sizeof(*cc->ht_cap));
 
-	memcpy(&cc->bands[NL80211_BAND_5GHZ], &cc33xx_band_5ghz,
-	       sizeof(cc33xx_band_5ghz));
-	memcpy(&cc->bands[NL80211_BAND_5GHZ].ht_cap,
+	    memcpy(&cc->bands[NL80211_BAND_5GHZ], &cc33xx_band_5ghz_non_he,
+	       sizeof(cc33xx_band_5ghz_non_he));
+	    memcpy(&cc->bands[NL80211_BAND_5GHZ].ht_cap,
 	       &cc->ht_cap[NL80211_BAND_5GHZ],
 	       sizeof(*cc->ht_cap));
+	}
 
 	ieee80211_set_sband_iftype_data(&cc->bands[NL80211_BAND_2GHZ], iftype_data_2ghz);
 	ieee80211_set_sband_iftype_data(&cc->bands[NL80211_BAND_5GHZ], iftype_data_5ghz);
@@ -5209,7 +5323,7 @@ static int cc33xx_init_ieee80211(struct cc33xx *cc)
 static struct ieee80211_hw *cc33xx_alloc_hw(u32 aggr_buf_size)
 {
 	struct ieee80211_hw *hw;
-	struct cc33xx *cc;
+	struct cc33xx *cc = NULL;
 	int i, j;
 	unsigned int order;
 
@@ -5266,6 +5380,8 @@ static struct ieee80211_hw *cc33xx_alloc_hw(u32 aggr_buf_size)
 	cc->active_sta_count = 0;
 	cc->active_link_count = 0;
 	cc->fwlog_size = 0;
+
+	cc->fw_crash_logs = NULL;
 
 	/* The system link is always allocated */
 	__set_bit(CC33XX_SYSTEM_HLID, cc->links_map);
@@ -5326,6 +5442,7 @@ err_ns_wq:
 	destroy_workqueue(cc->freezable_netstack_wq);
 
 err_hw_alloc:
+	cc33xx_debugfs_exit(cc);
 	return NULL;
 }
 
@@ -5338,9 +5455,15 @@ static int cc33xx_free_hw(struct cc33xx *cc)
 
 	kfree(cc->buffer_32);
 	kfree(cc->core_status);
+
+	kfree(cc->fw_crash_logs);
+	cc->fw_crash_logs = NULL;
+
 	free_page((unsigned long)cc->fwlog);
 	dev_kfree_skb(cc->dummy_packet);
 	free_pages((unsigned long)cc->aggr_buf, get_order(cc->aggr_buf_size));
+
+	cc33xx_debugfs_exit(cc);
 
 	kfree(cc->nvs_mac_addr);
 	cc->nvs_mac_addr = NULL;
@@ -5389,7 +5512,9 @@ static int read_version_info(struct cc33xx *cc)
 		     cc->fw_ver->api_version,
 		     cc->fw_ver->build_version);
 
-	cc33xx_debug(DEBUG_BOOT, "Wireless PHY version %u.%u.%u.%u.%u.%u",
+	cc33xx_debug(DEBUG_BOOT, "Wireless PHY version %u.%u.%u.%u.%u.%u.%u.%u",
+		     cc->fw_ver->phy_version[7],
+		     cc->fw_ver->phy_version[6],
 		     cc->fw_ver->phy_version[5],
 		     cc->fw_ver->phy_version[4],
 		     cc->fw_ver->phy_version[3],
@@ -5548,6 +5673,16 @@ static int cc33xx_setup(struct cc33xx *cc)
 	if (ret < 0)
 		return ret;
 
+	if (cc->conf.core.max_rx_ampdu_len == 0) {
+		cc33xx_siso40_ht_cap_2ghz.ampdu_factor = IEEE80211_HT_MAX_AMPDU_8K;
+		cc33xx_siso40_ht_cap_5ghz.ampdu_factor = IEEE80211_HT_MAX_AMPDU_8K;
+		cc33xx_siso20_ht_cap.ampdu_factor = IEEE80211_HT_MAX_AMPDU_8K;
+	} else if (cc->conf.core.max_rx_ampdu_len == 1) {
+		cc33xx_siso40_ht_cap_2ghz.ampdu_factor = IEEE80211_HT_MAX_AMPDU_16K;
+		cc33xx_siso40_ht_cap_5ghz.ampdu_factor = IEEE80211_HT_MAX_AMPDU_16K;
+		cc33xx_siso20_ht_cap.ampdu_factor = IEEE80211_HT_MAX_AMPDU_16K;
+	}
+
 	if (cc->conf.host_conf.ht.mode == HT_MODE_DEFAULT) {
 		cc33xx_set_ht_cap(cc, NL80211_BAND_2GHZ,
 				  &cc33xx_siso40_ht_cap_2ghz);
@@ -5648,6 +5783,8 @@ static void cc33xx_remove(struct platform_device *pdev)
 
 	device_init_wakeup(cc->dev, false);
 	cc33xx_unregister_hw(cc);
+	cc33xx_disable_interrupts_nosync(cc);
+	cc33xx_sync_interrupts(cc);
 	cc33xx_turn_off(cc);
 
 out:
