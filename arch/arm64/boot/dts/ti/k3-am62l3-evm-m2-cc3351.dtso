@@ -88,3 +88,13 @@
 		interrupts = <52 IRQ_TYPE_EDGE_FALLING>;
 	};
 };
+
+&main_uart1 {
+	status = "okay";
+
+	bluetooth {
+		compatible = "ti,cc33xx-bt";
+		cc33xx-supply = <&wlan_en>;
+		max-speed = <115200>;
+	};
+};

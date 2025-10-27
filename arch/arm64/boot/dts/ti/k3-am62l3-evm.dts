@@ -22,6 +22,7 @@
 	aliases {
 		mmc0 = &sdhci0;
 		mmc1 = &sdhci1;
+		serial3 = &main_uart1;
 	};
 
 	chosen {
@@ -464,6 +465,13 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&main_gpio0_ioexp_intr_pins_default>;
 		bootph-all;
+
+		uart1_fet_buf_en {
+			gpio-hog;
+			gpios = <6 GPIO_ACTIVE_HIGH>;
+			output-low;
+			line-name = "UART1_FET_BUF_EN";
+		};
 	};
 
 	exp2: gpio@23 {
