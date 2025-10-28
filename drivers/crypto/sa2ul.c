@@ -58,6 +58,7 @@
 #define SA_CMDL_UPD_AUTH        BIT(2)
 #define SA_CMDL_UPD_ENC_IV      BIT(3)
 #define SA_CMDL_UPD_IS_GCM      BIT(4)
+#define SA_CMDL_UPD_IS_CMAC     BIT(5)
 
 #define SA_CMDL_PAYLOAD_LENGTH_MASK	0x0000FFFF
 #define SA_CMDL_LENGTH_MASK		0x00FF0000
@@ -91,6 +92,10 @@
 /* Max Authentication tag size */
 #define SA_MAX_AUTH_TAG_SZ 64
 
+/* CMAC definitions */
+#define SA_CMAC_DIGEST_SIZE 16
+#define SA_CMAC_BLOCK_SIZE 16
+
 enum sa_algo_id {
 	SA_ALG_CBC_AES = 0,
 	SA_ALG_EBC_AES,
@@ -105,6 +110,7 @@ enum sa_algo_id {
 	SA_ALG_HMAC_SHA1,
 	SA_ALG_HMAC_SHA256,
 	SA_ALG_HMAC_SHA512,
+	SA_ALG_CMAC_AES,
 };
 
 struct sa_match_data {
@@ -121,6 +127,8 @@ static struct device *sa_k3_dev;
  * @auth_eng_id: Authentication Engine ID
  * @iv_size: Initialization Vector size
  * @enc: True, if this is an encode request
+ * @is_gcm: True, if this is GCM mode
+ * @is_cmac: True, if this is CMAC mode
  */
 struct sa_cmdl_cfg {
 	u8 enc_eng_id;
@@ -128,6 +136,7 @@ struct sa_cmdl_cfg {
 	u8 iv_size;
 	bool enc;
 	bool is_gcm;
+	bool is_cmac;
 };
 
 /**
@@ -164,6 +173,8 @@ struct algo_data {
 	int (*prep_iopad)(struct algo_data *algo, const u8 *key,
 			   u16 key_sz, __be32 *lower_ipad, __be32 *lower_opad,
 			   __be32 *upper_ipad, __be32 *upper_opad);
+	int (*prep_cmac)(struct algo_data *algo, const u8 *key,
+			 u16 key_sz, __be32 *subkey1, __be32 *subkey2);
 };
 
 /**
@@ -412,6 +423,27 @@ static u8 mci_ecb_3des_dec_array[SC_ENC_MCI_SIZE] = {
 	0x30, 0x00, 0x00, 0x85, 0x0a, 0x04, 0xb7, 0x90, 0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00,
+};
+
+/*
+ * Mode Control Instructions for CMAC (Cipher-based Message Authentication Code)
+ * For various Key lengths: 128, 192, 256 bits
+ * Based on SA2UL/SA3UL specification
+ * Note: Subkey must be derived by software and supplied via command label
+ */
+static u8 mci_cmac_aes_array[3][SC_ENC_MCI_SIZE] = {
+	/* AES-128 CMAC */
+	{	0x41, 0x00, 0x00, 0xf1, 0x0d, 0x19, 0x10, 0x8d, 0x2c, 0x12,
+		0x88, 0x08, 0xa6, 0x4b, 0x7e, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00	},
+	/* AES-192 CMAC */
+	{	0x41, 0x00, 0x00, 0xf1, 0x0d, 0x19, 0x10, 0x8d, 0x2c, 0x12,
+		0x88, 0x48, 0xa6, 0x4b, 0x7e, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00	},
+	/* AES-256 CMAC */
+	{	0x41, 0x00, 0x00, 0xf1, 0x0d, 0x19, 0x10, 0x8d, 0x2c, 0x12,
+		0x88, 0x88, 0xa6, 0x4b, 0x7e, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00	},
 };
 
 /*
@@ -683,8 +715,7 @@ static int sa_set_sc_auth(struct algo_data *ad, const u8 *key, u16 key_sz,
 				__func__, __LINE__, ret);
 			return ret;
 		}
-	}
-	else {
+	} else {
 		/* basic hash */
 		sc_buf[1] |= SA_BASIC_HASH;
 	}
@@ -739,7 +770,33 @@ static int sa_format_cmdl_gen(struct sa_cmdl_cfg *cfg, u8 *cmdl,
 		/* Encryption command label */
 		cmdl[enc_offset + SA_CMDL_OFFSET_NESC] = enc_next_eng;
 
-		if (cfg->is_gcm) {
+		if (cfg->is_cmac) {
+			/*
+			 * CMAC subkey passing via command label option bytes
+			 *
+			 * Subkey (16B) : Goes in AUX1[255:128]
+			 *
+			 * Setup command label to accept 16-byte subkey at runtime.
+			 * The subkey (K1 or K2) selection happens in sa_update_cmdl()
+			 * based on message length.
+			 */
+			upd_info->flags |= SA_CMDL_UPD_IS_CMAC;
+
+			upd_info->aux_key_info.index = (SA_CMDL_HEADER_SIZE_BYTES) >> 2;
+			upd_info->aux_key_info.size = 16;
+
+			/* Set the initial command label length */
+			cmdl[enc_offset + SA_CMDL_OFFSET_LABEL_LEN] =
+				SA_CMDL_HEADER_SIZE_BYTES + upd_info->aux_key_info.size;
+
+			/* The length and offset are specified in unit of 8B
+			 * For AUX1[255:128]: offset=(64+16)=80, length=16
+			 */
+			cmdl[enc_offset + SA_CMDL_OFFSET_OPTION_CTRL1] =
+				((SC_ENC_AUX1_OFFSET) | (upd_info->aux_key_info.size >> 3));
+
+			total = SA_CMDL_HEADER_SIZE_BYTES + upd_info->aux_key_info.size;
+		} else if (cfg->is_gcm) {
 			/*
 			 * GCM requires the following things so we need to
 			 * send them through option bytes as they keep
@@ -884,6 +941,28 @@ static inline int sa_update_cmdl(struct sa_req *req, u32 *cmdl,
 
 		cmdl[0] &= ~SA_CMDL_LENGTH_MASK;
 		cmdl[0] |= FIELD_PREP(SA_CMDL_LENGTH_MASK, total);
+	}
+
+	/*
+	 * CMAC subkey passing via command label option bytes
+	 *
+	 * Per NIST SP 800-38B and SA2UL hardware requirements:
+	 * - Pass a single 16-byte subkey (K1 or K2) to Aux1[255:128] (bytes 16-31)
+	 * - K1 is used when message is a multiple of block size (16 bytes)
+	 * - K2 is used when message needs padding
+	 * - K1 and K2 are stored in ctx->enc.cmdl_upd_info.aux_key[]
+	 */
+	if (upd_info->flags & SA_CMDL_UPD_IS_CMAC) {
+		struct sa_tfm_ctx *ctx = req->ctx;
+		u32 *subkey;
+
+		/* Select K1 (complete blocks) or K2 (needs padding) per NIST SP 800-38B */
+		subkey = (req->enc_size > 0 && req->enc_size % AES_BLOCK_SIZE == 0) ?
+			 &ctx->enc.cmdl_upd_info.aux_key[0] :  /* K1 */
+			 &ctx->enc.cmdl_upd_info.aux_key[4];   /* K2 */
+
+		sa_copy_to_cmdl((__be32 *)&cmdl[upd_info->aux_key_info.index],
+				subkey, upd_info->aux_key_info.size);
 	}
 
 	if (likely(upd_info->flags & SA_CMDL_UPD_AUTH)) {
@@ -1757,6 +1836,61 @@ static int sa_sha_digest(struct ahash_request *req)
 	return sa_run(&sa_req);
 }
 
+static int sa_cmac_digest(struct ahash_request *req)
+{
+	struct sa_tfm_ctx *ctx = crypto_ahash_ctx(crypto_ahash_reqtfm(req));
+	struct sa_sha_req_ctx *rctx = ahash_request_ctx(req);
+	struct sa_req sa_req = { 0 };
+	size_t auth_len;
+
+	auth_len = req->nbytes;
+	if (!auth_len || auth_len > SA_MAX_DATA_SZ ||
+	    (auth_len >= SA_UNSAFE_DATA_SZ_MIN &&
+	     auth_len <= SA_UNSAFE_DATA_SZ_MAX)) {
+		struct ahash_request *subreq = &rctx->fallback_req;
+		int ret = 0;
+
+		ahash_request_set_tfm(subreq, ctx->fallback.ahash);
+		subreq->base.flags = req->base.flags & CRYPTO_TFM_REQ_MAY_SLEEP;
+
+		crypto_ahash_init(subreq);
+
+		subreq->nbytes = auth_len;
+		subreq->src = req->src;
+		subreq->result = req->result;
+
+		ret |= crypto_ahash_update(subreq);
+
+		subreq->nbytes = 0;
+
+		ret |= crypto_ahash_final(subreq);
+
+		return ret;
+	}
+
+	sa_req.size = auth_len;
+	sa_req.src = req->src;
+	sa_req.dst = req->src;
+	sa_req.enc = true;
+	sa_req.type = CRYPTO_ALG_TYPE_AHASH;
+	sa_req.callback = sa_sha_dma_in_callback;
+	sa_req.ctx = ctx;
+	sa_req.base = &req->base;
+
+	/*
+	 * CMAC uses the encryption engine, not authentication engine.
+	 * Set enc_size for CMAC (uses encryption path).
+	 *
+	 * The CMAC flag (SA_CMDL_UPD_IS_CMAC) was already set during setup
+	 * in sa_format_cmdl_gen(), which enables sa_update_cmdl() to handle
+	 * K1/K2 subkey selection and insertion automatically.
+	 */
+	sa_req.enc_size = auth_len;
+	sa_req.auth_size = 0;
+
+	return sa_run(&sa_req);
+}
+
 static int sa_sha_setup(struct sa_tfm_ctx *ctx, struct algo_data *ad,
 		const u8 *key, u8 key_sz)
 {
@@ -2012,6 +2146,270 @@ static int sa_hmac_cra_init(struct crypto_tfm *tfm)
 	return ret;
 }
 
+/**
+ * cmac_gf_double() - GF(2^128) doubling operation for CMAC subkey derivation
+ * @in: Input 128-bit value as two u64 words (big-endian)
+ * @out: Output 128-bit value (can be same as input for in-place operation)
+ * @gfmask: GF(2^128) reduction polynomial (0x87 for CMAC)
+ *
+ * Performs: out = (in << 1) XOR (gfmask if MSB(in) = 1)
+ * Per NIST SP 800-38B section 6.1
+ */
+static inline void cmac_gf_double(const u64 in[2], u64 out[2], u8 gfmask)
+{
+	u8 msb = (in[1] >> 63);
+
+	out[1] = (in[1] << 1) | (in[0] >> 63);
+	out[0] = (in[0] << 1) ^ (msb ? gfmask : 0);
+}
+
+/**
+ * sa_prepare_cmac_subkeys() - Derive CMAC subkeys K1 and K2
+ * @data: Algorithm data structure
+ * @key: AES encryption key
+ * @key_sz: Key size in bytes (16, 24, or 32)
+ * @subkey1: Output buffer for K1 (16 bytes)
+ * @subkey2: Output buffer for K2 (16 bytes)
+ *
+ * Derives CMAC subkeys according to NIST SP 800-38B:
+ * L = AES(key, 0^128)
+ * K1 = L << 1, XOR 0x87 if MSB(L) = 1
+ * K2 = K1 << 1, XOR 0x87 if MSB(K1) = 1
+ *
+ * Return: 0 on success, negative error code on failure
+ */
+static int sa_prepare_cmac_subkeys(struct algo_data *data, const u8 *key,
+				   u16 key_sz, __be32 *subkey1, __be32 *subkey2)
+{
+	SYNC_SKCIPHER_REQUEST_ON_STACK(req, data->ctx->skcipher);
+	struct scatterlist sg;
+	u8 *L;
+	u64 k1[2], k2[2];
+	const u8 gfmask = 0x87;  /* GF(2^128) reduction polynomial */
+	int ret;
+
+	/* Allocate buffer from heap to avoid cache flush issues with stack memory */
+	L = kmalloc(AES_BLOCK_SIZE, GFP_KERNEL);
+	if (!L)
+		return -ENOMEM;
+
+	/* Set key for ECB(AES) cipher */
+	ret = crypto_sync_skcipher_setkey(data->ctx->skcipher, key, key_sz);
+	if (ret) {
+		dev_err(sa_k3_dev, "%s: crypto_sync_skcipher_setkey failed, ret=%d\n",
+			__func__, ret);
+		goto out_free;
+	}
+
+	/* Step 1: Encrypt zero block to get L = AES(key, 0) */
+	memset(L, 0, AES_BLOCK_SIZE);
+	sg_init_one(&sg, L, AES_BLOCK_SIZE);
+	skcipher_request_set_sync_tfm(req, data->ctx->skcipher);
+	skcipher_request_set_crypt(req, &sg, &sg, AES_BLOCK_SIZE, NULL);
+
+	ret = crypto_skcipher_encrypt(req);
+	if (ret) {
+		dev_err(sa_k3_dev, "%s: crypto_skcipher_encrypt failed, ret=%d\n",
+			__func__, ret);
+		goto out_free;
+	}
+
+	/* Convert to u64 for easier manipulation (big-endian) */
+	k1[1] = get_unaligned_be64(L);      /* Upper 64 bits */
+	k1[0] = get_unaligned_be64(L + 8);  /* Lower 64 bits */
+
+	/* Step 2: Derive K1 = L << 1, XOR 0x87 if MSB(L) = 1 */
+	cmac_gf_double(k1, k1, gfmask);
+
+	/* Store K1 in big-endian format */
+	put_unaligned_be64(k1[1], (u8 *)subkey1);
+	put_unaligned_be64(k1[0], (u8 *)subkey1 + 8);
+
+	/* Step 3: Derive K2 = K1 << 1, XOR 0x87 if MSB(K1) = 1 */
+	cmac_gf_double(k1, k2, gfmask);
+
+	/* Store K2 in big-endian format */
+	put_unaligned_be64(k2[1], (u8 *)subkey2);
+	put_unaligned_be64(k2[0], (u8 *)subkey2 + 8);
+
+	ret = 0;
+
+out_free:
+	/* Clear sensitive data on all exit paths before freeing */
+	memzero_explicit(L, AES_BLOCK_SIZE);
+	memzero_explicit(k1, sizeof(k1));
+	memzero_explicit(k2, sizeof(k2));
+	kfree(L);
+	return ret;
+}
+
+/**
+ * sa_cmac_setup() - Setup CMAC algorithm context
+ * @ctx: Transform context
+ * @ad: Algorithm data
+ * @key: AES key
+ * @key_sz: Key size
+ *
+ * Initializes CMAC context with:
+ * - Encryption engine for AES operations
+ * - Derives K1 and K2 subkeys and stores them in cmdl_upd_info.aux_key[]
+ * - Sets up command label for runtime subkey passing
+ */
+static int sa_cmac_setup(struct sa_tfm_ctx *ctx, struct algo_data *ad,
+			 const u8 *key, u8 key_sz)
+{
+	int cmdl_len;
+	struct sa_cmdl_cfg cfg;
+	int ret;
+	__be32 *k1_storage, *k2_storage;
+
+	ad->ctx = ctx;
+	ad->enc_eng.eng_id = SA_ENG_ID_EM1;  /* Use encryption engine for CMAC */
+	ad->enc_eng.sc_size = SA_CTX_ENC_TYPE_SZ;
+
+	if (key_sz) {
+		/* Initialize fallback setkey */
+		ret = crypto_ahash_setkey(ad->ctx->fallback.ahash,
+					  key, key_sz);
+		if (ret) {
+			dev_err(sa_k3_dev, "%s: Failed to set fallback.ahash setkey=%d",
+				__func__, ret);
+			return ret;
+		}
+
+		ad->keyed_mac = true;
+	}
+
+	memset(&cfg, 0, sizeof(cfg));
+	cfg.enc_eng_id = ad->enc_eng.eng_id;
+	cfg.iv_size = 0;
+	cfg.is_cmac = true;
+	cfg.enc = true;
+
+	ctx->dev_data = dev_get_drvdata(sa_k3_dev);
+
+	/* Setup Security Context & Command label template
+	 * CMAC uses encryption key for both encryption and authentication
+	 * Use enc=1 to enter the MCI code path (selects mci_enc)
+	 */
+	if (sa_init_sc(&ctx->enc, ctx->dev_data->match_data, key, key_sz,
+		       NULL, 0, ad, 1, &ctx->enc.epib[1]))
+		goto badkey;
+
+	cmdl_len = sa_format_cmdl_gen(&cfg,
+				      (u8 *)ctx->enc.cmdl,
+				      &ctx->enc.cmdl_upd_info);
+	if (cmdl_len <= 0 || (cmdl_len > SA_MAX_CMDL_WORDS * sizeof(u32)))
+		goto badkey;
+
+	ctx->enc.cmdl_size = cmdl_len;
+
+	/*
+	 * Derive and store CMAC subkeys K1 and K2 in cmdl_upd_info.aux_key[]
+	 * for runtime access:
+	 * - K1: aux_key[0-3]  (words 0-3, bytes 0-15)
+	 * - K2: aux_key[4-7]  (words 4-7, bytes 16-31)
+	 *
+	 * The appropriate subkey will be selected at runtime in sa_sha_digest()
+	 * based on message length and passed via command label option bytes.
+	 */
+	if (ad->keyed_mac && ad->prep_cmac) {
+		k1_storage = (__be32 *)&ctx->enc.cmdl_upd_info.aux_key[0];
+		k2_storage = (__be32 *)&ctx->enc.cmdl_upd_info.aux_key[4];
+
+		ret = ad->prep_cmac(ad, key, key_sz, k1_storage, k2_storage);
+		if (ret) {
+			dev_err(sa_k3_dev, "%s: prep_cmac failed, ret=%d\n",
+				__func__, ret);
+			return ret;
+		}
+	}
+
+	return 0;
+
+badkey:
+	dev_err(sa_k3_dev, "%s: badkey\n", __func__);
+	return -EINVAL;
+}
+
+static int sa_cmac_aes_setkey(struct crypto_ahash *ahash, const u8 *key,
+			      unsigned int keylen)
+{
+	struct crypto_tfm *tfm = crypto_ahash_tfm(ahash);
+	struct sa_tfm_ctx *ctx = crypto_tfm_ctx(tfm);
+	struct algo_data ad = { 0 };
+	int key_idx;
+
+	/* Validate key length for AES */
+	if (aes_check_keylen(keylen))
+		return -EINVAL;
+
+	/* Determine key index for MCI selection */
+	key_idx = (keylen >> 3) - 2; /* 128->0, 192->1, 256->2 */
+	if (key_idx >= 3)
+		return -EINVAL;
+
+	/* Setup algorithm data for CMAC */
+	ad.ctx = ctx;
+	ad.enc_eng.eng_id = SA_ENG_ID_EM1;  /* Encryption engine */
+	ad.enc_eng.sc_size = SA_CTX_ENC_TYPE_SZ;
+	ad.aalg_id = SA_AALG_ID_CMAC;
+	ad.hash_size = SA_CMAC_DIGEST_SIZE;
+	ad.iv_out_size = SA_CMAC_DIGEST_SIZE;  /* CRITICAL: Output size for egress trailer */
+	ad.keyed_mac = true;
+	ad.prep_cmac = sa_prepare_cmac_subkeys;
+
+	/* Set the appropriate CMAC MCI based on key length */
+	/* CMAC needs both mci_enc and mci_dec set to the same MCI */
+	ad.mci_enc = mci_cmac_aes_array[key_idx];
+	ad.mci_dec = mci_cmac_aes_array[key_idx];
+
+	/* Use CMAC-specific setup instead of SHA setup */
+	return sa_cmac_setup(ctx, &ad, key, keylen);
+}
+
+static int sa_cmac_aes_cra_init(struct crypto_tfm *tfm)
+{
+	struct sa_tfm_ctx *ctx = crypto_tfm_ctx(tfm);
+	struct sa_crypto_data *data = dev_get_drvdata(sa_k3_dev);
+	int ret;
+
+	/* Initialize context */
+	memset(ctx, 0, sizeof(*ctx));
+	ctx->dev_data = data;
+
+	/* Initialize context info for hardware */
+	ret = sa_init_ctx_info(&ctx->enc, data);
+	if (ret)
+		return ret;
+
+	/*
+	 * Allocate ECB(AES) cipher for CMAC subkey derivation (AES(key, 0))
+	 * Request generic software implementation to avoid DMA issues with
+	 * stack-allocated buffers
+	 */
+	ctx->skcipher = crypto_alloc_sync_skcipher("ecb(aes)", 0, CRYPTO_ALG_NEED_FALLBACK);
+	if (IS_ERR(ctx->skcipher)) {
+		dev_err(sa_k3_dev, "Failed to allocate ecb(aes) for CMAC subkey derivation\n");
+		return PTR_ERR(ctx->skcipher);
+	}
+
+	/* Allocate fallback for CMAC */
+	ctx->fallback.ahash = crypto_alloc_ahash("cmac(aes)", 0,
+						 CRYPTO_ALG_NEED_FALLBACK);
+	if (IS_ERR(ctx->fallback.ahash)) {
+		dev_err(sa_k3_dev, "Failed to allocate cmac(aes) fallback\n");
+		crypto_free_sync_skcipher(ctx->skcipher);
+		return PTR_ERR(ctx->fallback.ahash);
+	}
+
+	/* Set request size for ahash requests */
+	crypto_ahash_set_reqsize(__crypto_ahash_cast(tfm),
+				 sizeof(struct sa_sha_req_ctx) +
+				 crypto_ahash_reqsize(ctx->fallback.ahash));
+
+	return 0;
+}
 
 static int sa_hmac_sha_setkey(struct crypto_ahash *ahash, const u8 *key,
 			     unsigned int keylen)
@@ -2053,6 +2451,7 @@ static void sa_sha_cra_exit(struct crypto_tfm *tfm)
 	if (crypto_tfm_alg_type(tfm) == CRYPTO_ALG_TYPE_AHASH)
 		sa_free_ctx_info(&ctx->enc, data);
 
+	crypto_free_sync_skcipher(ctx->skcipher);
 	crypto_free_shash(ctx->shash);
 	crypto_free_ahash(ctx->fallback.ahash);
 }
@@ -2791,6 +3190,36 @@ static struct sa_alg_tmpl sa_algs[] = {
 			.import			= sa_sha_import,
 		},
 	},
+	[SA_ALG_CMAC_AES] = {
+		.type = CRYPTO_ALG_TYPE_AHASH,
+		.alg.ahash = {
+			.halg.base = {
+				.cra_name	= "cmac(aes)",
+				.cra_driver_name	= "cmac-aes-sa2ul",
+				.cra_priority	= 400,
+				.cra_flags	= CRYPTO_ALG_TYPE_AHASH |
+						  CRYPTO_ALG_ASYNC |
+						  CRYPTO_ALG_KERN_DRIVER_ONLY |
+						  CRYPTO_ALG_NEED_FALLBACK,
+				.cra_blocksize	= SA_CMAC_BLOCK_SIZE,
+				.cra_ctxsize	= sizeof(struct sa_tfm_ctx),
+				.cra_module	= THIS_MODULE,
+				.cra_init	= sa_cmac_aes_cra_init,
+				.cra_exit	= sa_sha_cra_exit,
+			},
+			.halg.digestsize	= SA_CMAC_DIGEST_SIZE,
+			.halg.statesize		= sizeof(struct sa_sha_req_ctx) +
+						  SA_CMAC_DIGEST_SIZE,
+			.init			= sa_sha_init,
+			.update			= sa_sha_update,
+			.final			= sa_sha_final,
+			.finup			= sa_sha_finup,
+			.setkey			= sa_cmac_aes_setkey,
+			.digest			= sa_cmac_digest,
+			.export			= sa_sha_export,
+			.import			= sa_sha_import,
+		},
+	},
 	[SA_ALG_GCM_AES] = {
 		.type = CRYPTO_ALG_TYPE_AEAD,
 		.alg.aead = {
@@ -2990,7 +3419,8 @@ static struct sa_match_data am654_match_data = {
 			   BIT(SA_ALG_HMAC_SHA1) |
 			   BIT(SA_ALG_HMAC_SHA256)  |
 			   BIT(SA_ALG_HMAC_SHA512) |
-			   BIT(SA_ALG_GCM_AES)
+			   BIT(SA_ALG_GCM_AES) |
+			   BIT(SA_ALG_CMAC_AES)
 };
 
 static struct sa_match_data am64_match_data = {
@@ -3000,7 +3430,8 @@ static struct sa_match_data am64_match_data = {
 			   BIT(SA_ALG_EBC_AES) |
 			   BIT(SA_ALG_SHA256) |
 			   BIT(SA_ALG_SHA512) |
-			   BIT(SA_ALG_AUTHENC_SHA256_AES),
+			   BIT(SA_ALG_AUTHENC_SHA256_AES) |
+			   BIT(SA_ALG_CMAC_AES)
 };
 
 static const struct of_device_id of_match[] = {
