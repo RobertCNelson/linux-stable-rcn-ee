@@ -1449,9 +1449,21 @@ static int sa_run(struct sa_req *req)
 
 	memcpy(cmdl, sa_ctx->cmdl, sa_ctx->cmdl_size);
 
-	sa_ctx->cmdl_size = sa_update_cmdl(req, cmdl,
+	/* Process the command label for this request.
+	 * IMPORTANT: Use local variable to store the processed size.
+	 * sa_ctx->cmdl_size must remain unchanged as it stores the
+	 * template size for use across multiple requests.
+	 */
+	u32 cmdl_len = sa_update_cmdl(req, cmdl,
 					   &sa_ctx->cmdl_upd_info,
 					   sa_ctx->cmdl_size);
+
+	if (cmdl_len > SA_MAX_CMDL_WORDS * sizeof(u32)) {
+		dev_err(pdata->dev, "sa_update_cmdl returned %u, exceeds max %u\n",
+			cmdl_len, SA_MAX_CMDL_WORDS * sizeof(u32));
+		kfree(rxd);
+		return -EINVAL;
+	}
 
 	/*
 	 * Map the packets, first we check if the data fits into a single
@@ -1584,7 +1596,7 @@ static int sa_run(struct sa_req *req)
 	 */
 	mdptr = (u32 *)dmaengine_desc_get_metadata_ptr(tx_out, &pl, &ml);
 
-	req->mdata_size = sa_prepare_tx_desc(mdptr, sa_ctx->cmdl_size,
+	req->mdata_size = sa_prepare_tx_desc(mdptr, cmdl_len,
 					     cmdl, sizeof(sa_ctx->epib),
 					     sa_ctx->epib);
 
