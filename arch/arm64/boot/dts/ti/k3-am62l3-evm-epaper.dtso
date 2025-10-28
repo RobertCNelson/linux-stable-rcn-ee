@@ -1,0 +1,90 @@
+// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
+/**
+ * DT Overlay for E-Paper screen over SPI1 on AM62L3 EVM.
+ *
+ * P24 --> BUSY
+ * P25 --> GND
+ * P26 --> RST
+ * P27 --> SPI CLK
+ * P28 --> DC
+ * P29 --> SPI DAT
+ * P30 --> SPI CS
+ *
+ * Copyright (C) 2025 Texas Instruments Incorporated - https://www.ti.com/
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include "k3-pinctrl.h"
+
+&pmx0 {
+	dc_pins_default: dc-default-pins {
+		pinctrl-single,pins = <
+			AM62LX_IOPAD(0x0080, PIN_OUTPUT, 7) /* (K22) GPMC0_AD2.GPIO0_17 */
+		>;
+	};
+
+	res_pins_default: res-default-pins {
+		pinctrl-single,pins = <
+			AM62LX_IOPAD(0x007c, PIN_OUTPUT, 7) /* (L23) GPMC0_AD1.GPIO0_16 */
+		>;
+	};
+
+	busy_pins_default: busy-default-pins {
+		pinctrl-single,pins = <
+			AM62LX_IOPAD(0x0078, PIN_INPUT, 7) /* (L22) GPMC0_AD0.GPIO0_15 */
+		>;
+	};
+
+	main_spi1_pins_default: main-spi1-default-pins {
+		pinctrl-single,pins = <
+			AM62LX_IOPAD(0x008c, PIN_OUTPUT, 4) /* (H22) GPMC0_AD5.SPI1_CLK */
+			AM62LX_IOPAD(0x0088, PIN_OUTPUT, 4) /* (K23) GPMC0_AD4.SPI1_CS0 */
+			AM62LX_IOPAD(0x0084, PIN_OUTPUT, 4) /* (J23) GPMC0_AD3.SPI1_D1 */
+		>;
+	};
+
+	fet_sel_pins_default: fet-sel-default-pins {
+		pinctrl-single,pins = <
+			AM62LX_IOPAD(0x01a8, PIN_OUTPUT, 7) /* (E13) SPI0_CLK.GPIO0_89 */
+		>;
+	};
+};
+
+&main_gpio0 {
+	fet-sel-hog {
+		/* VOUT0 FET switch selection */
+		gpio-hog;
+		gpios = <89 0>;
+		output-high;
+		line-name = "GPIO_EXP_CONN_FET_SEL";
+	};
+};
+
+&dss {
+	status = "disabled";
+};
+
+&gpmc0 {
+	status = "disabled";
+};
+
+&main_spi1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&main_spi1_pins_default>, <&fet_sel_pins_default>;
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	spidev@0 {
+		compatible = "rohm,dh2228fv";
+		reg = <0>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&dc_pins_default>,
+			    <&res_pins_default>,
+			    <&busy_pins_default>;
+		spi-max-frequency = <1000000>;
+	};
+};
