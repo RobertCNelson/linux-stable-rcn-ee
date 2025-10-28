@@ -946,7 +946,20 @@ int sa_init_sc(struct sa_ctx_info *ctx, const struct sa_match_data *match_data,
 
 	memzero_explicit(sc_buf, SA_CTX_MAX_SZ);
 
-	sc_buf[1] = SA_SCCTL_FE_AUTH_ENC;
+	/* Set SCCTL fetch/evict control based on engine configuration */
+	if (ad->auth_eng.eng_id && ad->enc_eng.eng_id) {
+		/* Dual-engine (authenc) - fetch both contexts */
+		sc_buf[1] = SA_SCCTL_FE_AUTH_ENC;
+	} else if (ad->enc_eng.eng_id) {
+		/* Single-engine encryption (CMAC, GCM, CBC, ECB) */
+		sc_buf[1] = SA_SCCTL_FE_ENC;
+	} else if (ad->auth_eng.eng_id) {
+		/* Single-engine authentication (SHA, HMAC) */
+		sc_buf[1] = SA_SCCTL_FE_AUTH;
+	} else {
+		/* No engines configured */
+		return -EINVAL;
+	}
 	enc_sc_offset = SA_CTX_PHP_PE_CTX_SZ;
 	auth_sc_offset = enc_sc_offset + ad->enc_eng.sc_size;
 

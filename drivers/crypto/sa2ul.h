@@ -119,7 +119,13 @@ struct sa_tfm_ctx;
  */
 #define SA_CTX_SCCTL_OWNER_OFFSET 0
 
-#define SA_SCCTL_FE_AUTH_ENC	0x6D
+/*
+ * SCCTL Fetch/Evict control values
+ * Based on bit encoding: [7:6]=evict PHP, [5:4]=fetch auth, [3:2]=fetch enc, [1:0]=fetch PHP
+ */
+#define SA_SCCTL_FE_AUTH_ENC	0x6D  /* Dual-engine: PHP + Enc + Auth (authenc) */
+#define SA_SCCTL_FE_ENC		0x8D  /* Single-engine Enc: PHP + Enc + evict (CMAC, GCM, CBC) */
+#define SA_SCCTL_FE_AUTH	0x4D  /* Single-engine Auth: PHP + Auth (SHA, HMAC) */
 
 #define SA_ALIGN_MASK		(sizeof(u32) - 1)
 #define SA_ALIGNED		__aligned(32)
