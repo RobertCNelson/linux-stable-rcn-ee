@@ -106,7 +106,16 @@
 
 /* Override SelLCDorHDMI from am437x-gp-evm.dts to select HDMI */
 &gpio5 {
-	p8 {
+	sel-lcd-hdmi-hog {
+		/*
+		 * SelLCDorHDMI selects between display and audio paths:
+		 * Low: HDMI display with audio via HDMI
+		 * High: LCD display with analog audio via aic3111 codec
+		 */
+		gpio-hog;
+		gpios = <8 GPIO_ACTIVE_HIGH>;
 		output-low;
+		line-name = "SelLCDorHDMI";
 	};
+
 };
