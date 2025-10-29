@@ -21,8 +21,10 @@
 #include <linux/clk.h>
 #include <linux/clk-provider.h>
 #include <linux/clocksource.h>
+#include <linux/clockchips.h>
 #include <linux/cpu_pm.h>
 #include <linux/module.h>
+#include <linux/interrupt.h>
 #include <linux/io.h>
 #include <linux/device.h>
 #include <linux/err.h>
@@ -158,7 +160,14 @@ struct dmtimer_clocksource {
 	unsigned int loadval;
 };
 
+struct omap_dm_timer_clockevent {
+	struct clock_event_device dev;
+	struct dmtimer *timer;
+	u32 period;
+};
+
 static resource_size_t omap_dm_timer_clocksource_base;
+static resource_size_t omap_dm_timer_clockevent_base;
 static void __iomem *omap_dm_timer_sched_clock_counter;
 
 enum {
@@ -1091,6 +1100,9 @@ static void omap_dm_timer_find_alwon(void)
 {
 	struct device_node *np;
 
+	if (omap_dm_timer_clocksource_base && omap_dm_timer_clockevent_base)
+		return;
+
 	for_each_matching_node(np, omap_timer_match) {
 		struct resource res;
 
@@ -1103,13 +1115,22 @@ static void omap_dm_timer_find_alwon(void)
 		if (of_address_to_resource(np, 0, &res))
 			continue;
 
-		omap_dm_timer_clocksource_base = res.start;
+		if (!omap_dm_timer_clocksource_base) {
+			omap_dm_timer_clocksource_base = res.start;
+			continue;
+		}
 
-		of_node_put(np);
-		return;
+		if (res.start != omap_dm_timer_clocksource_base) {
+			omap_dm_timer_clockevent_base = res.start;
+
+			of_node_put(np);
+			return;
+		}
 	}
 
-	omap_dm_timer_clocksource_base = -1;
+	if (!omap_dm_timer_clocksource_base)
+		omap_dm_timer_clocksource_base = -1;
+	omap_dm_timer_clockevent_base = -1;
 }
 
 static struct dmtimer_clocksource *omap_dm_timer_to_clocksource(struct clocksource *cs)
@@ -1188,6 +1209,105 @@ static int omap_dm_timer_setup_clocksource(struct dmtimer *timer)
 	return 0;
 }
 
+static struct omap_dm_timer_clockevent *to_dm_timer_clockevent(struct clock_event_device *evt)
+{
+	return container_of(evt, struct omap_dm_timer_clockevent, dev);
+}
+
+static int omap_dm_timer_evt_set_next_event(unsigned long cycles,
+					    struct clock_event_device *evt)
+{
+	struct omap_dm_timer_clockevent *clkevt = to_dm_timer_clockevent(evt);
+	struct dmtimer *timer = clkevt->timer;
+
+	dmtimer_write(timer, OMAP_TIMER_COUNTER_REG, 0xffffffff - cycles);
+	dmtimer_write(timer, OMAP_TIMER_CTRL_REG, OMAP_TIMER_CTRL_ST);
+
+	return 0;
+}
+
+static int omap_dm_timer_evt_shutdown(struct clock_event_device *evt)
+{
+	struct omap_dm_timer_clockevent *clkevt = to_dm_timer_clockevent(evt);
+	struct dmtimer *timer = clkevt->timer;
+
+	__omap_dm_timer_stop(timer);
+
+	return 0;
+}
+
+static int omap_dm_timer_evt_set_periodic(struct clock_event_device *evt)
+{
+	struct omap_dm_timer_clockevent *clkevt = to_dm_timer_clockevent(evt);
+	struct dmtimer *timer = clkevt->timer;
+
+	omap_dm_timer_evt_shutdown(evt);
+
+	omap_dm_timer_set_load(&timer->cookie, clkevt->period);
+	dmtimer_write(timer, OMAP_TIMER_COUNTER_REG, clkevt->period);
+	dmtimer_write(timer, OMAP_TIMER_CTRL_REG,
+		      OMAP_TIMER_CTRL_AR | OMAP_TIMER_CTRL_ST);
+
+	return 0;
+}
+
+static irqreturn_t omap_dm_timer_evt_interrupt(int irq, void *dev_id)
+{
+	struct omap_dm_timer_clockevent *clkevt = dev_id;
+	struct dmtimer *timer = clkevt->timer;
+
+	__omap_dm_timer_write_status(timer, OMAP_TIMER_INT_OVERFLOW);
+
+	clkevt->dev.event_handler(&clkevt->dev);
+
+	return IRQ_HANDLED;
+}
+
+static int omap_dm_timer_setup_clockevent(struct dmtimer *timer)
+{
+	struct device *dev = &timer->pdev->dev;
+	struct omap_dm_timer_clockevent *clkevt;
+	int ret;
+
+	clkevt = devm_kzalloc(dev, sizeof(*clkevt), GFP_KERNEL);
+	if (!clkevt)
+		return -ENOMEM;
+
+	timer->reserved = 1;
+	clkevt->timer = timer;
+
+	clkevt->dev.name = "omap_dm_timer";
+	clkevt->dev.features = CLOCK_EVT_FEAT_PERIODIC | CLOCK_EVT_FEAT_ONESHOT;
+	clkevt->dev.rating = 300;
+	clkevt->dev.set_next_event = omap_dm_timer_evt_set_next_event;
+	clkevt->dev.set_state_shutdown = omap_dm_timer_evt_shutdown;
+	clkevt->dev.set_state_periodic = omap_dm_timer_evt_set_periodic;
+	clkevt->dev.set_state_oneshot = omap_dm_timer_evt_shutdown;
+	clkevt->dev.set_state_oneshot_stopped = omap_dm_timer_evt_shutdown;
+	clkevt->dev.tick_resume = omap_dm_timer_evt_shutdown;
+	clkevt->dev.cpumask = cpu_possible_mask;
+	clkevt->period = 0xffffffff - DIV_ROUND_CLOSEST(timer->fclk_rate, HZ);
+
+	__omap_dm_timer_init_regs(timer);
+	__omap_dm_timer_stop(timer);
+	__omap_dm_timer_enable_posted(timer);
+
+	ret = devm_request_irq(dev, timer->irq, omap_dm_timer_evt_interrupt,
+			       IRQF_TIMER, "omap_dm_timer_clockevent", clkevt);
+	if (ret) {
+		dev_err(dev, "Failed to request interrupt: %d\n", ret);
+		return ret;
+	}
+
+	__omap_dm_timer_int_enable(timer, OMAP_TIMER_INT_OVERFLOW);
+
+	clockevents_config_and_register(&clkevt->dev, timer->fclk_rate,
+					3,
+					0xffffffff);
+
+	return 0;
+}
+
 /**
  * omap_dm_timer_probe - probe function called for every registered device
  * @pdev:	pointer to current timer platform device
@@ -1204,7 +1324,7 @@ static int omap_dm_timer_probe(struct platform_device *pdev)
 	struct resource *res;
 	int ret;
 
-	if (!omap_dm_timer_clocksource_base)
+	if (!omap_dm_timer_clocksource_base || !omap_dm_timer_clockevent_base)
 		omap_dm_timer_find_alwon();
 
 	pdata = of_device_get_match_data(dev);
@@ -1276,6 +1396,14 @@ static int omap_dm_timer_probe(struct platform_device *pdev)
 	timer->pdev = pdev;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+
+	if (omap_dm_timer_clockevent_base && res &&
+	    res->start == omap_dm_timer_clockevent_base &&
+	    !IS_ERR_OR_NULL(timer->fclk)) {
+		ret = omap_dm_timer_setup_clockevent(timer);
+		if (ret)
+			return ret;
+	}
 
 	if (omap_dm_timer_clocksource_base && res &&
 	    res->start == omap_dm_timer_clocksource_base &&
