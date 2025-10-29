@@ -48,6 +48,12 @@
 #define AM625_SUPPORT_S_MPU_OPP			BIT(1)
 #define AM625_SUPPORT_T_MPU_OPP			BIT(2)
 
+#define AM62L3_EFUSE_E_MPU_OPP			5
+#define AM62L3_EFUSE_O_MPU_OPP			15
+
+#define AM62L3_SUPPORT_E_MPU_OPP		BIT(0)
+#define AM62L3_SUPPORT_O_MPU_OPP		BIT(1)
+
 enum {
 	AM62A7_EFUSE_M_MPU_OPP =		13,
 	AM62A7_EFUSE_N_MPU_OPP,
@@ -213,6 +219,22 @@ static unsigned long am625_efuse_xlate(struct ti_cpufreq_data *opp_data,
 	return calculated_efuse;
 }
 
+static unsigned long am62l3_efuse_xlate(struct ti_cpufreq_data *opp_data,
+				       unsigned long efuse)
+{
+	unsigned long calculated_efuse = AM62L3_SUPPORT_E_MPU_OPP;
+
+	switch (efuse) {
+	case AM62L3_EFUSE_O_MPU_OPP:
+		calculated_efuse |= AM62L3_SUPPORT_O_MPU_OPP;
+		fallthrough;
+	case AM62L3_EFUSE_E_MPU_OPP:
+		calculated_efuse |= AM62L3_SUPPORT_E_MPU_OPP;
+	}
+
+	return calculated_efuse;
+}
+
 static struct ti_cpufreq_soc_data am3x_soc_data = {
 	.efuse_xlate = amx3_efuse_xlate,
 	.efuse_fallback = AM33XX_800M_ARM_MPU_MAX_FREQ,
@@ -315,6 +337,7 @@ static const struct soc_device_attribute k3_cpufreq_soc[] = {
 	{ .family = "AM62AX", },
 	{ .family = "AM62PX", },
 	{ .family = "AM62DX", },
+	{ .family = "AM62LX", },
 	{ /* sentinel */ }
 };
 
@@ -325,6 +348,14 @@ static struct ti_cpufreq_soc_data am625_soc_data = {
 	.efuse_shift = 0x6,
 	.multi_regulator = false,
 	.quirks = TI_QUIRK_SYSCON_IS_SINGLE_REG,
+};
+
+static struct ti_cpufreq_soc_data am62l3_soc_data = {
+	.efuse_xlate = am62l3_efuse_xlate,
+	.efuse_offset = 0x0,
+	.efuse_mask = 0x07c0,
+	.efuse_shift = 0x6,
+	.multi_regulator = false,
 };
 
 static struct ti_cpufreq_soc_data am62a7_soc_data = {
@@ -462,6 +493,7 @@ static const struct of_device_id ti_cpufreq_of_match[]  __maybe_unused = {
 	{ .compatible = "ti,omap36xx", .data = &omap36xx_soc_data, },
 	{ .compatible = "ti,am625", .data = &am625_soc_data, },
 	{ .compatible = "ti,am6254xxl", .data = &am625_soc_data, },
+	{ .compatible = "ti,am62l3", .data = &am62l3_soc_data, },
 	{ .compatible = "ti,am62a7", .data = &am62a7_soc_data, },
 	{ .compatible = "ti,am62d2", .data = &am62a7_soc_data, },
 	{ .compatible = "ti,am62p5", .data = &am62p5_soc_data, },
