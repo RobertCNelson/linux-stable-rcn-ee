@@ -167,3 +167,7 @@
 		>;
 	};
 };
+
+&uart0 {
+	wakeup-source;
+};
