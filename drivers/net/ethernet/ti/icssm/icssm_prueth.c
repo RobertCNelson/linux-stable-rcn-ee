@@ -2787,9 +2787,13 @@ static int icssm_emac_ndo_set_features(struct net_device *ndev,
 		ndev->features |= NETIF_F_HW_HSR_TAG_RM;
 	} else if (features & NETIF_F_HW_HSR_FWD) {
 		ndev->features |= NETIF_F_HW_HSR_FWD;
+	} else if (features & NETIF_F_HW_HSR_DUP) {
+		ndev->features |= NETIF_F_HW_HSR_DUP;
 	} else {
 		prueth->eth_type = PRUSS_ETHTYPE_EMAC;
-		ndev->features &= ~(NETIF_F_HW_HSR_TAG_RM | NETIF_F_HW_HSR_FWD);
+		ndev->features &= ~(NETIF_F_HW_HSR_TAG_RM |
+				    NETIF_F_HW_HSR_FWD |
+				    NETIF_F_HW_HSR_DUP);
 	}
 
 	return 0;
@@ -2984,7 +2988,9 @@ static int icssm_prueth_netdev_init(struct prueth *prueth,
 
 	if (prueth->support_lre)
 		ndev->hw_features |=
-			(NETIF_F_HW_HSR_FWD | NETIF_F_HW_HSR_TAG_RM);
+			(NETIF_F_HW_HSR_FWD |
+			 NETIF_F_HW_HSR_TAG_RM |
+			 NETIF_F_HW_HSR_DUP);
 
 	ndev->features |= NETIF_F_HW_VLAN_CTAG_FILTER | NETIF_F_HW_TC;
 
