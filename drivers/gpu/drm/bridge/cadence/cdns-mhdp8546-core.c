@@ -1598,7 +1598,7 @@ static int cdns_mhdp_attach(struct drm_bridge *bridge,
 	if (mhdp->no_hpd) {
 		ret = wait_event_timeout(mhdp->fw_load_wq,
 					 mhdp->hw_state == MHDP_HW_READY,
-					 msecs_to_jiffies(100));
+					 msecs_to_jiffies(1000));
 		if (ret == 0) {
 			dev_err(mhdp->dev, "%s: Timeout waiting for fw loading\n",
 				__func__);
