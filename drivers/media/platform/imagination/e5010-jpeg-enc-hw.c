@@ -78,6 +78,69 @@ void e5010_hw_bypass_mmu(void __iomem *mmu_base, u32 enable)
 			enable);
 }
 
+void e5010_hw_enable_mmu(void __iomem *mmu_base, u32 enable)
+{
+	write_reg_field(mmu_base,
+		MMU_MMU_ADDRESS_CONTROL_OFFSET,
+		MMU_MMU_ADDRESS_CONTROL_MMU_BYPASS_MASK,
+		MMU_MMU_ADDRESS_CONTROL_MMU_BYPASS_SHIFT,
+		enable);
+}
+
+void e5010_hw_mmu_flush(void __iomem *mmu_base, u32 val)
+{
+	write_reg_field(mmu_base,
+		MMU_MMU_CONTROL1_OFFSET,
+		MMU_MMU_CONTROL1_MMU_INVALDC0_MASK,
+		MMU_MMU_CONTROL1_MMU_INVALDC0_SHIFT,
+		val);
+}
+
+void e5010_hw_mmu_ext_addressing(void __iomem *mmu_base, u32 enable)
+{
+	write_reg_field(mmu_base,
+		MMU_MMU_ADDRESS_CONTROL_OFFSET,
+		MMU_MMU_ADDRESS_CONTROL_MMU_ENABLE_EXT_ADDRESSING_MASK,
+		MMU_MMU_ADDRESS_CONTROL_MMU_ENABLE_EXT_ADDRESSING_SHIFT,
+		enable);
+}
+
+void e5010_hw_set_mmu_base_dir_addr(void __iomem *mmu_base, u32 addr)
+{
+	write_reg_field(mmu_base,
+		MMU_MMU_DIR_BASE_ADDR_OFFSET,
+		MMU_MMU_DIR_BASE_ADDR_MMU_DIR_BASE_ADDR_MASK,
+		MMU_MMU_DIR_BASE_ADDR_MMU_DIR_BASE_ADDR_SHIFT,
+		addr);
+}
+
+/*
+ * todo: enable tiling functionality
+ *
+ * MUST MATCH WHATEVER IS IN MMU_TILE_CFG register
+ */
+int e5010_hw_enable_tiling_scheme(void __iomem *core_base, u32 enable)
+{
+	return write_reg_field_not_busy(core_base, core_base,
+		JASPER_MMU_CTRL_OFFSET,
+		JASPER_MMU_CTRL_CR_JASPER_TILING_ENABLE_MASK,
+		JASPER_MMU_CTRL_CR_JASPER_TILING_ENABLE_SHIFT,
+		enable);
+}
+
+/*
+ * 0 correlates to 256x16
+ * 1 correlates to 512*8
+ */
+int e5010_hw_set_tiling_scheme(void __iomem *core_base, u32 enable)
+{
+	return write_reg_field_not_busy(core_base, core_base,
+		JASPER_MMU_CTRL_OFFSET,
+		JASPER_MMU_CTRL_CR_JASPER_TILING_SCHEME_MASK,
+		JASPER_MMU_CTRL_CR_JASPER_TILING_SCHEME_SHIFT,
+		enable);
+}
+
 int e5010_hw_enable_output_address_error_irq(void __iomem *core_base, u32 enable)
 {
 	return write_reg_field_not_busy(core_base, core_base,

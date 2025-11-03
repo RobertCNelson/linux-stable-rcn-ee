@@ -66,8 +66,14 @@
 #define MMU_MMU_CONTROL1_MMU_FLUSH_NO_REPS				(4)
 #define MMU_MMU_CONTROL1_MMU_FLUSH_SIZE					(1)
 
-#define MMU_MMU_CONTROL1_MMU_INVALDC_MASK				(0x00000800)
-#define MMU_MMU_CONTROL1_MMU_INVALDC_SHIFT				(11)
+#define MMU_MMU_CONTROL1_MMU_INVALDC3_MASK				(0x00000800)
+#define MMU_MMU_CONTROL1_MMU_INVALDC3_SHIFT				(11)
+#define MMU_MMU_CONTROL1_MMU_INVALDC2_MASK				(0x00000400)
+#define MMU_MMU_CONTROL1_MMU_INVALDC2_SHIFT				(10)
+#define MMU_MMU_CONTROL1_MMU_INVALDC1_MASK				(0x00000200)
+#define MMU_MMU_CONTROL1_MMU_INVALDC1_SHIFT				(9)
+#define MMU_MMU_CONTROL1_MMU_INVALDC0_MASK				(0x00000100)
+#define MMU_MMU_CONTROL1_MMU_INVALDC0_SHIFT				(8)
 #define MMU_MMU_CONTROL1_MMU_INVALDC_NO_REPS				(4)
 #define MMU_MMU_CONTROL1_MMU_INVALDC_SIZE				(1)
 
@@ -307,5 +313,16 @@
 #define MMU_MMU_VERSION_MMU_MAINT_REV_SHIFT				(0)
 
 #define MMU_BYTE_SIZE							(0x01D4)
+#define MMU_NUM_ENTRIES                         DIV_ROUND_UP(PAGE_SIZE, 4)
+
+#define MMU_DIR_ID_SHIFT                        22
+#define MMU_DIR_MASK                            (0xFFC)
+
+#define MMU_PAGE_ID_SHIFT                       12
+#define MMU_PAGE_MASK                           (0x3FF)
+
+#define MMU_PAGE_ENTRY_MASK                     (0xFFFFF000)
+
+#define MMU_PAGE_VALID_MASK                     (0x1)
 
 #endif
