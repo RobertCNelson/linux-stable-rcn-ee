@@ -2,7 +2,7 @@
 /*
  * Imagination E5010 JPEG Encoder driver.
  *
- * TODO: Add MMU and memory tiling support
+ * TODO: Add Memory tiling support
  *
  * Copyright (C) 2023 Texas Instruments Incorporated - https://www.ti.com/
  *
@@ -27,7 +27,8 @@
 #include <media/v4l2-jpeg.h>
 #include <media/v4l2-rect.h>
 #include <media/v4l2-mem2mem.h>
-#include <media/videobuf2-dma-contig.h>
+#include <media/videobuf2-dma-sg.h>
+#include <linux/scatterlist.h>
 #include <media/videobuf2-v4l2.h>
 #include "e5010-jpeg-enc.h"
 #include "e5010-jpeg-enc-hw.h"
@@ -154,6 +155,14 @@ static const char *type_name(enum v4l2_buf_type type)
 static struct e5010_q_data *get_queue(struct e5010_context *ctx, enum v4l2_buf_type type)
 {
 	return (type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) ? &ctx->out_queue : &ctx->cap_queue;
+}
+
+static inline struct e5010_buffer *vb_to_e5010_buffer(struct vb2_v4l2_buffer *vb)
+{
+	struct v4l2_m2m_buffer *m2m_buf = container_of(vb, struct v4l2_m2m_buffer, vb);
+	struct e5010_buffer *buf = container_of(m2m_buf, struct e5010_buffer, buffer);
+
+	return buf;
 }
 
 static void calculate_qp_tables(struct e5010_context *ctx)
@@ -588,9 +597,10 @@ static int queue_init(void *priv, struct vb2_queue *src_vq, struct vb2_queue *ds
 	src_vq->type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
 	src_vq->io_modes = VB2_MMAP | VB2_DMABUF;
 	src_vq->drv_priv = ctx;
+	src_vq->gfp_flags = __GFP_DMA32;
 	src_vq->buf_struct_size = sizeof(struct e5010_buffer);
 	src_vq->ops = &e5010_video_ops;
-	src_vq->mem_ops = &vb2_dma_contig_memops;
+	src_vq->mem_ops = &vb2_dma_sg_memops;
 	src_vq->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_COPY;
 	src_vq->lock = &e5010->mutex;
 	src_vq->dev = e5010->v4l2_dev.dev;
@@ -604,9 +614,10 @@ static int queue_init(void *priv, struct vb2_queue *src_vq, struct vb2_queue *ds
 	dst_vq->type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
 	dst_vq->io_modes = VB2_MMAP | VB2_DMABUF;
 	dst_vq->drv_priv = ctx;
+	dst_vq->gfp_flags = __GFP_DMA32;
 	dst_vq->buf_struct_size = sizeof(struct e5010_buffer);
 	dst_vq->ops = &e5010_video_ops;
-	dst_vq->mem_ops = &vb2_dma_contig_memops;
+	dst_vq->mem_ops = &vb2_dma_sg_memops;
 	dst_vq->timestamp_flags = V4L2_BUF_FLAG_TIMESTAMP_COPY;
 	dst_vq->lock = &e5010->mutex;
 	dst_vq->dev = e5010->v4l2_dev.dev;
@@ -726,6 +737,78 @@ static void e5010_jpeg_set_default_params(struct e5010_context *ctx)
 	queue->height_adjusted = pix_mp->height;
 }
 
+static int e5010_jpeg_config_mmu(struct e5010_context *ctx)
+{
+	struct e5010_dev *e5010 = ctx->e5010;
+	struct e5010_mmu_ctx *mmu_ctx;
+	dma_addr_t ptd_dma;
+	dma_addr_t *pte_bases;
+	void **pt_vas;
+	void *ptd_va;
+	unsigned long *pt_bitmap;
+
+	mmu_ctx = kzalloc(sizeof(*mmu_ctx), GFP_KERNEL);
+	if (!mmu_ctx)
+		return -ENOMEM;
+
+	pt_bitmap = bitmap_zalloc(MMU_NUM_ENTRIES, GFP_KERNEL);
+	if (!pt_bitmap) {
+		kfree(mmu_ctx);
+		return -ENOMEM;
+	}
+
+	// MMU address 0x0 isn't valid, so mark first PTD accordingly
+	set_bit(0, pt_bitmap);
+
+	// need to get the page table directory allocated
+	ptd_va = dma_alloc_coherent(e5010->dev, PAGE_SIZE, &ptd_dma, GFP_KERNEL | GFP_DMA32);
+	if (!ptd_va) {
+		dev_err(e5010->dev, "Failed to allocate page table directory");
+		bitmap_free(pt_bitmap);
+		kfree(mmu_ctx);
+		return -ENOMEM;
+	}
+	memset(ptd_va, 0, PAGE_SIZE);
+
+	mmu_ctx->e5010_mmu_ptd = ptd_va;
+	mmu_ctx->e5010_mmu_ptd_dma = ptd_dma;
+	mmu_ctx->pt_bitmap = pt_bitmap;
+
+	// this is for holding the pointers to the lower level page table
+	pte_bases = kcalloc(MMU_NUM_ENTRIES, sizeof(dma_addr_t), GFP_KERNEL);
+	if (!pte_bases) {
+		dev_err(e5010->dev, "Failed to allocate list of page table entries");
+		bitmap_free(pt_bitmap);
+		dma_free_coherent(e5010->dev, PAGE_SIZE, mmu_ctx->e5010_mmu_ptd,
+				 mmu_ctx->e5010_mmu_ptd_dma);
+		kfree(mmu_ctx);
+		return -ENOMEM;
+	}
+
+	// this is for holding the pointers to the lower level page table virtual addresses
+	pt_vas = kcalloc(MMU_NUM_ENTRIES, sizeof(void *), GFP_KERNEL);
+	if (!pt_vas) {
+		dev_err(e5010->dev, "Failed to allocate list of page table virtual addresses");
+		kfree(pte_bases);
+		bitmap_free(pt_bitmap);
+		dma_free_coherent(e5010->dev, PAGE_SIZE, mmu_ctx->e5010_mmu_ptd,
+				 mmu_ctx->e5010_mmu_ptd_dma);
+		kfree(mmu_ctx);
+		return -ENOMEM;
+	}
+
+	mmu_ctx->e5010_pt_bases = pte_bases;
+	mmu_ctx->e5010_pt_vas = pt_vas;
+	mmu_ctx->num_mapped = 0;
+
+	/* Initialize allocation tracking linked list */
+	INIT_LIST_HEAD(&mmu_ctx->alloc_list);
+
+	ctx->mmu_ctx = mmu_ctx;
+
+	return 0;
+}
+
 static int e5010_open(struct file *file)
 {
 	struct e5010_dev *e5010 = video_drvdata(file);
@@ -763,7 +846,14 @@ static int e5010_open(struct file *file)
 
 	e5010_jpeg_set_default_params(ctx);
 
-	dprintk(e5010, 1, "Created instance: 0x%p, m2m_ctx: 0x%p\n", ctx, ctx->fh.m2m_ctx);
+	ret = e5010_jpeg_config_mmu(ctx);
+	if (ret) {
+		dev_err(e5010->dev, "failed to configure mmu for this context");
+		goto exit;
+	}
+
+	dprintk(e5010, 1, "Created instance: 0x%p, m2m_ctx: 0x%p, ptd: 0x%p\n",
+		ctx, ctx->fh.m2m_ctx, (void *)ctx->mmu_ctx->e5010_mmu_ptd_dma);
 
 	mutex_unlock(&e5010->mutex);
 	return 0;
@@ -783,9 +873,40 @@ static int e5010_release(struct file *file)
 {
 	struct e5010_dev *e5010 = video_drvdata(file);
 	struct e5010_context *ctx = file->private_data;
+	struct e5010_mmu_ctx *mmu_ctx;
+	struct e5010_pt_alloc_node *node, *tmp;
 
 	dprintk(e5010, 1, "Releasing instance: 0x%p, m2m_ctx: 0x%p\n", ctx, ctx->fh.m2m_ctx);
 	mutex_lock(&e5010->mutex);
+
+	if (ctx && ctx->mmu_ctx) {
+		mmu_ctx = ctx->mmu_ctx;
+
+		/* Free all allocations in the linked list */
+		list_for_each_entry_safe(node, tmp, &mmu_ctx->alloc_list, list) {
+			dprintk(e5010, 3, "Freeing allocation: va=%p, pa=%pad, size=%zu",
+				node->va_base, &node->pa_base, node->size);
+
+			dma_free_coherent(e5010->dev, node->size, node->va_base, node->pa_base);
+			list_del(&node->list);
+			kfree(node);
+		}
+
+		/* Free the page table directory */
+		if (mmu_ctx->e5010_mmu_ptd) {
+			dma_free_coherent(e5010->dev, PAGE_SIZE, mmu_ctx->e5010_mmu_ptd,
+					 mmu_ctx->e5010_mmu_ptd_dma);
+		}
+
+		/* Free the bitmap */
+		if (mmu_ctx->pt_bitmap)
+			bitmap_free(mmu_ctx->pt_bitmap);
+
+		kfree(mmu_ctx->e5010_pt_bases);
+		kfree(mmu_ctx->e5010_pt_vas);
+		kfree(mmu_ctx);
+	}
+
 	v4l2_ctrl_handler_free(&ctx->ctrl_handler);
 	v4l2_m2m_ctx_release(ctx->fh.m2m_ctx);
 	v4l2_fh_del(&ctx->fh);
@@ -992,8 +1113,8 @@ static int e5010_init_device(struct e5010_dev *e5010)
 {
 	int ret = 0;
 
-	/*TODO: Set MMU in bypass mode until support for the same is added in driver*/
-	e5010_hw_bypass_mmu(e5010->mmu_base, 1);
+	e5010_hw_enable_mmu(e5010->mmu_base, 0);
+	e5010_hw_mmu_ext_addressing(e5010->mmu_base, 0);
 
 	if (e5010_hw_enable_auto_clock_gating(e5010->core_base, 1))
 		v4l2_warn(&e5010->v4l2_dev, "failed to enable auto clock gating\n");
@@ -1026,7 +1147,7 @@ static int e5010_probe(struct platform_device *pdev)
 	int irq, ret = 0;
 	struct device *dev = &pdev->dev;
 
-	ret = dma_set_mask(dev, DMA_BIT_MASK(32));
+	ret = dma_set_mask_and_coherent(dev, DMA_BIT_MASK(32));
 	if (ret)
 		return dev_err_probe(dev, ret, "32-bit consistent DMA enable failed\n");
 
@@ -1188,16 +1309,95 @@ static int e5010_queue_setup(struct vb2_queue *vq, unsigned int *nbuffers, unsig
 	return 0;
 }
 
+static void e5010_mmu_free_entries(struct e5010_context *ctx, int start_ptd, int num_entries)
+{
+	struct e5010_mmu_ctx *mmu_ctx = ctx->mmu_ctx;
+	struct e5010_dev *e5010 = ctx->e5010;
+	struct e5010_pt_alloc_node *node, *tmp;
+	int i;
+
+	if (start_ptd <= 0 || start_ptd + num_entries > MMU_NUM_ENTRIES)
+		return;
+
+	/* Find the allocation in the linked list */
+	list_for_each_entry_safe(node, tmp, &mmu_ctx->alloc_list, list) {
+		if (node->start_index == start_ptd && node->num_entries == num_entries) {
+			/* Found the allocation */
+			dma_free_coherent(e5010->dev, node->size, node->va_base, node->pa_base);
+
+			for (i = start_ptd; i < start_ptd + num_entries; i++) {
+				mmu_ctx->e5010_pt_bases[i] = 0;
+				mmu_ctx->e5010_pt_vas[i] = NULL;
+				((u32 *)mmu_ctx->e5010_mmu_ptd)[i] = 0;
+				mmu_ctx->num_mapped--;
+			}
+
+			/* Remove from the linked list and free the node */
+			list_del(&node->list);
+			kfree(node);
+
+			dprintk(e5010, 3, "Freed allocation: start_ptd=%d, num_entries=%d",
+				start_ptd, num_entries);
+			break;
+		}
+	}
+
+	/* Clear the entries in the bitmap */
+	bitmap_clear(mmu_ctx->pt_bitmap, start_ptd, num_entries);
+
+	dprintk(e5010, 3, "Freed %d page table entries starting at %d", num_entries, start_ptd);
+}
+
+static unsigned int e5010_mmu_get_num_pages(struct vb2_buffer *vb, int plane_no)
+{
+	unsigned int size = ALIGN(vb2_plane_size(vb, plane_no), PAGE_SIZE);
+
+	return DIV_ROUND_UP(size, PAGE_SIZE);
+}
+
 static void e5010_buf_finish(struct vb2_buffer *vb)
 {
 	struct e5010_context *ctx = vb2_get_drv_priv(vb->vb2_queue);
+	struct vb2_v4l2_buffer *vbuf = to_vb2_v4l2_buffer(vb);
+	struct e5010_buffer *buf = vb_to_e5010_buffer(vbuf);
+	struct e5010_q_data *queue = get_queue(ctx, vb->vb2_queue->type);
+	int plane, start_ptd, num_entries;
+	dma_addr_t addr;
 	void *d_addr;
 
-	if (vb->state != VB2_BUF_STATE_DONE || V4L2_TYPE_IS_OUTPUT(vb->vb2_queue->type))
-		return;
+	/* For capture buffers in DONE state, write the header */
+	if (vb->state == VB2_BUF_STATE_DONE && V4L2_TYPE_IS_CAPTURE(vb->vb2_queue->type)) {
+		d_addr = vb2_plane_vaddr(vb, 0);
+		write_header(ctx, d_addr);
+	}
 
-	d_addr = vb2_plane_vaddr(vb, 0);
-	write_header(ctx, d_addr);
+	/* Only free page table entries when the buffer is in DONE state */
+	if (vb->state == VB2_BUF_STATE_DONE) {
+		/* Free page table entries for all buffer types */
+		for (plane = 0; plane < queue->fmt->num_planes; plane++) {
+			/* Get the appropriate address for this plane */
+			addr = (plane == 0) ? buf->buf_addr : buf->offset_addr;
+
+			if (addr) {
+				start_ptd = addr >> MMU_DIR_ID_SHIFT;
+				num_entries = DIV_ROUND_UP(e5010_mmu_get_num_pages(vb, plane),
+							   MMU_NUM_ENTRIES);
+
+				/* Free the page table entries */
+				e5010_mmu_free_entries(ctx, start_ptd, num_entries);
+
+				/* Mark as freed */
+				if (plane == 0)
+					buf->buf_addr = 0;
+				else
+					buf->offset_addr = 0;
+
+				dprintk(ctx->e5010, 2,
+					"Freed %d page table entries starting at %d for plane %d",
+					num_entries, start_ptd, plane);
+			}
+		}
+	}
 }
 
 static int e5010_buf_out_validate(struct vb2_buffer *vb)
@@ -1213,21 +1413,206 @@ static int e5010_buf_out_validate(struct vb2_buffer *vb)
 	return 0;
 }
 
+static int e5010_mmu_allocate_entries(struct e5010_context *ctx,
+				     int num_entries_needed, int *start_ptd)
+{
+	struct e5010_mmu_ctx *mmu_ctx = ctx->mmu_ctx;
+	struct e5010_dev *e5010 = ctx->e5010;
+	void *pt_va;
+	dma_addr_t pt_pa;
+	size_t pt_size;
+	int i, ptd_index;
+	struct e5010_pt_alloc_node *alloc_node;
+
+	/* Find a contiguous region of free entries in the bitmap */
+	*start_ptd = bitmap_find_next_zero_area(mmu_ctx->pt_bitmap,
+					       MMU_NUM_ENTRIES,
+					       1,  /* Start from index 1, as 0 is reserved */
+					       num_entries_needed,
+					       0);
+
+	if (*start_ptd >= MMU_NUM_ENTRIES) {
+		dev_err(e5010->dev, "Failed to find %d contiguous free page table entries",
+			num_entries_needed);
+		return -ENOMEM;
+	}
+
+	/* Calculate the size needed for the page table */
+	pt_size = num_entries_needed * PAGE_SIZE;
+
+	/* Allocate a single, larger page table */
+	pt_va = dma_alloc_coherent(e5010->dev, pt_size, &pt_pa, GFP_KERNEL | GFP_DMA32);
+	if (!pt_va) {
+		dev_err(e5010->dev, "Failed to allocate %zu bytes for page table", pt_size);
+		return -ENOMEM;
+	}
+
+	/* Clear the page table */
+	memset(pt_va, 0, pt_size);
+
+	/* Mark the entries as used in the bitmap */
+	bitmap_set(mmu_ctx->pt_bitmap, *start_ptd, num_entries_needed);
+
+	/* Set up the PTD entries to point to different parts of the single page table */
+	for (i = 0; i < num_entries_needed; i++) {
+		int ptd_index = *start_ptd + i;
+		dma_addr_t pt_section_pa = pt_pa + (i * PAGE_SIZE);
+		void *pt_section_va = pt_va + (i * PAGE_SIZE);
+
+		/* Free any existing page table at this index */
+		if (mmu_ctx->e5010_pt_bases[ptd_index]) {
+			dma_free_coherent(e5010->dev, PAGE_SIZE, mmu_ctx->e5010_pt_vas[ptd_index],
+					 mmu_ctx->e5010_pt_bases[ptd_index]);
+		}
+
+		/* Store the virtual and physical addresses */
+		mmu_ctx->e5010_pt_bases[ptd_index] = pt_section_pa;
+		mmu_ctx->e5010_pt_vas[ptd_index] = pt_section_va;
+
+		/* Set up the PTD entry */
+		((u32 *)mmu_ctx->e5010_mmu_ptd)[ptd_index] = pt_section_pa | MMU_PAGE_VALID_MASK;
+		dprintk(e5010, 1, "PTD_INDEX[%d] holds 0x%x", ptd_index,
+			(u32)((u32 *)mmu_ctx->e5010_mmu_ptd)[ptd_index]);
+		mmu_ctx->num_mapped++;
+	}
+
+	/* Create and add allocation node to the linked list */
+	alloc_node = kmalloc(sizeof(*alloc_node), GFP_KERNEL);
+	if (!alloc_node) {
+		/* Free the allocated page table */
+		dma_free_coherent(e5010->dev, pt_size, pt_va, pt_pa);
+
+		/* Clear the bitmap entries that were marked */
+		bitmap_clear(mmu_ctx->pt_bitmap, *start_ptd, num_entries_needed);
+
+		/* Reset the PTD entries and tracking arrays */
+		for (i = 0; i < num_entries_needed; i++) {
+			ptd_index = *start_ptd + i;
+			mmu_ctx->e5010_pt_bases[ptd_index] = 0;
+			mmu_ctx->e5010_pt_vas[ptd_index] = NULL;
+			((u32 *)mmu_ctx->e5010_mmu_ptd)[ptd_index] = 0;
+			mmu_ctx->num_mapped--;
+		}
+	}
+	alloc_node->va_base = pt_va;
+	alloc_node->pa_base = pt_pa;
+	alloc_node->size = pt_size;
+	alloc_node->start_index = *start_ptd;
+	alloc_node->num_entries = num_entries_needed;
+
+	/* Add to the linked list */
+	list_add(&alloc_node->list, &mmu_ctx->alloc_list);
+
+	dprintk(e5010, 2, "Added allocation to list: va=%p, pa=%pad, size=%zu, start=%d, entries=%d",
+		pt_va, &pt_pa, pt_size, *start_ptd, num_entries_needed);
+
+	return 0;
+}
+
+
+static int e5010_mmu_map_pages(struct e5010_context *ctx, struct sg_table *sgt,
+			      int start_ptd, int end_ptd)
+{
+	void *pt;
+	dma_addr_t phys_addr;
+	struct scatterlist *sg;
+	u32 base_addr, addr, pages_mapped, sg_length, num_pages;
+	int i, page_index, ptd_index, pte_index;
+	struct e5010_mmu_ctx *mmu_ctx = ctx->mmu_ctx;
+	struct e5010_dev *e5010 = ctx->e5010;
+
+	i = 0;
+	pages_mapped = 0;
+	ptd_index = start_ptd;
+	base_addr = ptd_index << MMU_DIR_ID_SHIFT;
+	pt = mmu_ctx->e5010_pt_vas[ptd_index];
+	for_each_sg(sgt->sgl, sg, sgt->nents, i) {
+		phys_addr = sg_dma_address(sg);
+		sg_length = sg_dma_len(sg);
+		num_pages = sg_length >> PAGE_SHIFT;
+
+		if (sg->length & (PAGE_SIZE - 1))
+			return -EINVAL;
+
+		for (page_index = 0; page_index < num_pages; page_index++) {
+			addr = base_addr + pages_mapped * PAGE_SIZE;
+			pte_index = (addr >> MMU_PAGE_ID_SHIFT) & MMU_PAGE_MASK;
+			((u32 *)pt)[pte_index] = phys_addr | MMU_PAGE_VALID_MASK;
+			pages_mapped++;
+			phys_addr = phys_addr + PAGE_SIZE;
+			if (pages_mapped >= MMU_NUM_ENTRIES) {
+				pages_mapped = 0;
+				ptd_index++;
+
+				if (ptd_index >= end_ptd) {
+					dev_err(e5010->dev, "error: ptd_index %d exceeds max index %d",
+						ptd_index, end_ptd);
+					return -ENOMEM;
+				}
+				base_addr = ptd_index << MMU_DIR_ID_SHIFT;
+				pt = mmu_ctx->e5010_pt_vas[ptd_index];
+			}
+		}
+	}
+	return 0;
+}
+
+static int e5010_create_mmu_mapping(struct e5010_context *ctx,
+				   struct vb2_buffer *vb, int num_planes)
+{
+	struct vb2_v4l2_buffer *vbuf = to_vb2_v4l2_buffer(vb);
+	struct e5010_buffer *buf = vb_to_e5010_buffer(vbuf);
+	struct sg_table *sgt;
+	int plane, start_ptd, ret;
+	unsigned int req_pgs, req_ptds = 0;
+	u32 base_addr = 0;
+
+	ret = 0;
+
+	for (plane = 0; plane < num_planes; plane++) {
+		sgt = vb2_dma_sg_plane_desc(vb, plane);
+
+		req_pgs = e5010_mmu_get_num_pages(vb, plane);
+		req_ptds = DIV_ROUND_UP(req_pgs, MMU_NUM_ENTRIES);
+
+		ret = e5010_mmu_allocate_entries(ctx, req_ptds, &start_ptd);
+		if (ret)
+			return ret;
+
+		base_addr = ((u32)start_ptd) << MMU_DIR_ID_SHIFT;
+
+		if (plane)
+			buf->offset_addr = (dma_addr_t)base_addr;
+		else
+			buf->buf_addr = (dma_addr_t)base_addr;
+
+		ret = e5010_mmu_map_pages(ctx, sgt, start_ptd, start_ptd + req_ptds);
+		if (ret) {
+			e5010_mmu_free_entries(ctx, start_ptd, req_ptds);
+			return ret;
+		}
+	}
+	return 0;
+
+}
+
 static int e5010_buf_prepare(struct vb2_buffer *vb)
 {
 	struct e5010_context *ctx = vb2_get_drv_priv(vb->vb2_queue);
 	struct vb2_v4l2_buffer *vbuf = to_vb2_v4l2_buffer(vb);
 	struct e5010_q_data *queue;
-	int i;
+	int plane;
+	struct e5010_dev *e5010 = ctx->e5010;
+	int ret;
 
 	vbuf->field = V4L2_FIELD_NONE;
 
 	queue = get_queue(ctx, vb->vb2_queue->type);
 
-	for (i = 0; i < queue->fmt->num_planes; i++) {
-		if (vb2_plane_size(vb, i) < (unsigned long)queue->sizeimage[i]) {
-			v4l2_err(&ctx->e5010->v4l2_dev, "plane %d too small (%lu < %lu)", i,
-				 vb2_plane_size(vb, i), (unsigned long)queue->sizeimage[i]);
+	for (plane = 0; plane < queue->fmt->num_planes; plane++) {
+		if (vb2_plane_size(vb, plane) < (unsigned long)queue->sizeimage[plane]) {
+			v4l2_err(&ctx->e5010->v4l2_dev, "plane %d too small (%lu < %lu)", plane,
+				 vb2_plane_size(vb, plane), (unsigned long)queue->sizeimage[plane]);
 
 			return -EINVAL;
 		}
@@ -1236,6 +1621,12 @@ static int e5010_buf_prepare(struct vb2_buffer *vb)
 	if (V4L2_TYPE_IS_CAPTURE(vb->vb2_queue->type)) {
 		vb2_set_plane_payload(vb, 0, 0);
 		vb2_set_plane_payload(vb, 1, 0);
+	}
+
+	ret = e5010_create_mmu_mapping(ctx, vb, queue->fmt->num_planes);
+	if (ret) {
+		dev_err(e5010->dev, "device failed to map buffer into MMU\n");
+		return ret;
 	}
 
 	return 0;
@@ -1344,6 +1735,8 @@ static void e5010_device_run(void *priv)
 	struct e5010_context *ctx = priv;
 	struct e5010_dev *e5010 = ctx->e5010;
 	struct vb2_v4l2_buffer *s_vb, *d_vb;
+	struct e5010_buffer *srcbuf, *destbuf;
+	struct e5010_mmu_ctx *mmu_ctx = ctx->mmu_ctx;
 	u32 reg = 0;
 	int ret = 0, luma_crop_offset = 0, chroma_crop_offset = 0;
 	unsigned long flags;
@@ -1360,12 +1753,18 @@ static void e5010_device_run(void *priv)
 	s_vb->sequence = ctx->out_queue.sequence++;
 	d_vb->sequence = ctx->cap_queue.sequence++;
 
+	srcbuf = vb_to_e5010_buffer(s_vb);
+	destbuf = vb_to_e5010_buffer(d_vb);
+
+	e5010_hw_set_mmu_base_dir_addr(e5010->mmu_base, (u32)mmu_ctx->e5010_mmu_ptd_dma);
+
 	v4l2_m2m_buf_copy_metadata(s_vb, d_vb, false);
 
 	if (ctx != e5010->last_context_run || ctx->update_qp) {
 		dprintk(e5010, 1, "ctx updated: 0x%p -> 0x%p, updating qp tables\n",
 			e5010->last_context_run, ctx);
 		ret = update_qp_tables(ctx);
+		e5010_hw_mmu_flush(e5010->mmu_base, 1);
 	}
 
 	if (ret) {
@@ -1378,7 +1777,7 @@ static void e5010_device_run(void *priv)
 	}
 
 	/* Set I/O Buffer addresses */
-	reg = (u32)vb2_dma_contig_plane_dma_addr(&s_vb->vb2_buf, 0);
+	reg = (u32)srcbuf->buf_addr;
 
 	if (ctx->out_queue.crop_set) {
 		luma_crop_offset = ctx->out_queue.bytesperline[0] * ctx->out_queue.crop.top +
@@ -1407,12 +1806,12 @@ static void e5010_device_run(void *priv)
 	if (num_planes == 1)
 		reg += (ctx->out_queue.bytesperline[0]) * (ctx->out_queue.height);
 	else
-		reg = (u32)vb2_dma_contig_plane_dma_addr(&s_vb->vb2_buf, 1);
+		reg = (u32)srcbuf->offset_addr;
 
 	dprintk(e5010, 3,
 		"ctx: 0x%p, luma_addr: 0x%x, chroma_addr: 0x%x, out_addr: 0x%x\n",
-		ctx, (u32)vb2_dma_contig_plane_dma_addr(&s_vb->vb2_buf, 0) + luma_crop_offset,
-		reg + chroma_crop_offset, (u32)vb2_dma_contig_plane_dma_addr(&d_vb->vb2_buf, 0));
+		ctx, (u32)srcbuf->buf_addr,
+		reg + chroma_crop_offset, (u32)destbuf->buf_addr);
 
 	dprintk(e5010, 3,
 		"ctx: 0x%p, buf indices: src_index: %d, dst_index: %d\n",
@@ -1424,7 +1823,7 @@ static void e5010_device_run(void *priv)
 		goto device_busy_err;
 	}
 
-	reg = (u32)vb2_dma_contig_plane_dma_addr(&d_vb->vb2_buf, 0);
+	reg = destbuf->buf_addr;
 	reg += HEADER_SIZE;
 	ret = e5010_hw_set_output_base_addr(e5010->core_base, reg);
 	if (ret || !reg) {

@@ -11,6 +11,7 @@
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-fh.h>
+#include <linux/list.h>
 
 #ifndef _E5010_JPEG_ENC_H
 #define _E5010_JPEG_ENC_H
@@ -105,6 +106,105 @@ struct e5010_dev {
 };
 
 /*
+ *  E5010 MMU Memory Mapping Structure
+ * ==================================
+ *
+ * Overview of the two-level page table structure used in the E5010 JPEG encoder MMU:
+ *
+ * Virtual Address (32-bit):
+ * +-------------------------------+----------------------+--------------------+
+ * | Directory Index (10 bits)     | Page Index (10 bits) | Offset (12 bits)  |
+ * | [31:22]                       | [21:12]              | [11:0]            |
+ * +-------------------------------+----------------------+--------------------+
+ *
+ * Address Translation Process:
+ * ---------------------------
+ *
+ * 1. Virtual Address â Physical Address Translation
+ *
+ *    Virtual Address (32-bit)
+ *           |
+ *           | Split into components
+ *           v
+ *    +------+------+------+
+ *    | Dir  | Page | Off  |
+ *    | Idx  | Idx  | set  |
+ *    +------+------+------+
+ *       |      |      |
+ *       |      |      +----> Used directly as offset in physical page
+ *       |      |
+ *       |      +-----------> Used to index into Page Table
+ *       |
+ *       +-------------------> Used to index into Page Table Directory
+ *
+ * 2. Page Table Directory (PTD) Structure:
+ *
+ *    Page Table Directory (Single PAGE_SIZE allocation)
+ *    +---------------------------------------------------+
+ *    | Entry 0 | Entry 1 | ... | Entry 1023 |            |
+ *    | (4B)    | (4B)    |     | (4B)       |            |
+ *    +---------------------------------------------------+
+ *       |         |                |
+ *       |         |                +----> Points to Page Table N
+ *       |         |
+ *       |         +----> Points to Page Table 1
+ *       |
+ *       +----> Points to Page Table 0 (Reserved/Invalid in E5010)
+ *
+ *    Each PTD entry contains:
+ *    - Physical address of a Page Table (bits 31:12)
+ *    - Valid bit (bit 0)
+ *
+ * 3. Page Table (PT) Structure:
+ *
+ *    Page Table (Single PAGE_SIZE allocation)
+ *    +---------------------------------------------------+
+ *    | Entry 0 | Entry 1 | ... | Entry 1023 |            |
+ *    | (4B)    | (4B)    |     | (4B)       |            |
+ *    +---------------------------------------------------+
+ *       |         |                |
+ *       |         |                +----> Maps to Physical Page N
+ *       |         |
+ *       |         +----> Maps to Physical Page 1
+ *       |
+ *       +----> Maps to Physical Page 0
+ *
+ *    Each PT entry contains:
+ *    - Physical page address (bits 31:12)
+ *    - Valid bit (bit 0)
+ */
+
+
+/*
+ * Allocation tracking node structure
+ * Used in a linked list to track memory allocations for MMU page tables
+ */
+struct e5010_pt_alloc_node {
+	void *va_base;		/* Virtual address base of allocation */
+	dma_addr_t pa_base;	/* Physical address base of allocation */
+	size_t size;		/* Size of allocation in bytes */
+	int start_index;	/* Starting index in page table directory */
+	int num_entries;	/* Number of entries this allocation spans */
+	struct list_head list;	/* Linked list pointers */
+};
+
+/*
+ * Per context mmu data
+ * Each context gets it own page table directory
+ */
+struct e5010_mmu_ctx {
+	dma_addr_t e5010_mmu_ptd_dma;
+	void *e5010_mmu_ptd;
+	dma_addr_t *e5010_pt_bases;
+	void **e5010_pt_vas;
+	unsigned long *pt_bitmap;
+	u32 num_mapped;
+
+	/* Allocation tracking linked list */
+	struct list_head alloc_list;
+};
+
+/*
  * Driver context structure
  * One of these exists for every m2m context
  * Holds context specific data
@@ -119,6 +219,7 @@ struct e5010_context {
 	struct v4l2_ctrl_handler	ctrl_handler;
 	u8				luma_qp[QP_TABLE_SIZE];
 	u8				chroma_qp[QP_TABLE_SIZE];
+	struct e5010_mmu_ctx	*mmu_ctx;
 };
 
 /*
@@ -127,6 +228,8 @@ struct e5010_context {
  */
 struct e5010_buffer {
 	struct v4l2_m2m_buffer buffer;
+	dma_addr_t buf_addr;
+	dma_addr_t offset_addr;
 };
 
 enum {
