@@ -3633,6 +3633,8 @@ static int cqspi_probe(struct platform_device *pdev)
 	cqspi->current_cs = -1;
 	cqspi->sclk = 0;
 
+	pm_runtime_enable(dev);
+
 	ret = cqspi_setup_flash(cqspi);
 	if (ret) {
 		dev_err(dev, "failed to setup flash parameters %d\n", ret);
@@ -3646,8 +3648,6 @@ static int cqspi_probe(struct platform_device *pdev)
 		if (ret == -EPROBE_DEFER)
 			goto probe_setup_failed;
 	}
-
-	pm_runtime_enable(dev);
 
 	pm_runtime_set_autosuspend_delay(dev, CQSPI_AUTOSUSPEND_TIMEOUT);
 	pm_runtime_use_autosuspend(dev);
