@@ -1442,7 +1442,7 @@ static void sa_free_sa_rx_data(struct sa_rx_data *rxd)
 
 		if (mapped_sg->mapped) {
 			dma_unmap_sgtable(rxd->ddev, &mapped_sg->sgt,
-					  mapped_sg->dir, 0);
+					  mapped_sg->dir, DMA_ATTR_SKIP_CPU_SYNC);
 			kfree(mapped_sg->split_sg);
 		}
 	}
