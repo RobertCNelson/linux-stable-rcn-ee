@@ -1146,12 +1146,6 @@ static u64 omap_dm_timer_read_cycles(struct clocksource *cs)
 	return (u64)__omap_dm_timer_read_counter(timer);
 }
 
-static u64 notrace omap_dm_timer_read_sched_clock(void)
-{
-	/* Posted mode is not active here, so we can read directly */
-	return readl_relaxed(omap_dm_timer_sched_clock_counter);
-}
-
 static void omap_dm_timer_clocksource_suspend(struct clocksource *cs)
 {
 	struct dmtimer_clocksource *clksrc = omap_dm_timer_to_clocksource(cs);
@@ -1198,9 +1192,6 @@ static int omap_dm_timer_setup_clocksource(struct dmtimer *timer)
 	dmtimer_write(timer, OMAP_TIMER_COUNTER_REG, 0);
 	dmtimer_write(timer, OMAP_TIMER_LOAD_REG, 0);
 	dmtimer_write(timer, OMAP_TIMER_CTRL_REG, OMAP_TIMER_CTRL_ST | OMAP_TIMER_CTRL_AR);
-
-	omap_dm_timer_sched_clock_counter = timer->func_base + _OMAP_TIMER_COUNTER_OFFSET;
-	sched_clock_register(omap_dm_timer_read_sched_clock, 32, timer->fclk_rate);
 
 	err = clocksource_register_hz(&clksrc->dev, timer->fclk_rate);
 	if (err)
@@ -1408,6 +1399,16 @@ static int omap_dm_timer_probe(struct platform_device *pdev)
 	if (omap_dm_timer_clocksource_base && res &&
 	    res->start == omap_dm_timer_clocksource_base &&
 	    !IS_ERR_OR_NULL(timer->fclk)) {
+		/*
+		 * This timer should have been initialized early via TIMER_OF_DECLARE
+		 * by timer-ti-dm-systimer.c. If we reach here, it means the early
+		 * init didn't happen (e.g., timer doesn't have ti,timer-alwon property
+		 * or is an older platform). Set it up now for legacy compatibility.
+		 */
+		dev_info(dev, "Setting up clocksource via platform driver (legacy path)\n");
+
+		omap_dm_timer_sched_clock_counter = timer->func_base + _OMAP_TIMER_COUNTER_OFFSET;
+
 		ret = omap_dm_timer_setup_clocksource(timer);
 		if (ret)
 			return ret;
