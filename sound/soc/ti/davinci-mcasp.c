@@ -101,6 +101,7 @@ struct davinci_mcasp {
 
 	int	sysclk_freq;
 	bool	bclk_master;
+	bool	async_mode;
 	u32	auxclk_fs_ratio;
 
 	unsigned long pdir; /* Pin direction bitfield */
@@ -224,11 +225,14 @@ static void mcasp_start_rx(struct davinci_mcasp *mcasp)
 	/*
 	 * When ASYNC == 0 the transmit and receive sections operate
 	 * synchronously from the transmit clock and frame sync. We need to make
-	 * sure that the TX signlas are enabled when starting reception.
+	 * sure that the TX signals are enabled when starting reception.
+	 * Else set pin to be output when McASP is the master
 	 */
 	if (mcasp_is_synchronous(mcasp)) {
 		mcasp_set_ctl_reg(mcasp, DAVINCI_MCASP_GBLCTLX_REG, TXHCLKRST);
 		mcasp_set_ctl_reg(mcasp, DAVINCI_MCASP_GBLCTLX_REG, TXCLKRST);
+		mcasp_set_clk_pdir(mcasp, true);
+	} else if (mcasp->bclk_master) {
 		mcasp_set_clk_pdir(mcasp, true);
 	}
 
@@ -308,6 +312,8 @@ static void mcasp_stop_rx(struct davinci_mcasp *mcasp)
 	if (mcasp_is_synchronous(mcasp) && !mcasp->streams) {
 		mcasp_set_clk_pdir(mcasp, false);
 		mcasp_set_reg(mcasp, DAVINCI_MCASP_GBLCTLX_REG, 0);
+	} else if (!mcasp->streams) {
+		mcasp_set_clk_pdir(mcasp, false);
 	}
 
 	mcasp_set_reg(mcasp, DAVINCI_MCASP_GBLCTLR_REG, 0);
@@ -334,7 +340,7 @@ static void mcasp_stop_tx(struct davinci_mcasp *mcasp)
 	 */
 	if (mcasp_is_synchronous(mcasp) && mcasp->streams)
 		val =  TXHCLKRST | TXCLKRST | TXFSRST;
-	else
+	else if (!mcasp->streams)
 		mcasp_set_clk_pdir(mcasp, false);
 
 
@@ -1021,7 +1027,10 @@ static int mcasp_i2s_hw_param(struct davinci_mcasp *mcasp, int stream,
 			mask |= (1 << i);
 	}
 
-	mcasp_clr_bits(mcasp, DAVINCI_MCASP_ACLKXCTL_REG, TX_ASYNC);
+	if (mcasp->async_mode)
+		mcasp_set_bits(mcasp, DAVINCI_MCASP_ACLKXCTL_REG, TX_ASYNC);
+	else
+		mcasp_clr_bits(mcasp, DAVINCI_MCASP_ACLKXCTL_REG, TX_ASYNC);
 
 	if (!mcasp->dat_port)
 		busel = TXSEL;
@@ -1751,8 +1760,6 @@ static struct snd_soc_dai_driver davinci_mcasp_dai[] = {
 			.formats	= DAVINCI_MCASP_PCM_FMTS,
 		},
 		.ops 		= &davinci_mcasp_dai_ops,
-
-		.symmetric_rate		= 1,
 	},
 	{
 		.name		= "davinci-mcasp.1",
@@ -1925,6 +1932,9 @@ static int davinci_mcasp_get_config(struct davinci_mcasp *mcasp,
 		mcasp->missing_audio_param = true;
 		goto out;
 	}
+
+	if (pdata->op_mode != DAVINCI_MCASP_DIT_MODE)
+	        mcasp->async_mode = of_property_read_bool(np, "ti,async-mode");
 
 	of_serial_dir32 = of_get_property(np, "serial-dir", &val);
 	val /= sizeof(u32);
