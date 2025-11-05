@@ -1074,6 +1074,7 @@ static int omap2_mcspi_setup(struct spi_device *spi)
 	struct omap2_mcspi	*mcspi = spi_controller_get_devdata(spi->controller);
 	struct omap2_mcspi_regs	*ctx = &mcspi->ctx;
 	struct omap2_mcspi_cs	*cs = spi->controller_state;
+	struct omap2_mcspi_device_config *cd = spi->controller_data;
 
 	if (!cs) {
 		cs = kzalloc(sizeof(*cs), GFP_KERNEL);
@@ -1088,6 +1089,22 @@ static int omap2_mcspi_setup(struct spi_device *spi)
 		/* Link this to context save list */
 		list_add_tail(&cs->node, &ctx->cs);
 		initial_setup = true;
+	}
+
+	if (!cd) {
+		cd = devm_kzalloc(mcspi->dev, sizeof(*cd), GFP_KERNEL);
+		if (!cd) {
+			if (initial_setup)
+				/* Since the cd allocation failed, cs should free too */
+				omap2_mcspi_cleanup(spi);
+			return -ENOMEM;
+		}
+
+		/* Enables turbo mode as default */
+		cd->turbo_mode = 1;
+		spi->controller_data = cd;
+		dev_dbg(&spi->dev, "%s: enabling TURBO mode\n",
+				__func__);
 	}
 
 	ret = pm_runtime_resume_and_get(mcspi->dev);
@@ -1199,9 +1216,11 @@ static int omap2_mcspi_transfer_one(struct spi_controller *ctlr,
 	else if (t->rx_buf == NULL)
 		chconf |= OMAP2_MCSPI_CHCONF_TRM_TX_ONLY;
 
-	if (cd && cd->turbo_mode && t->tx_buf == NULL) {
-		/* Turbo mode is for more than one word */
-		if (t->len > ((cs->word_len + 7) >> 3))
+	if (cd && cd->turbo_mode) {
+		/* Turbo mode is for more than one word.
+		 * Also if the speed is set as above 25MHz then turbo mode should stay enabled.
+		 */
+		if ((t->len > ((cs->word_len + 7) >> 3)) || (t->speed_hz > 25000000))
 			chconf |= OMAP2_MCSPI_CHCONF_TURBO;
 	}
 
