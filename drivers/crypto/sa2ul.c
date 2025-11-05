@@ -1551,7 +1551,7 @@ static int sa_run(struct sa_req *req)
 					   sa_ctx->cmdl_size);
 
 	if (cmdl_len > SA_MAX_CMDL_WORDS * sizeof(u32)) {
-		dev_err(pdata->dev, "sa_update_cmdl returned %u, exceeds max %u\n",
+		dev_err(pdata->dev, "sa_update_cmdl returned %u, exceeds max %lu\n",
 			cmdl_len, SA_MAX_CMDL_WORDS * sizeof(u32));
 		kfree(rxd);
 		return -EINVAL;
