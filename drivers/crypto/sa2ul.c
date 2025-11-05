@@ -3435,6 +3435,7 @@ static struct sa_match_data am64_match_data = {
 			   BIT(SA_ALG_SHA256) |
 			   BIT(SA_ALG_SHA512) |
 			   BIT(SA_ALG_AUTHENC_SHA256_AES) |
+			   BIT(SA_ALG_GCM_AES) |
 			   BIT(SA_ALG_CMAC_AES)
 };
 
