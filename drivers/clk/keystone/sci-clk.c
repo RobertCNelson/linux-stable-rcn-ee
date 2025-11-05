@@ -260,6 +260,27 @@ static int sci_clk_set_parent(struct clk_hw *hw, u8 index)
 					      index + 1 + clk->clk_id);
 }
 
+/**
+ * sci_clk_set_spread_spectrum - Set spread spectrum for a TI SCI clock
+ * @hw: clock to set parent for
+ * @ss_conf: spread spectrum configuration
+ *
+ * Sets the spread spectrum of a TI SCI clock. Return TI SCI protocol status.
+ */
+static int sci_clk_set_spread_spectrum(struct clk_hw *hw, const struct clk_spread_spectrum *ss_conf)
+{
+	struct sci_clk *clk = to_sci_clk(hw);
+
+	clk->cached_req = 0;
+
+	if (clk->provider->ops->set_spread_spectrum)
+		return clk->provider->ops->set_spread_spectrum(clk->provider->sci, clk->dev_id,
+					      clk->clk_id, ss_conf->modfreq_hz, ss_conf->spread_bp,
+					      (u8)ss_conf->method);
+
+	return 0;
+}
+
 static const struct clk_ops sci_clk_ops = {
 	.prepare = sci_clk_prepare,
 	.unprepare = sci_clk_unprepare,
@@ -269,6 +290,7 @@ static const struct clk_ops sci_clk_ops = {
 	.set_rate = sci_clk_set_rate,
 	.get_parent = sci_clk_get_parent,
 	.set_parent = sci_clk_set_parent,
+	.set_spread_spectrum = sci_clk_set_spread_spectrum,
 };
 
 /**

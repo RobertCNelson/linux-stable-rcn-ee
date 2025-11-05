@@ -9,6 +9,7 @@
 #define pr_fmt(fmt) "%s: " fmt, __func__
 
 #include <linux/bitmap.h>
+#include <linux/clk-provider.h>
 #include <linux/cpu.h>
 #include <linux/debugfs.h>
 #include <linux/export.h>
@@ -1665,6 +1666,79 @@ fail:
 }
 
 /**
+ * ti_sci_cmd_clk_set_ssc() - Set SSC configurations
+ * @handle:	pointer to TI SCI handle
+ * @dev_id:	Device identifier this request is for
+ * @clk_id:	Clock identifier for the device for this request.
+ *		Each device has it's own set of clock inputs. This indexes
+ *		which clock input to modify.
+ * @modfreq_hz:	The modulation frequency in Hz
+ * @mod_depth:	The modulation depth in "permyriad".
+ * @spread_type: Type of spread sprectum modulation.
+ *
+ * Return: 0 if all went well, else returns appropriate error value.
+ */
+static int ti_sci_cmd_clk_set_ssc(const struct ti_sci_handle *handle,
+				   u32 dev_id, u32 clk_id, u32 modfreq_hz,
+				   u32 mod_depth, u8 spread_type)
+{
+	struct ti_sci_info *info;
+	struct ti_sci_msg_req_set_clock_ssc *req;
+	struct ti_sci_msg_hdr *resp;
+	struct ti_sci_xfer *xfer;
+	struct device *dev;
+	int ret = 0;
+
+	if (IS_ERR(handle))
+		return PTR_ERR(handle);
+	if (!handle)
+		return -EINVAL;
+
+	/* mod_depth must be between 10 and 310 */
+	if (mod_depth > 310 || mod_depth < 10)
+		return -EINVAL;
+
+	info = handle_to_ti_sci_info(handle);
+	dev = info->dev;
+
+	xfer = ti_sci_get_one_xfer(info, TI_SCI_MSG_SET_CLOCK_SSC,
+				   TI_SCI_FLAG_REQ_ACK_ON_PROCESSED,
+				   sizeof(*req), sizeof(*resp));
+	if (IS_ERR(xfer)) {
+		ret = PTR_ERR(xfer);
+		dev_err(dev, "Message alloc failed(%d)\n", ret);
+		return ret;
+	}
+
+	req = (struct ti_sci_msg_req_set_clock_ssc *)xfer->xfer_buf;
+	req->dev_id = dev_id;
+	req->clk_id = clk_id;
+	req->modfreq_hz = modfreq_hz;
+	req->mod_depth = mod_depth;
+	req->spread_type = spread_type;
+
+	if (spread_type == CLK_SPREAD_NO)
+		req->enable = false;
+	else
+		req->enable = true;
+
+	ret = ti_sci_do_xfer(info, xfer);
+	if (ret) {
+		dev_err(dev, "Mbox send fail %d\n", ret);
+		goto fail;
+	}
+
+	resp = (struct ti_sci_msg_hdr *)xfer->xfer_buf;
+
+	ret = ti_sci_is_response_ack(resp) ? 0 : -ENODEV;
+
+fail:
+	ti_sci_put_one_xfer(&info->minfo, xfer);
+
+	return ret;
+}
+
+/**
  * ti_sci_cmd_prepare_sleep() - Prepare system for system suspend
  * @handle:		pointer to TI SCI handle
  * @mode:		Device identifier
@@ -3255,6 +3329,8 @@ static void ti_sci_setup_ops(struct ti_sci_info *info)
 	cops->get_best_match_freq = ti_sci_cmd_clk_get_match_freq;
 	cops->set_freq = ti_sci_cmd_clk_set_freq;
 	cops->get_freq = ti_sci_cmd_clk_get_freq;
+	if (info->fw_caps & MSG_FLAG_CAPS_CLOCK_SSC)
+		cops->set_spread_spectrum = ti_sci_cmd_clk_set_ssc;
 
 	if (info->fw_caps & MSG_FLAG_CAPS_LPM_DM_MANAGED) {
 		pr_debug("detected DM managed LPM in fw_caps\n");

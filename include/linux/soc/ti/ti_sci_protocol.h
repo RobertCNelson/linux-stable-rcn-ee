@@ -193,6 +193,9 @@ struct ti_sci_clk_ops {
 			u64 min_freq, u64 target_freq, u64 max_freq);
 	int (*get_freq)(const struct ti_sci_handle *handle, u32 did, u32 cid,
 			u64 *current_freq);
+	int (*set_spread_spectrum)(const struct ti_sci_handle *handle,
+				   u32 dev_id, u32 clk_id, u32 modfreq_hz,
+				   u32 mod_depth, u8 spread_type);
 };
 
 /* TISCI LPM IO isolation control values */

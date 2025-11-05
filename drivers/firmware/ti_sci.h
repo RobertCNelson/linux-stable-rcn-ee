@@ -32,6 +32,7 @@
 #define TI_SCI_MSG_SET_CLOCK_PARENT	0x0102
 #define TI_SCI_MSG_GET_CLOCK_PARENT	0x0103
 #define TI_SCI_MSG_GET_NUM_CLOCK_PARENTS 0x0104
+#define TI_SCI_MSG_SET_CLOCK_SSC        0x010a
 #define TI_SCI_MSG_SET_CLOCK_FREQ	0x010c
 #define TI_SCI_MSG_QUERY_CLOCK_FREQ	0x010d
 #define TI_SCI_MSG_GET_CLOCK_FREQ	0x010e
@@ -158,6 +159,7 @@ struct ti_sci_msg_resp_query_fw_caps {
 #define MSG_FLAG_CAPS_GENERIC		TI_SCI_MSG_FLAG(0)
 #define MSG_FLAG_CAPS_LPM_PARTIAL_IO	TI_SCI_MSG_FLAG(4)
 #define MSG_FLAG_CAPS_LPM_DM_MANAGED	TI_SCI_MSG_FLAG(5)
+#define MSG_FLAG_CAPS_CLOCK_SSC		TI_SCI_MSG_FLAG(10)
 #define MSG_MASK_CAPS_LPM		GENMASK_ULL(4, 1)
 	u64 fw_caps;
 } __packed;
@@ -573,6 +575,32 @@ struct ti_sci_msg_req_get_clock_freq {
 struct ti_sci_msg_resp_get_clock_freq {
 	struct ti_sci_msg_hdr hdr;
 	u64 freq_hz;
+} __packed;
+
+/**
+ * struct ti_sci_msg_req_set_clock_ssc - Request to setup a clock spread spectrum
+ * @hdr:	Generic Header
+ * @dev_id:	Device identifier this request is for
+ * @clk_id:	Clock identifier for the device for this request.
+ * @modfreq_hz: The desired modulation frequency in Hz.
+ * @mod_depth:  The target modulation depth in "permyriad". The modulation depth
+ *		refers to the maximum variation in frequency as a percentage of
+ *		the clock center frequency. The minimum modulation depth is 0.1%
+ *		and the maximum is 3.1%. Modulation depth can be adjusted in 0.1%
+ *		increments.
+ * @spread_type: The target spread type.
+ * @enable:		Enable or disable SSC.
+ *
+ * This message is used to enable/disable a clock's spread spectrum configurations
+ */
+struct ti_sci_msg_req_set_clock_ssc {
+	struct ti_sci_msg_hdr	hdr;
+	u32			dev_id;
+	u32			clk_id;
+	u32			modfreq_hz;
+	u32			mod_depth;
+	u8			spread_type;
+	u8			enable;
 } __packed;
 
 /**
