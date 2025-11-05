@@ -1113,6 +1113,12 @@ static int e5010_init_device(struct e5010_dev *e5010)
 {
 	int ret = 0;
 
+	ret = pm_runtime_resume_and_get(e5010->dev);
+	if (ret < 0) {
+		v4l2_err(&e5010->v4l2_dev, "failed to power up jpeg\n");
+		return ret;
+	}
+
 	e5010_hw_enable_mmu(e5010->mmu_base, 0);
 	e5010_hw_mmu_ext_addressing(e5010->mmu_base, 0);
 
@@ -1131,6 +1137,7 @@ static int e5010_init_device(struct e5010_dev *e5010)
 	ret = e5010_hw_set_input_source_to_memory(e5010->core_base, 1);
 	if (ret) {
 		v4l2_err(&e5010->v4l2_dev, "failed to set input source to memory\n");
+		pm_runtime_put_sync(e5010->dev);
 		return ret;
 	}
 
@@ -1138,6 +1145,7 @@ static int e5010_init_device(struct e5010_dev *e5010)
 	if (ret)
 		v4l2_err(&e5010->v4l2_dev, "failed to enable Picture Done interrupts\n");
 
+	pm_runtime_put_sync(e5010->dev);
 	return ret;
 }
 
