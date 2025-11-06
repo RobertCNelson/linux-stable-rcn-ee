@@ -396,7 +396,8 @@ static void wave5_vpu_dec_finish_decode(struct vpu_instance *inst)
 						       dec_info.index_frame_decoded);
 		if (vb) {
 			dec_buf = to_vb2_v4l2_buffer(vb);
-			dec_buf->vb2_buf.timestamp = inst->timestamp;
+			if (inst->cap_io_mode != VB2_MEMORY_DMABUF)
+				dec_buf->vb2_buf.timestamp = inst->timestamp;
 		} else {
 			dev_warn(inst->dev->dev, "%s: invalid decoded frame index %i",
 				 __func__, dec_info.index_frame_decoded);
