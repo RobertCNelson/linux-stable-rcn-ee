@@ -48,6 +48,7 @@ enum dthe_hash_alg_sel {
 enum dthe_aes_mode {
 	DTHE_AES_ECB = 0,
 	DTHE_AES_CBC,
+	DTHE_AES_XTS,
 	DTHE_AES_GCM,
 };
 
@@ -100,6 +101,7 @@ struct dthe_list {
  * @phash_size: partial hash size of the hash algorithm selected
  * @fallback: Fallback crypto aead handle
  * @ahash_fb: Fallback crypto ahash instance for hashing algorithms
+ * @skcipher_fb: Fallback crypto skcipher handle for AES-XTS mode
  */
 struct dthe_tfm_ctx {
 	struct dthe_data *dev_data;
@@ -116,6 +118,7 @@ struct dthe_tfm_ctx {
 	union {
 		struct crypto_sync_aead *aead_fb;
 		struct crypto_ahash *ahash_fb;
+		struct crypto_sync_skcipher *skcipher_fb;
 	};
 };
 

@@ -17,6 +17,7 @@ config CRYPTO_DEV_TI_DTHEV2
 	select CRYPTO_SKCIPHER
 	select CRYPTO_ECB
 	select CRYPTO_CBC
+	select CRYPTO_XTS
 	select CRYPTO_GCM
 	select CRYPTO_SHA256
 	select CRYPTO_SHA512
