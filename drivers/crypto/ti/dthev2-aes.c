@@ -20,6 +20,7 @@
 #include <linux/dmaengine.h>
 #include <linux/dma-mapping.h>
 #include <linux/io.h>
+#include <linux/iopoll.h>
 #include <linux/scatterlist.h>
 
 /* Registers */
@@ -82,19 +83,6 @@ enum aes_ctrl_mode_masks {
 #define POLL_TIMEOUT_INTERVAL			HZ
 
 static int cnt;
-
-static int dthe_poll_reg(struct dthe_data *dev_data, u32 reg, u32 bit)
-{
-	void __iomem *aes_base_reg = dev_data->regs + DTHE_P_AES_BASE;
-	unsigned long timeout = jiffies + POLL_TIMEOUT_INTERVAL;
-
-	while (!(readl_relaxed(aes_base_reg + reg) & bit)) {
-		if (time_is_before_jiffies(timeout))
-			return -ETIMEDOUT;
-	}
-
-	return 0;
-}
 
 static int dthe_cipher_init_tfm(struct crypto_skcipher *tfm)
 {
@@ -416,33 +404,39 @@ static void dthe_aead_exit_tfm(struct crypto_aead *tfm)
  * dthe_aead_prep_src - Prepare source scatterlist for AEAD from input req->src
  * @sg: Input req->src scatterlist
  * @assoclen: Input req->assoclen
- * @cryptlen: Input req->cryptlen (minus size of TAG for AES-GCM decryption)
+ * @cryptlen: Input req->cryptlen (minus size of TAG in decryption)
+ * @assoc_pad_buf: Buffer to hold AAD padding if needed
+ * @crypt_pad_buf: Buffer to hold ciphertext/plaintext padding if needed
  *
  * Description:
  *   For modes with authentication, DTHEv2 hardware requires the input AAD and
- *   plaintext/ciphertext to be individually aligned to AES_BLOCK_SIZE. However,
- *   linux crypto's aead_request provides the input with AAD and plaintext/ciphertext
- *   contiguously in a single scatterlist.
+ *   plaintext/ciphertext to be individually aligned to AES_BLOCK_SIZE. If either is not
+ *   aligned, it needs to be padded with zeros by the software before passing the data to
+ *   the hardware. However, linux crypto's aead_request provides the input with AAD and
+ *   plaintext/ciphertext contiguously appended together in a single scatterlist.
  *
  *   This helper function takes the input scatterlist and splits it into separate
  *   scatterlists for AAD and plaintext/ciphertext, ensuring each is aligned to
- *   AES_BLOCK_SIZE, and then merges the aligned scatterlists back into a single
- *   scatterlist for processing.
+ *   AES_BLOCK_SIZE by adding necessary padding, and then merges the aligned scatterlists
+ *   back into a single scatterlist for processing.
  *
  * Return:
- *   Pointer to the merged scatterlist, or NULL on failure.
+ *   Pointer to the merged scatterlist, or ERR_PTR(error) on failure.
+ *   The calling function needs to free the returned scatterlist when done.
  **/
 static struct scatterlist *dthe_aead_prep_src(struct scatterlist *sg,
 					      unsigned int assoclen,
-					      unsigned int cryptlen)
+					      unsigned int cryptlen,
+					      u8 *assoc_pad_buf,
+					      u8 *crypt_pad_buf)
 {
 	struct scatterlist *in_sg[2];
 	struct scatterlist *to_sg;
-	struct scatterlist *src, *ret;
+	struct scatterlist *src;
 	size_t split_sizes[2] = {assoclen, cryptlen};
 	int out_mapped_nents[2];
 	int crypt_nents = 0, assoc_nents = 0, src_nents = 0;
-	u8 *pad_buf_1, *pad_buf_2;
+	int err = 0;
 
 	/* sg_split does not work properly if one of the split_sizes is 0 */
 	if (cryptlen == 0 || assoclen == 0) {
@@ -455,7 +449,9 @@ static struct scatterlist *dthe_aead_prep_src(struct scatterlist *sg,
 
 		src_nents = sg_nents_for_len(sg, assoclen + cryptlen);
 	} else {
-		sg_split(sg, 0, 0, 2, split_sizes, in_sg, out_mapped_nents, GFP_KERNEL);
+		err = sg_split(sg, 0, 0, 2, split_sizes, in_sg, out_mapped_nents, GFP_ATOMIC);
+		if (err)
+			goto dthe_aead_prep_src_split_err;
 		assoc_nents = sg_nents_for_len(in_sg[0], assoclen);
 		crypt_nents = sg_nents_for_len(in_sg[1], cryptlen);
 
@@ -467,28 +463,20 @@ static struct scatterlist *dthe_aead_prep_src(struct scatterlist *sg,
 	if (cryptlen % AES_BLOCK_SIZE)
 		src_nents++;
 
-	src = kmalloc_array(src_nents, sizeof(struct scatterlist), GFP_KERNEL);
+	src = kmalloc_array(src_nents, sizeof(struct scatterlist), GFP_ATOMIC);
 	if (!src) {
-		ret = NULL;
+		err = -ENOMEM;
 		goto dthe_aead_prep_src_mem_err;
 	}
 
 	sg_init_table(src, src_nents);
 	to_sg = src;
-	ret = src;
 
 	to_sg = dthe_copy_sg(to_sg, in_sg[0], assoclen);
 	if (assoclen % AES_BLOCK_SIZE) {
 		unsigned int pad_len = AES_BLOCK_SIZE - (assoclen % AES_BLOCK_SIZE);
 
-		pad_buf_1 = kcalloc(pad_len, sizeof(u8), GFP_KERNEL);
-		if (!pad_buf_1) {
-			kfree(src);
-			ret = NULL;
-			goto dthe_aead_prep_src_mem_err;
-		}
-
-		sg_set_buf(to_sg, pad_buf_1, pad_len);
+		sg_set_buf(to_sg, assoc_pad_buf, pad_len);
 		to_sg = sg_next(to_sg);
 	}
 
@@ -496,16 +484,7 @@ static struct scatterlist *dthe_aead_prep_src(struct scatterlist *sg,
 	if (cryptlen % AES_BLOCK_SIZE) {
 		unsigned int pad_len = AES_BLOCK_SIZE - (cryptlen % AES_BLOCK_SIZE);
 
-		pad_buf_2 = kcalloc(pad_len, sizeof(u8), GFP_KERNEL);
-		if (!pad_buf_2) {
-			if (assoclen % AES_BLOCK_SIZE)
-				kfree(pad_buf_1);
-			kfree(src);
-			ret = NULL;
-			goto dthe_aead_prep_src_mem_err;
-		}
-
-		sg_set_buf(to_sg, pad_buf_2, pad_len);
+		sg_set_buf(to_sg, crypt_pad_buf, pad_len);
 		to_sg = sg_next(to_sg);
 	}
 
@@ -515,14 +494,18 @@ dthe_aead_prep_src_mem_err:
 		kfree(in_sg[1]);
 	}
 
-	return ret;
+dthe_aead_prep_src_split_err:
+	if (err)
+		return ERR_PTR(err);
+	return src;
 }
 
 /**
  * dthe_aead_prep_dst - Prepare destination scatterlist for AEAD from input req->dst
  * @sg:	Input req->dst scatterlist
  * @assoclen: Input req->assoclen
- * @cryptlen: Input req->cryptlen (minus size of TAG for AES-GCM decryption)
+ * @cryptlen: Input req->cryptlen (minus size of TAG in decryption)
+ * @pad_buf: Buffer to hold ciphertext/plaintext padding if needed
  *
  * Description:
  *   For modes with authentication, DTHEv2 hardware returns encrypted ciphertext/decrypted
@@ -536,11 +519,13 @@ dthe_aead_prep_src_mem_err:
  *   to align it with AES_BLOCK_SIZE.
  *
  * Return:
- *   Pointer to the trimmed scatterlist, or NULL on failure.
+ *   Pointer to the trimmed scatterlist, or ERR_PTR(error) on failure.
+ *   The calling function needs to free the returned scatterlist when done.
  **/
 static struct scatterlist *dthe_aead_prep_dst(struct scatterlist *sg,
 					      unsigned int assoclen,
-					      unsigned int cryptlen)
+					      unsigned int cryptlen,
+					      u8 *pad_buf)
 {
 	struct scatterlist *out_sg[1];
 	struct scatterlist *dst;
@@ -548,36 +533,37 @@ static struct scatterlist *dthe_aead_prep_dst(struct scatterlist *sg,
 	size_t split_sizes[1] = {cryptlen};
 	int out_mapped_nents[1];
 	int dst_nents = 0;
+	int err = 0;
 
-	sg_split(sg, 0, assoclen, 1, split_sizes, out_sg, out_mapped_nents, GFP_KERNEL);
+	err = sg_split(sg, 0, assoclen, 1, split_sizes, out_sg, out_mapped_nents, GFP_ATOMIC);
+	if (err)
+		goto dthe_aead_prep_dst_split_err;
+
 	dst_nents = sg_nents_for_len(out_sg[0], cryptlen);
 	if (cryptlen % AES_BLOCK_SIZE)
 		dst_nents++;
 
-	dst = kmalloc_array(dst_nents, sizeof(struct scatterlist), GFP_KERNEL);
+	dst = kmalloc_array(dst_nents, sizeof(struct scatterlist), GFP_ATOMIC);
 	if (!dst) {
-		kfree(out_sg[0]);
-		return NULL;
+		err = -ENOMEM;
+		goto dthe_aead_prep_dst_mem_err;
 	}
 	sg_init_table(dst, dst_nents);
 
 	to_sg = dthe_copy_sg(dst, out_sg[0], cryptlen);
 	if (cryptlen % AES_BLOCK_SIZE) {
 		unsigned int pad_len = AES_BLOCK_SIZE - (cryptlen % AES_BLOCK_SIZE);
-		u8 *pad_buf = kzalloc(sizeof(u8) * pad_len, GFP_KERNEL);
-
-		if (!pad_buf) {
-			kfree(dst);
-			kfree(out_sg[0]);
-			return NULL;
-		}
 
 		sg_set_buf(to_sg, pad_buf, pad_len);
 		to_sg = sg_next(to_sg);
 	}
 
+dthe_aead_prep_dst_mem_err:
 	kfree(out_sg[0]);
 
+dthe_aead_prep_dst_split_err:
+	if (err)
+		return ERR_PTR(err);
 	return dst;
 }
 
@@ -585,9 +571,12 @@ static int dthe_aead_read_tag(struct dthe_tfm_ctx *ctx, u32 *tag)
 {
 	struct dthe_data *dev_data = dthe_get_dev(ctx);
 	void __iomem *aes_base_reg = dev_data->regs + DTHE_P_AES_BASE;
+	u32 val;
 	int ret;
 
-	ret = dthe_poll_reg(dev_data, DTHE_P_AES_CTRL, DTHE_AES_CTRL_SAVED_CTX_READY);
+	ret = readl_relaxed_poll_timeout(aes_base_reg + DTHE_P_AES_CTRL, val,
+					 (val & DTHE_AES_CTRL_SAVED_CTX_READY),
+					 0, POLL_TIMEOUT_INTERVAL);
 	if (ret)
 		return ret;
 
@@ -669,6 +658,22 @@ static int dthe_aead_setauthsize(struct crypto_aead *tfm, unsigned int authsize)
 	return crypto_sync_aead_setauthsize(ctx->aead_fb, authsize);
 }
 
+static int dthe_aead_do_fallback(struct aead_request *req)
+{
+	struct dthe_tfm_ctx *ctx = crypto_aead_ctx(crypto_aead_reqtfm(req));
+	struct dthe_aes_req_ctx *rctx = aead_request_ctx(req);
+
+	SYNC_AEAD_REQUEST_ON_STACK(subreq, ctx->aead_fb);
+
+	aead_request_set_callback(subreq, req->base.flags,
+				  req->base.complete, req->base.data);
+	aead_request_set_crypt(subreq, req->src, req->dst, req->cryptlen, req->iv);
+	aead_request_set_ad(subreq, req->assoclen);
+
+	return rctx->enc ? crypto_aead_encrypt(subreq) :
+		crypto_aead_decrypt(subreq);
+}
+
 static void dthe_aead_dma_in_callback(void *data)
 {
 	struct aead_request *req = (struct aead_request *)data;
@@ -690,10 +695,15 @@ static int dthe_aead_run(struct crypto_engine *engine, void *areq)
 	unsigned int unpadded_cryptlen;
 	struct scatterlist *src = req->src;
 	struct scatterlist *dst = req->dst;
+	u32 iv_in[AES_BLOCK_SIZE / sizeof(u32)];
 
 	int src_nents;
 	int dst_nents;
 	int src_mapped_nents, dst_mapped_nents;
+
+	u8 src_assoc_padbuf[AES_BLOCK_SIZE] = {0};
+	u8 src_crypt_padbuf[AES_BLOCK_SIZE] = {0};
+	u8 dst_crypt_padbuf[AES_BLOCK_SIZE] = {0};
 
 	enum dma_data_direction src_dir, dst_dir;
 
@@ -715,9 +725,10 @@ static int dthe_aead_run(struct crypto_engine *engine, void *areq)
 	unpadded_cryptlen = cryptlen;
 
 	// Prep src and dst scatterlists
-	src = dthe_aead_prep_src(req->src, req->assoclen, cryptlen);
-	if (!src) {
-		ret = -ENOMEM;
+	src = dthe_aead_prep_src(req->src, req->assoclen, cryptlen,
+				 src_assoc_padbuf, src_crypt_padbuf);
+	if (IS_ERR(src)) {
+		ret = PTR_ERR(src);
 		goto aead_err;
 	}
 
@@ -729,9 +740,10 @@ static int dthe_aead_run(struct crypto_engine *engine, void *areq)
 	src_nents = sg_nents_for_len(src, assoclen + cryptlen);
 
 	if (cryptlen != 0) {
-		dst = dthe_aead_prep_dst(req->dst, req->assoclen, unpadded_cryptlen);
-		if (!dst) {
-			ret = -ENOMEM;
+		dst = dthe_aead_prep_dst(req->dst, req->assoclen, unpadded_cryptlen,
+					 dst_crypt_padbuf);
+		if (IS_ERR(dst)) {
+			ret = PTR_ERR(dst);
 			goto aead_prep_dst_err;
 		}
 
@@ -800,8 +812,6 @@ static int dthe_aead_run(struct crypto_engine *engine, void *areq)
 		writel_relaxed(1, aes_base_reg + DTHE_P_AES_AUTH_LENGTH);
 	}
 
-	u32 iv_in[AES_BLOCK_SIZE / sizeof(u32)];
-
 	if (req->iv) {
 		memcpy(iv_in, req->iv, GCM_AES_IV_SIZE);
 	} else {
@@ -857,24 +867,15 @@ aead_dma_prep_src_err:
 	dma_unmap_sg(tx_dev, src, src_nents, src_dir);
 
 aead_dma_map_src_err:
-	if (unpadded_cryptlen % AES_BLOCK_SIZE && cryptlen != 0)
-		kfree(sg_virt(&dst[dst_nents - 1]));
-
 	if (cryptlen != 0)
 		kfree(dst);
 
 aead_prep_dst_err:
-	if (req->assoclen % AES_BLOCK_SIZE) {
-		int assoc_nents = sg_nents_for_len(src, req->assoclen);
-
-		kfree(sg_virt(&src[assoc_nents]));
-	}
-	if (unpadded_cryptlen % AES_BLOCK_SIZE)
-		kfree(sg_virt(&src[src_nents - 1]));
-
 	kfree(src);
 
 aead_err:
+	if (ret)
+		ret = dthe_aead_do_fallback(req);
 	local_bh_disable();
 	crypto_finalize_aead_request(dev_data->aes_engine, req, ret);
 	local_bh_enable();
@@ -902,18 +903,8 @@ static int dthe_aead_crypt(struct aead_request *req)
 	 * case above tautologically false. If req->cryptlen is to be changed to a 64-bit
 	 * type, the check for these would also need to be added below.
 	 */
-	if (req->assoclen == 0 && cryptlen == 0) {
-		SYNC_AEAD_REQUEST_ON_STACK(subreq, ctx->aead_fb);
-
-		aead_request_set_callback(subreq, req->base.flags,
-					  req->base.complete, req->base.data);
-		aead_request_set_crypt(subreq, req->src, req->dst,
-				       req->cryptlen, req->iv);
-		aead_request_set_ad(subreq, req->assoclen);
-
-		return rctx->enc ? crypto_aead_encrypt(subreq) :
-			crypto_aead_decrypt(subreq);
-	}
+	if (req->assoclen == 0 && cryptlen == 0)
+		return dthe_aead_do_fallback(req);
 
 	engine = dev_data->aes_engine;
 	return crypto_transfer_aead_request_to_engine(engine, req);
