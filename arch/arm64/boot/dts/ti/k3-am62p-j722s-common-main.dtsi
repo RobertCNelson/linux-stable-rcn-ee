@@ -1217,7 +1217,7 @@
 			#size-cells = <0>;
 
 			oldi1_dss1: oldi@1 {
-				reg = <0>;
+				reg = <1>;
 				clocks = <&k3_clks 232 0>;
 				clock-names = "serial";
 				ti,oldi-io-ctrl = <&dss_oldi_io_ctrl>;
