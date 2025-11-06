@@ -392,8 +392,8 @@ static int dthe_aead_init_tfm(struct crypto_aead *tfm)
 
 	const char *alg_name = crypto_tfm_alg_name(&tfm->base);
 
-	ctx->aead_fb = crypto_alloc_aead(alg_name, 0,
-					 CRYPTO_ALG_NEED_FALLBACK);
+	ctx->aead_fb = crypto_alloc_sync_aead(alg_name, 0,
+					      CRYPTO_ALG_NEED_FALLBACK);
 	if (IS_ERR(ctx->aead_fb)) {
 		dev_err(dev_data->dev, "fallback driver %s couldn't be loaded\n",
 			alg_name);
@@ -409,7 +409,7 @@ static void dthe_aead_exit_tfm(struct crypto_aead *tfm)
 {
 	struct dthe_tfm_ctx *ctx = crypto_aead_ctx(tfm);
 
-	crypto_free_aead(ctx->aead_fb);
+	crypto_free_sync_aead(ctx->aead_fb);
 }
 
 /**
@@ -651,12 +651,12 @@ static int dthe_aead_setkey(struct crypto_aead *tfm, const u8 *key, unsigned int
 	ctx->keylen = keylen;
 	memcpy(ctx->key, key, keylen);
 
-	crypto_aead_clear_flags(ctx->aead_fb, CRYPTO_TFM_REQ_MASK);
-	crypto_aead_set_flags(ctx->aead_fb,
-			      crypto_aead_get_flags(tfm) &
-			      CRYPTO_TFM_REQ_MASK);
+	crypto_sync_aead_clear_flags(ctx->aead_fb, CRYPTO_TFM_REQ_MASK);
+	crypto_sync_aead_set_flags(ctx->aead_fb,
+				   crypto_aead_get_flags(tfm) &
+				   CRYPTO_TFM_REQ_MASK);
 
-	return crypto_aead_setkey(ctx->aead_fb, key, keylen);
+	return crypto_sync_aead_setkey(ctx->aead_fb, key, keylen);
 }
 
 static int dthe_aead_setauthsize(struct crypto_aead *tfm, unsigned int authsize)
@@ -666,7 +666,7 @@ static int dthe_aead_setauthsize(struct crypto_aead *tfm, unsigned int authsize)
 	/* Invalid auth size will be handled by crypto_aead_setauthsize() */
 	ctx->authsize = authsize;
 
-	return crypto_aead_setauthsize(ctx->aead_fb, authsize);
+	return crypto_sync_aead_setauthsize(ctx->aead_fb, authsize);
 }
 
 static void dthe_aead_dma_in_callback(void *data)
@@ -903,20 +903,16 @@ static int dthe_aead_crypt(struct aead_request *req)
 	 * type, the check for these would also need to be added below.
 	 */
 	if (req->assoclen == 0 && cryptlen == 0) {
-		struct aead_request *subreq = &rctx->fb_req;
-		int ret;
+		SYNC_AEAD_REQUEST_ON_STACK(subreq, ctx->aead_fb);
 
-		aead_request_set_tfm(subreq, ctx->aead_fb);
 		aead_request_set_callback(subreq, req->base.flags,
 					  req->base.complete, req->base.data);
 		aead_request_set_crypt(subreq, req->src, req->dst,
 				       req->cryptlen, req->iv);
 		aead_request_set_ad(subreq, req->assoclen);
 
-		ret = rctx->enc ? crypto_aead_encrypt(subreq) :
+		return rctx->enc ? crypto_aead_encrypt(subreq) :
 			crypto_aead_decrypt(subreq);
-
-		return ret;
 	}
 
 	engine = dev_data->aes_engine;
