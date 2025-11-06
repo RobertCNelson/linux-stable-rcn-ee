@@ -213,6 +213,20 @@
 		compatible = "simple-audio-card";
 		simple-audio-card,name = "AM62D2-EVM";
 
+		simple-audio-card,routing =
+			/* J3A (tad5x1x@50) */
+			"J3A IN1 Source Mux", "J3A Playback",
+			"J3A IN2 Source Mux", "J3A Playback",
+			/* J3B (tad5x1x@51) */
+			"J3B IN1 Source Mux", "J3B Playback",
+			"J3B IN2 Source Mux", "J3B Playback",
+			/* J4A (tad5x1x@52) */
+			"J4A IN1 Source Mux", "J4A Playback",
+			"J4A IN2 Source Mux", "J4A Playback",
+			/* J4B (tad5x1x@53) */
+			"J4B IN1 Source Mux", "J4B Playback",
+			"J4B IN2 Source Mux", "J4B Playback";
+
 		simple-audio-card,dai-link@0 {
 			format = "dsp_a";
 			bitclock-master = <&master0>;
