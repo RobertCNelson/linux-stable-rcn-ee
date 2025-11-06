@@ -214,7 +214,7 @@
 		simple-audio-card,name = "AM62D2-EVM";
 
 		simple-audio-card,dai-link@0 {
-			format = "dsp_b";
+			format = "dsp_a";
 			bitclock-master = <&master0>;
 			frame-master = <&master0>;
 
@@ -224,13 +224,12 @@
 			};
 
 			codec@0 {
-				sound-dai = <&tad5x1x_50>;
-				playback-only;
+				sound-dai = <&pcm6240>;
 			};
 		};
 
 		simple-audio-card,dai-link@1 {
-			format = "dsp_b";
+			format = "dsp_a";
 			bitclock-master = <&master1>;
 			frame-master = <&master1>;
 
@@ -240,29 +239,29 @@
 			};
 
 			codec@1 {
-				sound-dai = <&tad5x1x_51>;
+				sound-dai = <&tad5x1x_50>;
 				playback-only;
 			};
 		};
 
 		simple-audio-card,dai-link@2 {
-			format = "dsp_b";
+			format = "dsp_a";
 			bitclock-master = <&master2>;
 			frame-master = <&master2>;
 
 			master2: cpu {
-			sound-dai = <&mcasp2>;
+				sound-dai = <&mcasp2>;
 				system-clock-direction-out;
 			};
 
 			codec@2 {
-				sound-dai = <&tad5x1x_52>;
+				sound-dai = <&tad5x1x_51>;
 				playback-only;
 			};
 		};
 
 		simple-audio-card,dai-link@3 {
-			format = "dsp_b";
+			format = "dsp_a";
 			bitclock-master = <&master3>;
 			frame-master = <&master3>;
 
@@ -272,6 +271,22 @@
 			};
 
 			codec@3 {
+				sound-dai = <&tad5x1x_52>;
+				playback-only;
+			};
+		};
+
+		simple-audio-card,dai-link@4 {
+			format = "dsp_a";
+			bitclock-master = <&master4>;
+			frame-master = <&master4>;
+
+			master4: cpu {
+				sound-dai = <&mcasp2>;
+				system-clock-direction-out;
+			};
+
+			codec@4 {
 				sound-dai = <&tad5x1x_53>;
 				playback-only;
 			};
@@ -428,12 +443,15 @@
 
 	main_mcasp2_pins_default: main-mcasp2-default-pins {
 		pinctrl-single,pins = <
+			AM62DX_IOPAD(0x0078, PIN_INPUT, 3) /* (T21) GPMC0_AD15.MCASP2_ACLKR */
 			AM62DX_IOPAD(0x0070, PIN_INPUT, 3) /* (R21) GPMC0_AD13.MCASP2_ACLKX */
+			AM62DX_IOPAD(0x0074, PIN_INPUT, 3) /* (T20) GPMC0_AD14.MCASP2_AFSR */
 			AM62DX_IOPAD(0x006c, PIN_INPUT, 3) /* (T22) GPMC0_AD12.MCASP2_AFSX */
-			AM62DX_IOPAD(0x005C, PIN_INPUT, 3) /* (P22) GPMC0_AD8.MCASP2_AXR0 */
+			AM62DX_IOPAD(0x005c, PIN_INPUT, 3) /* (P22) GPMC0_AD8.MCASP2_AXR0 */
 			AM62DX_IOPAD(0x0060, PIN_INPUT, 3) /* (R19) GPMC0_AD9.MCASP2_AXR1 */
 			AM62DX_IOPAD(0x0068, PIN_INPUT, 3) /* (R22) GPMC0_AD11.MCASP2_AXR3 */
 			AM62DX_IOPAD(0x003c, PIN_INPUT, 3) /* (N21) GPMC0_AD0.MCASP2_AXR4 */
+			AM62DX_IOPAD(0x00a8, PIN_INPUT, 3) /* (M19) GPMC0_CSn0.MCASP2_AXR14 */
 		>;
 	};
 
@@ -599,6 +617,13 @@
 		ti,micbias-vg = <3>;
 		sound-name-prefix = "J4B";
 	};
+
+	pcm6240: adc@48 {
+		compatible = "ti,pcm6240";
+		reg = <0x48>, <0x49>;
+		#sound-dai-cells = <0>;
+		sound-name-prefix = "pcm6240-2dev-reg";
+	};
 };
 
 &main_i2c1 {
@@ -624,14 +649,14 @@
 
 	auxclk-fs-ratio = <2177>;
 	op-mode = <0>;          /* MCASP_IIS_MODE */
-	tdm-slots = <2>;
-	ti,async-mode;
+	tdm-slots = <4>;
 	slot-width = <32>;
+	ti,async-mode;
 	serial-dir = <
 	       1 1 0 1
 	       1 0 0 0
 	       0 0 0 0
-	       0 0 0 0
+	       0 0 2 0
 	>;
 };
 
