@@ -48,6 +48,7 @@ enum dthe_hash_alg_sel {
 enum dthe_aes_mode {
 	DTHE_AES_ECB = 0,
 	DTHE_AES_CBC,
+	DTHE_AES_CTR,
 	DTHE_AES_XTS,
 	DTHE_AES_GCM,
 };
