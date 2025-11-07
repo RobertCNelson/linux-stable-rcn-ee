@@ -3270,6 +3270,40 @@ int of_genpd_parse_idle_states(struct device_node *dn,
 }
 EXPORT_SYMBOL_GPL(of_genpd_parse_idle_states);
 
+int of_genpd_add_subdomain_map(struct device_node *np,
+			       struct generic_pm_domain *domain,
+			       int index)
+{
+	struct of_phandle_args parent_args;
+	struct generic_pm_domain *parent_pd;
+	struct device *dev = &domain->dev;
+	int ret;
+
+	if (!domain)
+		return -ENODEV;
+
+	/*
+	 * Check for power-domain-map, which implies the primary
+	 * power-doamin is a subdomain of the parent found in the map.
+	 */
+	ret = of_parse_phandle_with_args_map(np, NULL, "power-domain",
+					     index, &parent_args);
+	if (!ret && parent_args.np) {
+		parent_pd = genpd_get_from_provider(&parent_args);
+		of_node_put(parent_args.np);
+
+		if (IS_ERR(parent_pd))
+			return -EINVAL;
+
+		ret = pm_genpd_add_subdomain(parent_pd, domain);
+		if (!ret)
+			dev_dbg(dev, "adding PM domain %s as subdomain of %s\n",
+				domain->name, parent_pd->name);
+	}
+
+	return ret;
+}
+
 static int __init genpd_bus_init(void)
 {
 	return bus_register(&genpd_bus_type);

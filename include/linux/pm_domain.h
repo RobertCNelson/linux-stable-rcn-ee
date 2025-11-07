@@ -410,9 +410,11 @@ int of_genpd_add_subdomain(const struct of_phandle_args *parent_spec,
 int of_genpd_remove_subdomain(const struct of_phandle_args *parent_spec,
 			      const struct of_phandle_args *subdomain_spec);
 struct generic_pm_domain *of_genpd_remove_last(struct device_node *np);
+int of_genpd_add_subdomain_map(struct device_node *np,
+			       struct generic_pm_domain *genpd,
+			       int index);
 int of_genpd_parse_idle_states(struct device_node *dn,
 			       struct genpd_power_state **states, int *n);
-
 int genpd_dev_pm_attach(struct device *dev);
 struct device *genpd_dev_pm_attach_by_id(struct device *dev,
 					 unsigned int index);
@@ -447,6 +449,13 @@ static inline int of_genpd_add_subdomain(const struct of_phandle_args *parent_sp
 
 static inline int of_genpd_remove_subdomain(const struct of_phandle_args *parent_spec,
 					    const struct of_phandle_args *subdomain_spec)
+{
+	return -ENODEV;
+}
+
+static int of_genpd_add_subdomain_map(struct device_node *np,
+				      struct generic_pm_domain *genpd,
+				      int index)
 {
 	return -ENODEV;
 }
