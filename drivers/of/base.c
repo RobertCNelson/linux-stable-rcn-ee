@@ -1361,6 +1361,10 @@ EXPORT_SYMBOL(__of_parse_phandle_with_args);
  * is that this API remaps a phandle if the node the phandle points to has
  * a <@stem_name>-map property.
  *
+ * If @list_name is NULL or the property doesn't exist, the function automatically
+ * uses the current node (@np) as the base for mapping. This is useful for cases
+ * where you only have a map property without a base property listing child specifiers.
+ *
  * Caller is responsible to call of_node_put() on the returned out_args->np
  * pointer.
  *
@@ -1413,16 +1417,28 @@ int of_parse_phandle_with_args_map(const struct device_node *np,
 	if (!cells_name || !map_name || !mask_name || !pass_name)
 		return -ENOMEM;
 
-	ret = __of_parse_phandle_with_args(np, list_name, cells_name, -1, index,
-					   out_args);
-	if (ret)
-		return ret;
+	/* Check if we should use direct mapping from current node */
+	if (!list_name) {
+		/* No base property - use current node with index as single argument */
+		out_args->np = (struct device_node *)np;
+		out_args->args_count = 1;
+		out_args->args[0] = index;
+		of_node_get(out_args->np);
+		cur = out_args->np;
+		list_size = 1;
+	} else {
+		/* Parse from base property */
+		ret = __of_parse_phandle_with_args(np, list_name, cells_name, -1, index,
+						   out_args);
+		if (ret)
+			return ret;
 
-	/* Get the #<list>-cells property */
-	cur = out_args->np;
-	ret = of_property_read_u32(cur, cells_name, &list_size);
-	if (ret < 0)
-		goto put;
+		/* Get the #<list>-cells property */
+		cur = out_args->np;
+		ret = of_property_read_u32(cur, cells_name, &list_size);
+		if (ret < 0)
+			goto put;
+	}
 
 	/* Precalculate the match array - this simplifies match loop */
 	for (i = 0; i < list_size; i++)
