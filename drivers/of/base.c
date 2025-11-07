@@ -1459,7 +1459,7 @@ int of_parse_phandle_with_args_map(const struct device_node *np,
 			mask = dummy_mask;
 		/* Iterate through <list>-map property */
 		match = 0;
-		while (map_len > (list_size + 1) && !match) {
+		while (map_len >= (list_size + 1) && !match) {
 			/* Compare specifiers */
 			match = 1;
 			for (i = 0; i < list_size; i++, map_len--)
