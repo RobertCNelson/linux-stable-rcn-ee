@@ -21,6 +21,39 @@
 		stdout-path = &main_uart0;
 	};
 
+	idle-states {
+		entry-method = "psci";
+
+		CLST_STBY: STBY {
+			compatible = "arm,idle-state";
+			idle-state-name = "Standby";
+			arm,psci-suspend-param = <0x00000001>;
+			entry-latency-us = <300>;
+			exit-latency-us = <600>;
+			min-residency-us = <1000>;
+		};
+	};
+
+	domain-idle-states {
+		main_sleep_0: main-deep-sleep {
+			compatible = "domain-idle-state";
+			arm,psci-suspend-param = <0x2012231>;
+			entry-latency-us = <1000>;
+			exit-latency-us = <1000>;
+			min-residency-us = <500000>;
+			local-timer-stop;
+		};
+
+		main_sleep_1: main-sleep-rtcddr {
+			compatible = "domain-idle-state";
+			arm,psci-suspend-param = <0x2012232>;
+			local-timer-stop;
+			entry-latency-us = <300000>;
+			exit-latency-us = <600000>;
+			min-residency-us = <1000000>;
+		};
+	};
+
 	memory@80000000 {
 		/* 2G RAM */
 		reg = <0x00000000 0x80000000 0x00000000 0x80000000>;
@@ -256,6 +289,42 @@
 	pinctrl-0 = <&main_mmc1_pins_default>;
 	status = "okay";
 	bootph-all;
+};
+
+&scmi_pds {
+	/*
+	 * Here's how we group the scmi pd ID of devices into their
+	 * top level power domains, which happens to be the MAIN domain
+	 * in this case.
+	 */
+	power-domain-map = <15 &MAIN_PD>, /* TIMER0 */
+			   <16 &MAIN_PD>, /* TIMER1 */
+			   <17 &MAIN_PD>, /* TIMER2 */
+			   <18 &MAIN_PD>; /* TIMER3 */
+};
+
+&cpu0 {
+	power-domains = <&CLUSTER_PD>;
+	power-domain-names = "psci";
+};
+
+&psci {
+	CLUSTER_PD: power-controller-cluster {
+		#power-domain-cells = <0>;
+		domain-idle-states = <&CLST_STBY>;
+		power-domains = <&MAIN_PD>;
+	};
+
+	MAIN_PD: power-controller-main {
+		#power-domain-cells = <0>;
+		domain-idle-states = <&main_sleep_0>, <&main_sleep_1>;
+	};
+};
+
+/delete-node/ &cpu1;
+
+&cluster0 {
+	/delete-node/ core1;
 };
 
 /delete-node/ &main_rti1;
