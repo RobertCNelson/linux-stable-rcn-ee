@@ -418,10 +418,38 @@ static bool cpu_system_power_down_ok(struct dev_pm_domain *pd)
 	s64 constraint_ns = cpu_wakeup_latency_qos_limit() * NSEC_PER_USEC;
 	struct generic_pm_domain *genpd = pd_to_genpd(pd);
 	int state_idx = genpd->state_count - 1;
+	struct pm_domain_data *pdd;
+	s32 min_dev_latency = PM_QOS_RESUME_LATENCY_NO_CONSTRAINT;
+	s64 min_dev_latency_ns = PM_QOS_RESUME_LATENCY_NO_CONSTRAINT_NS;
+	struct gpd_link *link;
 
 	if (!(genpd->flags & GENPD_FLAG_CPU_DOMAIN)) {
 		genpd->state_idx = state_idx;
 		return true;
+	}
+
+	list_for_each_entry(link, &genpd->parent_links, parent_node) {
+		struct generic_pm_domain *child_pd = link->child;
+
+		list_for_each_entry(pdd, &child_pd->dev_list, list_node) {
+			s32 dev_latency;
+
+			dev_latency = dev_pm_qos_read_value(pdd->dev, DEV_PM_QOS_RESUME_LATENCY);
+			if (dev_latency != PM_QOS_RESUME_LATENCY_NO_CONSTRAINT) {
+				dev_warn(pdd->dev, "in domain %s, has QoS resume latency=%d\n", child_pd->name, dev_latency);
+				if (dev_latency < min_dev_latency)
+					min_dev_latency = dev_latency;
+			}
+		}
+	}
+
+	/* If max device latency < CPU wakeup latency, use it instead */
+	if (min_dev_latency != PM_QOS_RESUME_LATENCY_NO_CONSTRAINT) {
+		min_dev_latency_ns = min_dev_latency * NSEC_PER_USEC;
+		if (min_dev_latency_ns < constraint_ns)
+			dev_info(&genpd->dev, "updating constraint: %llu -> %llu\n",
+				 constraint_ns, min_dev_latency_ns);
+			constraint_ns = min_dev_latency_ns;
 	}
 
 	/* Find the deepest state for the latency constraint. */
