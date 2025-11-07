@@ -585,6 +585,13 @@ the given CPU as the upper limit for the exit latency of the idle states that
 they are allowed to select for that CPU.  They should never select any idle
 states with exit latency beyond that limit.
 
+While the above CPU QoS constraints applies to a running system, user space may
+also request a CPU system-wakeup latency QoS limit, via the `cpu_wakeup_latency`
+file.  This QoS constraint is respected when selecting a suitable idle state
+for the CPUs, while entering the system-wide suspend-to-idle sleep state.
+
+Note that, in regards how to manage the QoS request from user space for the
+`cpu_wakeup_latency` file, it works according to the `cpu_dma_latency` file.
 
 Idle States Control Via Kernel Command Line
 ===========================================
