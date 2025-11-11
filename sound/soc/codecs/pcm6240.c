@@ -1864,7 +1864,6 @@ static struct snd_soc_dai_driver pcmdevice_dai_driver[] = {
 			.formats	 = PCMDEVICE_FORMATS,
 		},
 		.ops = &pcmdevice_dai_ops,
-		.symmetric_rate = 1,
 	}
 };
 
