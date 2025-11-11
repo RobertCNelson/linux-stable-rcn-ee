@@ -1412,7 +1412,6 @@ static struct snd_soc_dai_driver taa5x1x_dai = {
 			.formats = TAC5X1X_FORMATS,
 			},
 	.ops = &tac5x1x_ops,
-	.symmetric_rate = 1,
 };
 
 static struct snd_soc_dai_driver tad5x1x_dai = {
@@ -1432,7 +1431,6 @@ static struct snd_soc_dai_driver tad5x1x_dai = {
 			.formats = TAC5X1X_FORMATS,
 			},
 	.ops = &tac5x1x_ops,
-	.symmetric_rate = 1,
 };
 
 static s32 find_first_s32_in_s32arr(const s32 *arr, s32 val, size_t size)
