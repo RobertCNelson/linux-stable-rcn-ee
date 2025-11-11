@@ -980,3 +980,7 @@
 	       0 0 0 0
 	>;
 };
+
+&wkup_uart0_interconnect {
+	status = "okay";
+};
