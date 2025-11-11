@@ -57,6 +57,9 @@
 			label = "User Key";
 			linux,code = <BTN_0>;
 			gpios = <&main_gpio0 90 GPIO_ACTIVE_LOW>;
+			interrupts-extended = <&main_gpio0 90 IRQ_TYPE_EDGE_RISING>,
+				<&pmx0 0x01ac>;
+			interrupt-names = "irq", "wakeup";
 		};
 	};
 
