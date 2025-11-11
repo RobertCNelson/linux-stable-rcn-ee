@@ -1,0 +1,50 @@
+// SPDX-License-Identifier: GPL-2.0
+/**
+ * AM62L3 evm can wakeup from Low Power Modes via
+ * multiple wakeup sources. This overlay enables WKUP GPIO.
+ *
+ * Copyright (C) 2025 Texas Instruments Incorporated - http://www.ti.com/
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/interrupt-controller/irq.h>
+#include <dt-bindings/interrupt-controller/arm-gic.h>
+
+#include "k3-pinctrl.h"
+
+&{/} {
+	wkup_gpio_key {
+		compatible = "gpio-keys";
+		autorepeat;
+		pinctrl-names = "default";
+		pinctrl-0 = <&wake_wkupgpio0_pins_default>;
+		interrupt-parent = <&wkup_gpio0>;
+		interrupts = <0 IRQ_TYPE_EDGE_RISING>;
+		switch {
+			label = "WKUPGPIO";
+			linux,code = <143>;
+			gpios = <&wkup_gpio0 0 GPIO_ACTIVE_LOW>;
+			wakeup-source;
+		};
+	};
+};
+
+&pmx0 {
+	wake_wkupgpio0_pins_default: wake-wkupgpio0-pins-default {
+		pinctrl-single,pins = <
+			AM62LX_IOPAD(0x0000, PIN_INPUT_PULLUP, 7) /* (Y22) WKUP_UART0_RXD.WKUP_GPIO0_0 */
+		>;
+	};
+};
+
+&wkup_gpio0 {
+	status = "okay";
+};
+
+&wkup_uart0_interconnect {
+	status = "disabled";
+};
