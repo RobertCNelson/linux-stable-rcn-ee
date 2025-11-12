@@ -663,7 +663,8 @@
 
 	auxclk-fs-ratio = <2177>;
 	op-mode = <0>;          /* MCASP_IIS_MODE */
-	tdm-slots = <4>;
+	tdm-slots = <2>;
+	tdm-slots-rx = <4>;
 	slot-width = <32>;
 	ti,async-mode;
 	serial-dir = <
