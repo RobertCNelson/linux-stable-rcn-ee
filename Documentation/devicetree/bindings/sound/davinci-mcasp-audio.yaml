@@ -40,8 +40,20 @@ properties:
   tdm-slots:
     $ref: /schemas/types.yaml#/definitions/uint32
     description:
-      number of channels over one serializer
-      the property is ignored in DIT mode
+      Number of channels over one serializer. This property
+      specifies the TX playback TDM slot count, along with default RX slot count
+      if tdm-slots-rx is not specified.
+      The property is ignored in DIT mode.
+    minimum: 2
+    maximum: 32
+
+  tdm-slots-rx:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description:
+      Number of RX capture channels over one serializer. If specified,
+      allows independent RX TDM slot count separate from TX. Requires
+      ti,async-mode to be enabled for independent TX/RX clock rates.
+      The property is ignored in DIT mode.
     minimum: 2
     maximum: 32
 
@@ -194,7 +206,15 @@ allOf:
     then:
       properties:
         tdm-slots: false
+        tdm-slots-rx: false
         ti,async-mode: false
+
+  - if:
+      required:
+        - tdm-slots-rx
+    then:
+      required:
+        - ti,async-mode
 
 unevaluatedProperties: false
 
