@@ -70,6 +70,7 @@ struct davinci_mcasp_context {
 struct davinci_mcasp_ruledata {
 	struct davinci_mcasp *mcasp;
 	int serializers;
+	int stream;
 };
 
 struct davinci_mcasp {
@@ -87,7 +88,8 @@ struct davinci_mcasp {
 	bool	missing_audio_param;
 
 	/* McASP specific data */
-	int	tdm_slots;
+	int	tdm_slots_tx;
+	int	tdm_slots_rx;
 	u32	tdm_mask[2];
 	int	slot_width;
 	u8	op_mode;
@@ -645,11 +647,11 @@ static int __davinci_mcasp_set_clkdiv(struct davinci_mcasp *mcasp, int div_id,
 		 * tdm_slot width by dividing the ratio by the
 		 * number of configured tdm slots.
 		 */
-		mcasp->slot_width = div / mcasp->tdm_slots;
-		if (div % mcasp->tdm_slots)
+		mcasp->slot_width = div / mcasp->tdm_slots_tx;
+		if (div % mcasp->tdm_slots_tx)
 			dev_warn(mcasp->dev,
 				 "%s(): BCLK/LRCLK %d is not divisible by %d tdm slots",
-				 __func__, div, mcasp->tdm_slots);
+				 __func__, div, mcasp->tdm_slots_tx);
 		break;
 
 	default:
@@ -717,8 +719,13 @@ static int davinci_mcasp_ch_constraint(struct davinci_mcasp *mcasp, int stream,
 {
 	struct snd_pcm_hw_constraint_list *cl = &mcasp->chconstr[stream];
 	unsigned int *list = (unsigned int *) cl->list;
-	int slots = mcasp->tdm_slots;
+	int slots;
 	int i, count = 0;
+
+	if (stream == SNDRV_PCM_STREAM_PLAYBACK)
+		slots = mcasp->tdm_slots_tx;
+	else
+		slots = mcasp->tdm_slots_rx;
 
 	if (mcasp->tdm_mask[stream])
 		slots = hweight32(mcasp->tdm_mask[stream]);
@@ -784,7 +791,16 @@ static int davinci_mcasp_set_tdm_slot(struct snd_soc_dai *dai,
 		return -EINVAL;
 	}
 
-	mcasp->tdm_slots = slots;
+	if (mcasp->async_mode) {
+		if (tx_mask)
+			mcasp->tdm_slots_tx = slots;
+		if (rx_mask)
+			mcasp->tdm_slots_rx = slots;
+	} else {
+		mcasp->tdm_slots_tx = slots;
+		mcasp->tdm_slots_rx = slots;
+	}
+
 	mcasp->tdm_mask[SNDRV_PCM_STREAM_PLAYBACK] = tx_mask;
 	mcasp->tdm_mask[SNDRV_PCM_STREAM_CAPTURE] = rx_mask;
 	mcasp->slot_width = slot_width;
@@ -864,10 +880,15 @@ static int mcasp_common_hw_param(struct davinci_mcasp *mcasp, int stream,
 	int i;
 	u8 tx_ser = 0;
 	u8 rx_ser = 0;
-	u8 slots = mcasp->tdm_slots;
+	u8 slots;
 	u8 max_active_serializers, max_rx_serializers, max_tx_serializers;
 	int active_serializers, numevt;
 	u32 reg;
+
+	if (stream == SNDRV_PCM_STREAM_PLAYBACK)
+		slots = mcasp->tdm_slots_tx;
+	else
+		slots = mcasp->tdm_slots_rx;
 
 	/* In DIT mode we only allow maximum of one serializers for now */
 	if (mcasp->op_mode == DAVINCI_MCASP_DIT_MODE)
@@ -996,7 +1017,10 @@ static int mcasp_i2s_hw_param(struct davinci_mcasp *mcasp, int stream,
 	u32 mask = 0;
 	u32 busel = 0;
 
-	total_slots = mcasp->tdm_slots;
+	if (stream == SNDRV_PCM_STREAM_PLAYBACK)
+		total_slots = mcasp->tdm_slots_tx;
+	else
+		total_slots = mcasp->tdm_slots_rx;
 
 	/*
 	 * If more than one serializer is needed, then use them with
@@ -1262,10 +1286,15 @@ static int davinci_mcasp_hw_params(struct snd_pcm_substream *substream,
 	 * the machine driver, we need to calculate the ratio.
 	 */
 	if (mcasp->bclk_master && mcasp->bclk_div == 0 && mcasp->sysclk_freq) {
-		int slots = mcasp->tdm_slots;
+		int slots;
 		int rate = params_rate(params);
 		int sbits = params_width(params);
 		unsigned int bclk_target;
+
+		if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
+			slots = mcasp->tdm_slots_tx;
+		else
+			slots = mcasp->tdm_slots_rx;
 
 		if (mcasp->slot_width)
 			sbits = mcasp->slot_width;
@@ -1389,9 +1418,14 @@ static int davinci_mcasp_hw_rule_rate(struct snd_pcm_hw_params *params,
 	struct snd_interval *ri =
 		hw_param_interval(params, SNDRV_PCM_HW_PARAM_RATE);
 	int sbits = params_width(params);
-	int slots = rd->mcasp->tdm_slots;
+	int slots;
 	struct snd_interval range;
 	int i;
+
+	if (rd->stream == SNDRV_PCM_STREAM_PLAYBACK)
+		slots = rd->mcasp->tdm_slots_tx;
+	else
+		slots = rd->mcasp->tdm_slots_rx;
 
 	if (rd->mcasp->slot_width)
 		sbits = rd->mcasp->slot_width;
@@ -1439,9 +1473,14 @@ static int davinci_mcasp_hw_rule_format(struct snd_pcm_hw_params *params,
 	struct snd_mask *fmt = hw_param_mask(params, SNDRV_PCM_HW_PARAM_FORMAT);
 	struct snd_mask nfmt;
 	int rate = params_rate(params);
-	int slots = rd->mcasp->tdm_slots;
+	int slots;
 	int count = 0;
 	snd_pcm_format_t i;
+
+	if (rd->stream == SNDRV_PCM_STREAM_PLAYBACK)
+		slots = rd->mcasp->tdm_slots_tx;
+	else
+		slots = rd->mcasp->tdm_slots_rx;
 
 	snd_mask_none(&nfmt);
 
@@ -1499,7 +1538,7 @@ static int davinci_mcasp_startup(struct snd_pcm_substream *substream,
 					&mcasp->ruledata[substream->stream];
 	u32 max_channels = 0;
 	int i, dir, ret;
-	int tdm_slots = mcasp->tdm_slots;
+	int tdm_slots;
 	u8 *numevt;
 
 	/* Do not allow more then one stream per direction */
@@ -1507,6 +1546,11 @@ static int davinci_mcasp_startup(struct snd_pcm_substream *substream,
 		return -EBUSY;
 
 	mcasp->substreams[substream->stream] = substream;
+
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
+		tdm_slots = mcasp->tdm_slots_tx;
+	else
+		tdm_slots = mcasp->tdm_slots_rx;
 
 	if (mcasp->tdm_mask[substream->stream])
 		tdm_slots = hweight32(mcasp->tdm_mask[substream->stream]);
@@ -1529,6 +1573,7 @@ static int davinci_mcasp_startup(struct snd_pcm_substream *substream,
 	}
 	ruledata->serializers = max_channels;
 	ruledata->mcasp = mcasp;
+	ruledata->stream = substream->stream;
 	max_channels *= tdm_slots;
 	/*
 	 * If the already active stream has less channels than the calculated
@@ -1536,9 +1581,13 @@ static int davinci_mcasp_startup(struct snd_pcm_substream *substream,
 	 * is in use we need to use that as a constraint for the second stream.
 	 * Otherwise (first stream or less allowed channels or more than one
 	 * serializer in use) we use the calculated constraint.
+	 *
+	 * However, in async mode, TX and RX have independent clocks and can
+	 * use different configurations, so don't apply the constraint.
 	 */
 	if (mcasp->channels && mcasp->channels < max_channels &&
-	    ruledata->serializers == 1)
+	    ruledata->serializers == 1 &&
+	    !mcasp->async_mode)
 		max_channels = mcasp->channels;
 	/*
 	 * But we can always allow channels upto the amount of
@@ -1555,7 +1604,7 @@ static int davinci_mcasp_startup(struct snd_pcm_substream *substream,
 				   0, SNDRV_PCM_HW_PARAM_CHANNELS,
 				   &mcasp->chconstr[substream->stream]);
 
-	if (mcasp->max_format_width) {
+	if (mcasp->max_format_width && !mcasp->async_mode) {
 		/*
 		 * Only allow formats which require same amount of bits on the
 		 * bus as the currently running stream
@@ -1921,16 +1970,28 @@ static int davinci_mcasp_get_config(struct davinci_mcasp *mcasp,
 		goto out;
 	}
 
+	/* Parse TX-specific TDM slot and use it as default for RX */
 	if (of_property_read_u32(np, "tdm-slots", &val) == 0) {
 		if (val < 2 || val > 32) {
-			dev_err(&pdev->dev, "tdm-slots must be in rage [2-32]\n");
+			dev_err(&pdev->dev, "tdm-slots must be in range [2-32]\n");
 			return -EINVAL;
 		}
 
-		pdata->tdm_slots = val;
+		pdata->tdm_slots_tx = val;
+		pdata->tdm_slots_rx = val;
 	} else if (pdata->op_mode == DAVINCI_MCASP_IIS_MODE) {
 		mcasp->missing_audio_param = true;
 		goto out;
+	}
+
+	/* Parse RX-specific TDM slot count if provided */
+	if (of_property_read_u32(np, "tdm-slots-rx", &val) == 0) {
+		if (val < 2 || val > 32) {
+			dev_err(&pdev->dev, "tdm-slots-rx must be in range [2-32]\n");
+			return -EINVAL;
+		}
+
+		pdata->tdm_slots_rx = val;
 	}
 
 	if (pdata->op_mode != DAVINCI_MCASP_DIT_MODE)
@@ -1991,19 +2052,41 @@ out:
 	mcasp->op_mode = pdata->op_mode;
 	/* sanity check for tdm slots parameter */
 	if (mcasp->op_mode == DAVINCI_MCASP_IIS_MODE) {
-		if (pdata->tdm_slots < 2) {
-			dev_warn(&pdev->dev, "invalid tdm slots: %d\n",
-				 pdata->tdm_slots);
-			mcasp->tdm_slots = 2;
-		} else if (pdata->tdm_slots > 32) {
-			dev_warn(&pdev->dev, "invalid tdm slots: %d\n",
-				 pdata->tdm_slots);
-			mcasp->tdm_slots = 32;
+		if (pdata->tdm_slots_tx < 2) {
+			dev_warn(&pdev->dev, "invalid tdm tx slots: %d\n",
+				 pdata->tdm_slots_tx);
+			mcasp->tdm_slots_tx = 2;
+		} else if (pdata->tdm_slots_tx > 32) {
+			dev_warn(&pdev->dev, "invalid tdm tx slots: %d\n",
+				 pdata->tdm_slots_tx);
+			mcasp->tdm_slots_tx = 32;
 		} else {
-			mcasp->tdm_slots = pdata->tdm_slots;
+			mcasp->tdm_slots_tx = pdata->tdm_slots_tx;
+		}
+
+		if (pdata->tdm_slots_rx < 2) {
+			dev_warn(&pdev->dev, "invalid tdm rx slots: %d\n",
+				 pdata->tdm_slots_rx);
+			mcasp->tdm_slots_rx = 2;
+		} else if (pdata->tdm_slots_rx > 32) {
+			dev_warn(&pdev->dev, "invalid tdm rx slots: %d\n",
+				 pdata->tdm_slots_rx);
+			mcasp->tdm_slots_rx = 32;
+		} else {
+			mcasp->tdm_slots_rx = pdata->tdm_slots_rx;
 		}
 	} else {
-		mcasp->tdm_slots = 32;
+		mcasp->tdm_slots_tx = 32;
+		mcasp->tdm_slots_rx = 32;
+	}
+
+	/* Different TX/RX slot counts require async mode */
+	if (pdata->op_mode == DAVINCI_MCASP_IIS_MODE &&
+	    mcasp->tdm_slots_tx != mcasp->tdm_slots_rx && !mcasp->async_mode) {
+		dev_err(&pdev->dev,
+			"Different TX (%d) and RX (%d) TDM slots require ti,async-mode\n",
+			mcasp->tdm_slots_tx, mcasp->tdm_slots_rx);
+		return -EINVAL;
 	}
 
 	mcasp->num_serializer = pdata->num_serializer;
