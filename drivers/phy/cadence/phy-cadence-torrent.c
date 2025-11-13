@@ -384,6 +384,7 @@ struct cdns_torrent_phy {
 	struct regmap_field *phy_reset_ctrl;
 	struct regmap_field *phy_pcs_iso_link_ctrl_1[MAX_NUM_LANES];
 	struct clk_hw_onecell_data *clk_hw_data;
+	int ref_clk_parent;
 };
 
 enum phy_powerstate {
@@ -3329,7 +3330,13 @@ static const struct cdns_torrent_vals sgmii_qsgmii_xcvr_diag_ln_vals = {
 static int cdns_torrent_phy_suspend_noirq(struct device *dev)
 {
 	struct cdns_torrent_phy *cdns_phy = dev_get_drvdata(dev);
+	struct clk_hw *hw = cdns_phy->clk_hw_data->hws[CDNS_TORRENT_REFCLK_DRIVER];
+	struct cdns_torrent_refclk_driver *refclk_driver = to_cdns_torrent_refclk_driver(hw);
+
 	int i;
+
+	regmap_field_read(refclk_driver->cmn_fields[CMN_CDIAG_REFCLK_DRV0_CTRL_4],
+			&cdns_phy->ref_clk_parent);
 
 	reset_control_assert(cdns_phy->phy_rst);
 	reset_control_assert(cdns_phy->apb_rst);
@@ -3349,8 +3356,14 @@ static int cdns_torrent_phy_suspend_noirq(struct device *dev)
 static int cdns_torrent_phy_resume_noirq(struct device *dev)
 {
 	struct cdns_torrent_phy *cdns_phy = dev_get_drvdata(dev);
+	struct clk_hw *hw = cdns_phy->clk_hw_data->hws[CDNS_TORRENT_REFCLK_DRIVER];
+	struct cdns_torrent_refclk_driver *refclk_driver = to_cdns_torrent_refclk_driver(hw);
+
 	int node = cdns_phy->nsubnodes;
 	int ret, i;
+
+	regmap_field_write(refclk_driver->cmn_fields[CMN_CDIAG_REFCLK_DRV0_CTRL_4],
+			cdns_phy->ref_clk_parent);
 
 	ret = cdns_torrent_clk(cdns_phy);
 	if (ret)
