@@ -141,9 +141,11 @@ static void cdns_host_exit(struct cdns *cdns)
 static int cdns_host_resume(struct cdns *cdns, bool power_lost)
 {
 	struct usb_hcd *hcd = platform_get_drvdata(cdns->host_dev);
-	struct xhci_plat_priv *priv = hcd_to_xhci_priv(hcd);
 
-	priv->power_lost = power_lost;
+	if (hcd) {
+		struct xhci_plat_priv *priv = hcd_to_xhci_priv(hcd);
+		priv->power_lost = power_lost;
+	}
 
 	return 0;
 }
