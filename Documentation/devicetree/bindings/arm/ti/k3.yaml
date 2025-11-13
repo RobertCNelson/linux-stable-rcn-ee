@@ -41,6 +41,7 @@ properties:
         items:
           - enum:
               - ti,am62l3-evm
+              - ti,am62l3-badge
           - const: ti,am62l3
 
       - description: K3 AM62P5 SoC and Boards
