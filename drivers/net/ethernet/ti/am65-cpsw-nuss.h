@@ -56,7 +56,9 @@ struct am65_cpsw_port {
 	bool				rx_ts_enabled;
 	struct am65_cpsw_qos		qos;
 	struct devlink_port		devlink_port;
+#if IS_ENABLED(CONFIG_DEBUG_FS)
 	struct dentry			*debugfs_port;
+#endif
 	struct bpf_prog			*xdp_prog;
 	struct xdp_rxq_info		xdp_rxq[AM65_CPSW_MAX_QUEUES];
 	/* Only for suspend resume context */
@@ -185,7 +187,9 @@ struct am65_cpsw_common {
 	struct notifier_block am65_cpsw_netdevice_nb;
 	unsigned char switch_id[MAX_PHYS_ITEM_ID_LEN];
 
+#if IS_ENABLED(CONFIG_DEBUG_FS)
 	struct dentry		*debugfs_root;
+#endif
 	/* only for suspend/resume context restore */
 	u32			*ale_context;
 };
@@ -235,8 +239,23 @@ int am65_cpsw_nuss_update_tx_rx_chns(struct am65_cpsw_common *common,
 
 bool am65_cpsw_port_dev_check(const struct net_device *dev);
 
+#if IS_ENABLED(CONFIG_DEBUG_FS)
 int am65_cpsw_nuss_register_port_debugfs(struct am65_cpsw_port *port);
 int am65_cpsw_nuss_register_debugfs(struct am65_cpsw_common *common);
 void am65_cpsw_nuss_unregister_debugfs(struct am65_cpsw_common *common);
+#else
+static inline int am65_cpsw_nuss_register_port_debugfs(struct am65_cpsw_port *port)
+{
+	return 0;
+}
+
+static inline int am65_cpsw_nuss_register_debugfs(struct am65_cpsw_common *common)
+{
+	return 0;
+}
+
+static inline void am65_cpsw_nuss_unregister_debugfs(struct am65_cpsw_common *common)
+{ }
+#endif /* CONFIG_DEBUG_FS */
 
 #endif /* AM65_CPSW_NUSS_H_ */
