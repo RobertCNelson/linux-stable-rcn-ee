@@ -1,0 +1,38 @@
+// SPDX-License-Identifier: GPL-2.0-only OR MIT
+/**
+ * DT Overlay for utilizing the "PCIe Clock HCSL (100MHz)" onboard clock
+ * generator. The clock generator outputs two 100 MHz differential clock
+ * pair signals for the purpose of:
+ * 1) Supplying the PCIe reference clock to the PCIe connector
+ * 2) Supplying the Reference clock to SERDES0
+ *
+ * AM642 EVM Product Link: https://www.ti.com/tool/TMDS64EVM
+ *
+ * Copyright (C) 2025 Texas Instruments Incorporated - https://www.ti.com/
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/phy/phy-ti.h>
+
+/* Onboard clock generator provides 100 MHz reference clock to SERDES0 */
+&serdes_refclk {
+	clock-frequency = <100000000>;
+};
+
+&serdes0 {
+	/*
+	 * Remove 'phy_en_refclk' clock since SERDES0 doesn't have to generate the
+	 * PCIe reference clock (provided by the onboard clock generator).
+	 */
+	clocks = <&serdes_wiz0 TI_WIZ_PLL0_REFCLK>;
+	clock-names = "refclk";
+	assigned-clocks = <&serdes_wiz0 TI_WIZ_PLL0_REFCLK>,
+			  <&serdes_wiz0 TI_WIZ_PLL1_REFCLK>,
+			  <&serdes_wiz0 TI_WIZ_REFCLK_DIG>;
+	/* Use onboard clock generator as SERDES0 reference clock */
+	assigned-clock-parents = <&serdes_refclk>,
+				 <&serdes_refclk>,
+				 <&serdes_refclk>;
+};
