@@ -443,13 +443,14 @@ static bool cpu_system_power_down_ok(struct dev_pm_domain *pd)
 		}
 	}
 
-	/* If max device latency < CPU wakeup latency, use it instead */
+	/* If any device has a stricter latency constraint than CPU wakeup latency, use it */
 	if (min_dev_latency != PM_QOS_RESUME_LATENCY_NO_CONSTRAINT) {
 		min_dev_latency_ns = min_dev_latency * NSEC_PER_USEC;
-		if (min_dev_latency_ns < constraint_ns)
+		if (min_dev_latency_ns < constraint_ns) {
 			dev_info(&genpd->dev, "updating constraint: %llu -> %llu\n",
 				 constraint_ns, min_dev_latency_ns);
 			constraint_ns = min_dev_latency_ns;
+		}
 	}
 
 	/* Find the deepest state for the latency constraint. */
