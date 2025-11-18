@@ -1237,7 +1237,7 @@
 
 		pru0: pru@34000 {
 			compatible = "ti,am625-pru";
-			reg = <0x34000 0x3000>,
+			reg = <0x34000 0x4000>,
 			      <0x22000 0x100>,
 			      <0x22400 0x100>;
 			reg-names = "iram", "control", "debug";
@@ -1249,7 +1249,7 @@
 
 		pru1: pru@38000 {
 			compatible = "ti,am625-pru";
-			reg = <0x38000 0x3000>,
+			reg = <0x38000 0x4000>,
 			      <0x24000 0x100>,
 			      <0x24400 0x100>;
 			reg-names = "iram", "control", "debug";
