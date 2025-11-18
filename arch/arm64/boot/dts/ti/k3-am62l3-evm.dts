@@ -504,6 +504,8 @@
 		interrupts = <16 IRQ_TYPE_EDGE_FALLING>;
 		#sound-dai-cells = <0>;
 		sil,i2s-data-lanes = < 0 >;
+		pinctrl-names = "default";
+		pinctrl-0 = <&main_dpi_pins_default>;
 		bootph-all;
 
 		ports {
@@ -785,8 +787,6 @@
 
 &dss {
 	status = "okay";
-	pinctrl-names = "default";
-	pinctrl-0 = <&main_dpi_pins_default>;
 	bootph-all;
 };
 
