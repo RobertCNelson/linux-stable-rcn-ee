@@ -152,6 +152,18 @@ struct sa_tfm_ctx;
 struct sa_match_data;
 
 /**
+ * struct sa_hw_state - Hardware-level lock state
+ * @lock: Spinlock to protect busy flag
+ * @wq: Wait queue for hardware availability
+ * @busy: Hardware busy flag
+ */
+struct sa_hw_state {
+	spinlock_t lock;
+	wait_queue_head_t wq;
+	bool busy;
+};
+
+/**
  * struct sa_crypto_data - Crypto driver instance data
  * @base: Base address of the register space
  * @soc_data: Pointer to SoC specific data
@@ -185,6 +197,7 @@ struct sa_crypto_data {
 	struct dma_chan		*dma_rx1;
 	struct dma_chan		*dma_rx2;
 	struct dma_chan		*dma_tx;
+	struct sa_hw_state	hw;
 };
 
 /**
