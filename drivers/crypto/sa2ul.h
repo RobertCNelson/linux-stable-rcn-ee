@@ -276,6 +276,18 @@ struct sa_ctx_info {
 };
 
 /**
+ * struct sa_req_ctx_data - Per-request snapshot of command label metadata
+ * @cmdl_size: template command label size in bytes
+ * @cmdl: mutable command label buffer for the request
+ * @cmdl_upd_info: request-local copy of update metadata
+ */
+struct sa_req_ctx_data {
+	u16 cmdl_size;
+	u32 cmdl[SA_MAX_CMDL_WORDS];
+	struct sa_cmdl_upd_info cmdl_upd_info;
+};
+
+/**
  * struct sa_tfm_ctx: TFM context structure
  * @dev_data: struct sa_crypto_data pointer
  * @enc: struct sa_ctx_info for encryption

@@ -229,6 +229,7 @@ struct sa_rx_data {
 	u8 enc_iv_size;
 	u8 iv_idx;
 	struct sa_crypto_data *pdata;
+	struct sa_req_ctx_data req_ctx;
 	bool hw_locked;
 };
 
@@ -1531,8 +1532,8 @@ sa_prepare_tx_desc(u32 *mdptr, u32 pslen, u32 *psdata, u32 epiblen, u32 *epib)
 static int sa_run(struct sa_req *req)
 {
 	struct sa_rx_data *rxd;
+	struct sa_req_ctx_data *req_ctx;
 	gfp_t gfp_flags;
-	u32 cmdl[SA_MAX_CMDL_WORDS];
 	struct sa_crypto_data *pdata = dev_get_drvdata(sa_k3_dev);
 	struct device *ddev;
 	struct dma_chan *dma_rx;
@@ -1581,16 +1582,21 @@ static int sa_run(struct sa_req *req)
 	ddev = dmaengine_get_dma_device(pdata->dma_tx);
 	rxd->ddev = ddev;
 
-	memcpy(cmdl, sa_ctx->cmdl, sa_ctx->cmdl_size);
+	req_ctx = &rxd->req_ctx;
+	memset(req_ctx, 0, sizeof(*req_ctx));
+
+	req_ctx->cmdl_size = sa_ctx->cmdl_size;
+	memcpy(req_ctx->cmdl, sa_ctx->cmdl, req_ctx->cmdl_size);
+	req_ctx->cmdl_upd_info = sa_ctx->cmdl_upd_info;
 
 	/* Process the command label for this request.
 	 * IMPORTANT: Use local variable to store the processed size.
 	 * sa_ctx->cmdl_size must remain unchanged as it stores the
 	 * template size for use across multiple requests.
 	 */
-	u32 cmdl_len = sa_update_cmdl(req, cmdl,
-					   &sa_ctx->cmdl_upd_info,
-					   sa_ctx->cmdl_size);
+	u32 cmdl_len = sa_update_cmdl(req, req_ctx->cmdl,
+			      &req_ctx->cmdl_upd_info,
+			      req_ctx->cmdl_size);
 
 	if (cmdl_len > SA_MAX_CMDL_WORDS * sizeof(u32)) {
 		dev_err(pdata->dev, "sa_update_cmdl returned %u, exceeds max %lu\n",
@@ -1713,7 +1719,7 @@ static int sa_run(struct sa_req *req)
 	rxd->req = (void *)req->base;
 	rxd->enc = req->enc;
 	rxd->iv_idx = req->ctx->iv_idx;
-	rxd->enc_iv_size = sa_ctx->cmdl_upd_info.enc_iv.size;
+	rxd->enc_iv_size = req_ctx->cmdl_upd_info.enc_iv.size;
 	rxd->tx_in->callback = req->callback;
 	rxd->tx_in->callback_param = rxd;
 
@@ -1734,7 +1740,7 @@ static int sa_run(struct sa_req *req)
 	mdptr = (u32 *)dmaengine_desc_get_metadata_ptr(tx_out, &pl, &ml);
 
 	req->mdata_size = sa_prepare_tx_desc(mdptr, cmdl_len,
-					     cmdl, sizeof(sa_ctx->epib),
+				     req_ctx->cmdl, sizeof(sa_ctx->epib),
 					     sa_ctx->epib);
 
 	dmaengine_desc_set_metadata_len(tx_out, req->mdata_size);
