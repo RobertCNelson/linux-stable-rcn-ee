@@ -667,6 +667,7 @@ static inline int sa_aes_inv_key(u8 *inv_key, const u8 *key, u16 key_sz)
 static int sa_set_sc_enc(struct algo_data *ad, const u8 *key, u16 key_sz,
 			 u8 enc, u8 *sc_buf)
 {
+	WARN_ON(!ad->ctx);
 	SYNC_SKCIPHER_REQUEST_ON_STACK(req, ad->ctx->skcipher);
 	const u8 *mci = NULL;
 	int ret = 0;
@@ -1256,6 +1257,7 @@ static int sa_cipher_setkey(struct crypto_skcipher *tfm, const u8 *key,
 	    keylen != AES_KEYSIZE_256)
 		return -EINVAL;
 
+	ad->ctx = ctx;
 	ad->enc_eng.eng_id = SA_ENG_ID_EM1;
 	ad->enc_eng.sc_size = SA_CTX_ENC_TYPE_SZ;
 
