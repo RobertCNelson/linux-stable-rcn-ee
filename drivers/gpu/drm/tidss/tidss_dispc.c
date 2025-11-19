@@ -1398,6 +1398,14 @@ void dispc_vp_enable(struct dispc_device *dispc, u32 hw_videoport,
 		regmap_update_bits(dispc->clk_ctrl, 0, 0x100, ipc ? 0x100 : 0x000);
 		regmap_update_bits(dispc->clk_ctrl, 0, 0x200, rf ? 0x200 : 0x000);
 	}
+
+	/*
+	 * AM62L: Disable DPIENABLE bitfield (bit 6) when DSI bridge is in use.
+	 * The DPI output path is unused in DSI configurations and disabling it
+	 * reduces power consumption.
+	 */
+	if (dispc->feat->subrev == DISPC_AM62L && dispc->tidss->disable_dpi_pipe_block)
+		VP_REG_FLD_MOD(dispc, hw_videoport, DISPC_VP_CONTROL, 0, 6, 6);
 }
 
 void dispc_vp_disable(struct dispc_device *dispc, u32 hw_videoport)

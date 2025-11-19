@@ -138,6 +138,9 @@ static int tidss_dispc_modeset_init(struct tidss_device *tidss)
 			return dev_err_probe(dev, ret, "port %d probe failed\n", i);
 		}
 
+		if (bridge && bridge->type == DRM_MODE_CONNECTOR_DSI)
+			tidss->disable_dpi_pipe_block = true;
+
 		if (panel) {
 			u32 conn_type;
 
