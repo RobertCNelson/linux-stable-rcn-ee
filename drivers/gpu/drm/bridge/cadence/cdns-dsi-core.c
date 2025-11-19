@@ -1344,6 +1344,7 @@ static int cdns_dsi_drm_probe(struct platform_device *pdev)
 	input->id = CDNS_DPI_INPUT;
 	input->bridge.funcs = &cdns_dsi_bridge_funcs;
 	input->bridge.of_node = pdev->dev.of_node;
+	input->bridge.type = DRM_MODE_CONNECTOR_DSI;
 
 	/* Mask all interrupts before registering the IRQ handler. */
 	writel(0, dsi->regs + MCTL_MAIN_STS_CTL);
