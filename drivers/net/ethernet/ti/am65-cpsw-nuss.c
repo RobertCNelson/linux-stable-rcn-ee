@@ -591,6 +591,13 @@ static void am65_cpsw_destroy_rxqs(struct am65_cpsw_common *common, bool retain_
 	reinit_completion(&common->tdown_complete);
 	k3_udma_glue_tdown_rx_chn(rx_chn->rx_chn, true);
 
+	for (id = common->rx_ch_num_flows -1; id >= 0; id--) {
+		if (!napi_if_scheduled_mark_missed(&rx_chn->flows[id].napi_rx)) {
+			if (napi_schedule_prep(&rx_chn->flows[id].napi_rx))
+				__napi_schedule(&rx_chn->flows[id].napi_rx);
+		}
+	}
+
 	if (common->pdata.quirks & AM64_CPSW_QUIRK_DMA_RX_TDOWN_IRQ) {
 		id = wait_for_completion_timeout(&common->tdown_complete, msecs_to_jiffies(1000));
 		if (!id)
