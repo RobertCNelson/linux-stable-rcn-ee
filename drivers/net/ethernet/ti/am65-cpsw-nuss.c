@@ -505,7 +505,7 @@ static inline void am65_cpsw_put_page(struct am65_cpsw_rx_flow *flow,
 static void am65_cpsw_nuss_rx_cleanup(void *data, dma_addr_t desc_dma);
 static void am65_cpsw_nuss_tx_cleanup(void *data, dma_addr_t desc_dma);
 
-static void am65_cpsw_destroy_rxq(struct am65_cpsw_common *common, int id)
+static void am65_cpsw_destroy_rxq(struct am65_cpsw_common *common, int id, bool retain_page_pool)
 {
 	struct am65_cpsw_rx_chn *rx_chn = &common->rx_chns;
 	struct am65_cpsw_rx_flow *flow;
@@ -528,13 +528,13 @@ static void am65_cpsw_destroy_rxq(struct am65_cpsw_common *common, int id)
 			xdp_rxq_info_unreg(rxq);
 	}
 
-	if (flow->page_pool) {
+	if (flow->page_pool && !retain_page_pool) {
 		page_pool_destroy(flow->page_pool);
 		flow->page_pool = NULL;
 	}
 }
 
-static void am65_cpsw_destroy_rxqs(struct am65_cpsw_common *common)
+static void am65_cpsw_destroy_rxqs(struct am65_cpsw_common *common, bool retain_page_pool)
 {
 	struct am65_cpsw_rx_chn *rx_chn = &common->rx_chns;
 	int id;
@@ -549,7 +549,7 @@ static void am65_cpsw_destroy_rxqs(struct am65_cpsw_common *common)
 	}
 
 	for (id = common->rx_ch_num_flows - 1; id >= 0; id--)
-		am65_cpsw_destroy_rxq(common, id);
+		am65_cpsw_destroy_rxq(common, id, retain_page_pool);
 
 	k3_udma_glue_disable_rx_chn(common->rx_chns.rx_chn);
 }
@@ -574,13 +574,18 @@ static int am65_cpsw_create_rxq(struct am65_cpsw_common *common, int id)
 
 	flow = &rx_chn->flows[id];
 	pp_params.napi = &flow->napi_rx;
-	pool = page_pool_create(&pp_params);
-	if (IS_ERR(pool)) {
-		ret = PTR_ERR(pool);
-		return ret;
-	}
 
-	flow->page_pool = pool;
+	if (!flow->page_pool) {
+		pool = page_pool_create(&pp_params);
+		if (IS_ERR(pool)) {
+			ret = PTR_ERR(pool);
+			return ret;
+		}
+
+		flow->page_pool = pool;
+	} else {
+		pool = flow->page_pool;
+	}
 
 	/* using same page pool is allowed as no running rx handlers
 	 * simultaneously for both ndevs
@@ -626,7 +631,7 @@ static int am65_cpsw_create_rxq(struct am65_cpsw_common *common, int id)
 	return 0;
 
 err:
-	am65_cpsw_destroy_rxq(common, id);
+	am65_cpsw_destroy_rxq(common, id, false);
 	return ret;
 }
 
@@ -653,7 +658,7 @@ static int am65_cpsw_create_rxqs(struct am65_cpsw_common *common)
 
 err:
 	for (--id; id >= 0; id--)
-		am65_cpsw_destroy_rxq(common, id);
+		am65_cpsw_destroy_rxq(common, id, false);
 
 	return ret;
 }
@@ -942,7 +947,7 @@ static int am65_cpsw_nuss_common_open(struct am65_cpsw_common *common)
 	return 0;
 
 cleanup_rx:
-	am65_cpsw_destroy_rxqs(common);
+	am65_cpsw_destroy_rxqs(common, false);
 
 	return ret;
 }
@@ -956,7 +961,7 @@ static int am65_cpsw_nuss_common_stop(struct am65_cpsw_common *common)
 			     ALE_PORT_STATE, ALE_PORT_STATE_DISABLE);
 
 	am65_cpsw_destroy_txqs(common);
-	am65_cpsw_destroy_rxqs(common);
+	am65_cpsw_destroy_rxqs(common, false);
 	cpsw_ale_stop(common->ale);
 
 	writel(0, common->cpsw_base + AM65_CPSW_REG_CTL);
@@ -1935,7 +1940,8 @@ static int am65_cpsw_xdp_prog_setup(struct net_device *ndev,
 	if (running) {
 		/* stop all queues */
 		am65_cpsw_destroy_txqs(common);
-		am65_cpsw_destroy_rxqs(common);
+		/* Retain page pool */
+		am65_cpsw_destroy_rxqs(common, true);
 	}
 
 	old_prog = xchg(&port->xdp_prog, prog);
@@ -1950,7 +1956,7 @@ static int am65_cpsw_xdp_prog_setup(struct net_device *ndev,
 
 		ret = am65_cpsw_create_txqs(common);
 		if (ret) {
-			am65_cpsw_destroy_rxqs(common);
+			am65_cpsw_destroy_rxqs(common, false);
 			return ret;
 		}
 	}
