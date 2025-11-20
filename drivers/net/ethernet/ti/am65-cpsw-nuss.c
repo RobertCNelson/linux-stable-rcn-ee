@@ -58,9 +58,6 @@
 
 #define AM65_CPSW_MAX_PORTS	8
 
-#define AM65_CPSW_MIN_PACKET_SIZE	VLAN_ETH_ZLEN
-#define AM65_CPSW_MAX_PACKET_SIZE	2024
-
 #define AM65_CPSW_REG_CTL		0x004
 #define AM65_CPSW_REG_STAT_PORT_EN	0x014
 #define AM65_CPSW_REG_PTYPE		0x018
@@ -505,7 +502,7 @@ static inline void am65_cpsw_put_page(struct am65_cpsw_rx_flow *flow,
 static void am65_cpsw_nuss_rx_cleanup(void *data, dma_addr_t desc_dma);
 static void am65_cpsw_nuss_tx_cleanup(void *data, dma_addr_t desc_dma);
 
-static void am65_cpsw_destroy_rxq(struct am65_cpsw_common *common, int id, bool retain_page_pool)
+void am65_cpsw_destroy_rxq(struct am65_cpsw_common *common, int id, bool retain_page_pool)
 {
 	struct am65_cpsw_rx_chn *rx_chn = &common->rx_chns;
 	struct am65_cpsw_rx_flow *flow;
@@ -554,7 +551,7 @@ static void am65_cpsw_destroy_rxqs(struct am65_cpsw_common *common, bool retain_
 	k3_udma_glue_disable_rx_chn(common->rx_chns.rx_chn);
 }
 
-static int am65_cpsw_create_rxq(struct am65_cpsw_common *common, int id)
+int am65_cpsw_create_rxq(struct am65_cpsw_common *common, int id)
 {
 	struct am65_cpsw_rx_chn *rx_chn = &common->rx_chns;
 	struct page_pool_params pp_params = {
@@ -663,7 +660,7 @@ err:
 	return ret;
 }
 
-static void am65_cpsw_destroy_txq(struct am65_cpsw_common *common, int id)
+void am65_cpsw_destroy_txq(struct am65_cpsw_common *common, int id)
 {
 	struct am65_cpsw_tx_chn *tx_chn = &common->tx_chns[id];
 
@@ -697,7 +694,7 @@ static void am65_cpsw_destroy_txqs(struct am65_cpsw_common *common)
 		am65_cpsw_destroy_txq(common, id);
 }
 
-static int am65_cpsw_create_txq(struct am65_cpsw_common *common, int id)
+int am65_cpsw_create_txq(struct am65_cpsw_common *common, int id)
 {
 	struct am65_cpsw_tx_chn *tx_chn = &common->tx_chns[id];
 	int ret;
@@ -1329,7 +1326,7 @@ static int am65_cpsw_nuss_rx_packets(struct am65_cpsw_rx_flow *flow,
 	dma_unmap_single(rx_chn->dma_dev, buf_dma, buf_dma_len, DMA_FROM_DEVICE);
 	k3_cppi_desc_pool_free(rx_chn->desc_pool, desc_rx);
 
-	if (port->xdp_prog) {
+	if (am65_cpsw_xdp_is_enabled(port)) {
 		xdp_init_buff(&xdp, PAGE_SIZE, &port->xdp_rxq[flow->id]);
 		xdp_prepare_buff(&xdp, page_addr, AM65_CPSW_HEADROOM,
 				 pkt_len, false);
@@ -1969,6 +1966,9 @@ static int am65_cpsw_ndo_bpf(struct net_device *ndev, struct netdev_bpf *bpf)
 	switch (bpf->command) {
 	case XDP_SETUP_PROG:
 		return am65_cpsw_xdp_prog_setup(ndev, bpf->prog);
+	case XDP_SETUP_XSK_POOL:
+		return am65_cpsw_xsk_setup_pool(ndev, bpf->xsk.pool,
+						bpf->xsk.queue_id);
 	default:
 		return -EINVAL;
 	}
@@ -3566,7 +3566,12 @@ static int am65_cpsw_nuss_probe(struct platform_device *pdev)
 	common = devm_kzalloc(dev, sizeof(struct am65_cpsw_common), GFP_KERNEL);
 	if (!common)
 		return -ENOMEM;
+
 	common->dev = dev;
+	common->xdp_zc_queues = devm_bitmap_zalloc(dev, AM65_CPSW_MAX_QUEUES,
+						   GFP_KERNEL);
+	if (!common->xdp_zc_queues)
+		return -ENOMEM;
 
 	of_id = of_match_device(am65_cpsw_nuss_of_mtable, dev);
 	if (!of_id)

@@ -24,7 +24,13 @@ struct am65_cpts;
 
 #define AM65_CPSW_MAX_QUEUES	8	/* both TX & RX */
 
+#define AM65_CPSW_MIN_PACKET_SIZE	VLAN_ETH_ZLEN
+#define AM65_CPSW_MAX_PACKET_SIZE	2024
+
 #define AM65_CPSW_PORT_VLAN_REG_OFFSET	0x014
+
+#define AM65_CPSW_RX_DMA_ATTR	(DMA_ATTR_SKIP_CPU_SYNC |\
+				 DMA_ATTR_WEAK_ORDERING)
 
 struct am65_cpsw_slave_data {
 	bool				mac_only;
@@ -200,6 +206,9 @@ struct am65_cpsw_common {
 #endif
 	/* only for suspend/resume context restore */
 	u32			*ale_context;
+	/* XDP Zero Copy */
+	unsigned long		*xdp_zc_queues;
+	int			xsk_port_id[AM65_CPSW_MAX_QUEUES];
 };
 
 struct am65_cpsw_ndev_priv {
@@ -256,5 +265,16 @@ static inline int am65_cpsw_nuss_register_debugfs(struct am65_cpsw_common *commo
 static inline void am65_cpsw_nuss_unregister_debugfs(struct am65_cpsw_common *common)
 { }
 #endif /* CONFIG_DEBUG_FS */
+int am65_cpsw_create_rxq(struct am65_cpsw_common *common, int id);
+void am65_cpsw_destroy_rxq(struct am65_cpsw_common *common, int id, bool retain_page_pool);
+int am65_cpsw_create_txq(struct am65_cpsw_common *common, int id);
+void am65_cpsw_destroy_txq(struct am65_cpsw_common *common, int id);
+int am65_cpsw_xsk_setup_pool(struct net_device *ndev,
+			     struct xsk_buff_pool *pool, u16 qid);
+int am65_cpsw_xsk_wakeup(struct net_device *ndev, u32 qid, u32 flags);
+static inline bool am65_cpsw_xdp_is_enabled(struct am65_cpsw_port *port)
+{
+	return !!READ_ONCE(port->xdp_prog);
+}
 
 #endif /* AM65_CPSW_NUSS_H_ */
