@@ -108,6 +108,9 @@ int am65_cpsw_xsk_wakeup(struct net_device *ndev, u32 qid, u32 flags)
 {
 	struct am65_cpsw_common *common = am65_ndev_to_common(ndev);
 	struct am65_cpsw_port *port = am65_ndev_to_port(ndev);
+	struct am65_cpsw_rx_flow *rx_flow;
+
+	rx_flow = &common->rx_chns.flows[qid];
 
 	if (!netif_running(ndev) || !netif_carrier_ok(ndev))
 		return -ENETDOWN;
@@ -118,5 +121,26 @@ int am65_cpsw_xsk_wakeup(struct net_device *ndev, u32 qid, u32 flags)
 	if (qid >= common->rx_ch_num_flows || qid >= common->tx_ch_num)
 		return -EINVAL;
 
+	if (!rx_flow->xsk_pool)
+		return -EINVAL;
+
+	if (flags & XDP_WAKEUP_RX) {
+		if (!napi_if_scheduled_mark_missed(&rx_flow->napi_rx)) {
+			if (likely(napi_schedule_prep(&rx_flow->napi_rx)))
+				__napi_schedule(&rx_flow->napi_rx);
+		}
+	}
+
 	return 0;
+}
+
+struct xsk_buff_pool *am65_cpsw_xsk_get_pool(struct am65_cpsw_port *port,
+					     u32 qid)
+{
+	if (!am65_cpsw_xdp_is_enabled(port) ||
+	    !test_bit(qid, port->common->xdp_zc_queues) ||
+	    port->common->xsk_port_id[qid] != port->port_id)
+		return NULL;
+
+	return xsk_get_pool_from_qid(port->ndev, qid);
 }

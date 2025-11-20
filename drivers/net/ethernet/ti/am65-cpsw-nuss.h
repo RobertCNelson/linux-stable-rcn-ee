@@ -16,6 +16,7 @@
 #include <linux/soc/ti/k3-ringacc.h>
 #include <net/devlink.h>
 #include <net/xdp.h>
+#include <net/xdp_sock_drv.h>
 #include "am65-cpsw-qos.h"
 
 struct am65_cpts;
@@ -111,6 +112,8 @@ struct am65_cpsw_rx_flow {
 	struct hrtimer rx_hrtimer;
 	unsigned long rx_pace_timeout;
 	struct page_pool *page_pool;
+	struct xsk_buff_pool *xsk_pool;
+	int xsk_port_id;
 	char name[32];
 };
 
@@ -124,7 +127,10 @@ struct am65_cpsw_tx_swdata {
 
 struct am65_cpsw_swdata {
 	u32 flow_id;
-	struct page *page;
+	union {
+		struct page *page;
+		struct xdp_buff *xdp;
+	};
 };
 
 struct am65_cpsw_rx_chn {
@@ -276,5 +282,7 @@ static inline bool am65_cpsw_xdp_is_enabled(struct am65_cpsw_port *port)
 {
 	return !!READ_ONCE(port->xdp_prog);
 }
+struct xsk_buff_pool *am65_cpsw_xsk_get_pool(struct am65_cpsw_port *port,
+					     u32 qid);
 
 #endif /* AM65_CPSW_NUSS_H_ */
