@@ -1780,15 +1780,13 @@ static int am65_cpsw_nuss_rx_poll(struct napi_struct *napi_rx, int budget)
 	dev_dbg(common->dev, "%s num_rx:%d %d\n", __func__, num_rx, budget);
 
 	if (num_rx < budget && napi_complete_done(napi_rx, num_rx)) {
-		if (flow->irq_disabled) {
+		if (unlikely(flow->rx_pace_timeout)) {
+			hrtimer_start(&flow->rx_hrtimer,
+				      ns_to_ktime(flow->rx_pace_timeout),
+				      HRTIMER_MODE_REL_PINNED);
+		} else if (flow->irq_disabled) {
 			flow->irq_disabled = false;
-			if (unlikely(flow->rx_pace_timeout)) {
-				hrtimer_start(&flow->rx_hrtimer,
-					      ns_to_ktime(flow->rx_pace_timeout),
-					      HRTIMER_MODE_REL_PINNED);
-			} else {
-				enable_irq(flow->irq);
-			}
+			enable_irq(flow->irq);
 		}
 	}
 
