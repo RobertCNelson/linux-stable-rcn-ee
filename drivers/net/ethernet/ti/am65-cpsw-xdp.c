@@ -109,8 +109,10 @@ int am65_cpsw_xsk_wakeup(struct net_device *ndev, u32 qid, u32 flags)
 	struct am65_cpsw_common *common = am65_ndev_to_common(ndev);
 	struct am65_cpsw_port *port = am65_ndev_to_port(ndev);
 	struct am65_cpsw_rx_flow *rx_flow;
+	struct am65_cpsw_tx_chn *tx_ch;
 
 	rx_flow = &common->rx_chns.flows[qid];
+	tx_ch = &common->tx_chns[qid];
 
 	if (!netif_running(ndev) || !netif_carrier_ok(ndev))
 		return -ENETDOWN;
@@ -121,8 +123,15 @@ int am65_cpsw_xsk_wakeup(struct net_device *ndev, u32 qid, u32 flags)
 	if (qid >= common->rx_ch_num_flows || qid >= common->tx_ch_num)
 		return -EINVAL;
 
-	if (!rx_flow->xsk_pool)
+	if (!rx_flow->xsk_pool && !tx_ch->xsk_pool)
 		return -EINVAL;
+
+	if (flags & XDP_WAKEUP_TX) {
+		if (!napi_if_scheduled_mark_missed(&tx_ch->napi_tx)) {
+			if (likely(napi_schedule_prep(&tx_ch->napi_tx)))
+				__napi_schedule(&tx_ch->napi_tx);
+		}
+	}
 
 	if (flags & XDP_WAKEUP_RX) {
 		if (!napi_if_scheduled_mark_missed(&rx_flow->napi_rx)) {

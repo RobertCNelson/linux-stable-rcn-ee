@@ -76,6 +76,7 @@ enum am65_cpsw_tx_buf_type {
 	AM65_CPSW_TX_BUF_TYPE_SKB,
 	AM65_CPSW_TX_BUF_TYPE_XDP_TX,
 	AM65_CPSW_TX_BUF_TYPE_XDP_NDO,
+	AM65_CPSW_TX_BUF_TYPE_XSK_TX,
 };
 
 struct am65_cpsw_host {
@@ -101,6 +102,9 @@ struct am65_cpsw_tx_chn {
 	unsigned char dsize_log2;
 	char tx_chn_name[128];
 	u32 rate_mbps;
+	struct xsk_buff_pool *xsk_pool;
+	int xsk_port_id;
+	bool irq_disabled;
 };
 
 struct am65_cpsw_rx_flow {
@@ -122,6 +126,7 @@ struct am65_cpsw_tx_swdata {
 	union {
 		struct sk_buff *skb;
 		struct xdp_frame *xdpf;
+		struct xsk_buff_pool *xsk_pool;
 	};
 };
 
