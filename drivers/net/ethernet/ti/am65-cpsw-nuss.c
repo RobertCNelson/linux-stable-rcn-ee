@@ -1145,9 +1145,7 @@ static int am65_cpsw_run_xdp(struct am65_cpsw_rx_flow *flow,
 			     int cpu, int *len)
 {
 	struct am65_cpsw_common *common = flow->common;
-	struct am65_cpsw_ndev_priv *ndev_priv;
 	struct net_device *ndev = port->ndev;
-	struct am65_cpsw_ndev_stats *stats;
 	int ret = AM65_CPSW_XDP_CONSUMED;
 	struct am65_cpsw_tx_chn *tx_chn;
 	struct netdev_queue *netif_txq;
@@ -1164,9 +1162,6 @@ static int am65_cpsw_run_xdp(struct am65_cpsw_rx_flow *flow,
 	act = bpf_prog_run_xdp(prog, xdp);
 	/* XDP prog might have changed packet data and boundaries */
 	*len = xdp->data_end - xdp->data;
-
-	ndev_priv = netdev_priv(ndev);
-	stats = this_cpu_ptr(ndev_priv->stats);
 
 	switch (act) {
 	case XDP_PASS:
@@ -1187,20 +1182,14 @@ static int am65_cpsw_run_xdp(struct am65_cpsw_rx_flow *flow,
 		if (err)
 			goto drop;
 
-		u64_stats_update_begin(&stats->syncp);
-		stats->rx_bytes += *len;
-		stats->rx_packets++;
-		u64_stats_update_end(&stats->syncp);
+		dev_sw_netstats_tx_add(ndev, 1, *len);
 		ret = AM65_CPSW_XDP_CONSUMED;
 		goto out;
 	case XDP_REDIRECT:
 		if (unlikely(xdp_do_redirect(ndev, xdp, prog)))
 			goto drop;
 
-		u64_stats_update_begin(&stats->syncp);
-		stats->rx_bytes += *len;
-		stats->rx_packets++;
-		u64_stats_update_end(&stats->syncp);
+		dev_sw_netstats_rx_add(ndev, *len);
 		ret = AM65_CPSW_XDP_REDIRECT;
 		goto out;
 	default:
@@ -1261,7 +1250,6 @@ static int am65_cpsw_nuss_rx_packets(struct am65_cpsw_rx_flow *flow,
 	u32 buf_dma_len, pkt_len, port_id = 0, csum_info;
 	struct am65_cpsw_common *common = flow->common;
 	struct am65_cpsw_ndev_priv *ndev_priv;
-	struct am65_cpsw_ndev_stats *stats;
 	struct cppi5_host_desc_t *desc_rx;
 	struct device *dev = common->dev;
 	struct am65_cpsw_swdata *swdata;
@@ -1343,12 +1331,7 @@ static int am65_cpsw_nuss_rx_packets(struct am65_cpsw_rx_flow *flow,
 	am65_cpsw_nuss_rx_csum(skb, csum_info);
 	napi_gro_receive(&flow->napi_rx, skb);
 
-	stats = this_cpu_ptr(ndev_priv->stats);
-
-	u64_stats_update_begin(&stats->syncp);
-	stats->rx_packets++;
-	stats->rx_bytes += pkt_len;
-	u64_stats_update_end(&stats->syncp);
+	dev_sw_netstats_rx_add(ndev, pkt_len);
 
 allocate:
 	new_page = page_pool_dev_alloc_pages(flow->page_pool);
@@ -1429,10 +1412,7 @@ static struct sk_buff *
 am65_cpsw_nuss_tx_compl_packet_skb(struct am65_cpsw_tx_chn *tx_chn,
 				   dma_addr_t desc_dma)
 {
-	struct am65_cpsw_ndev_priv *ndev_priv;
-	struct am65_cpsw_ndev_stats *stats;
 	struct cppi5_host_desc_t *desc_tx;
-	struct net_device *ndev;
 	struct sk_buff *skb;
 	void **swdata;
 
@@ -1442,16 +1422,9 @@ am65_cpsw_nuss_tx_compl_packet_skb(struct am65_cpsw_tx_chn *tx_chn,
 	skb = *(swdata);
 	am65_cpsw_nuss_xmit_free(tx_chn, desc_tx);
 
-	ndev = skb->dev;
-
 	am65_cpts_tx_timestamp(tx_chn->common->cpts, skb);
 
-	ndev_priv = netdev_priv(ndev);
-	stats = this_cpu_ptr(ndev_priv->stats);
-	u64_stats_update_begin(&stats->syncp);
-	stats->tx_packets++;
-	stats->tx_bytes += skb->len;
-	u64_stats_update_end(&stats->syncp);
+	dev_sw_netstats_tx_add(skb->dev, 1, skb->len);
 
 	return skb;
 }
@@ -1462,8 +1435,6 @@ am65_cpsw_nuss_tx_compl_packet_xdp(struct am65_cpsw_common *common,
 				   dma_addr_t desc_dma,
 				   struct net_device **ndev)
 {
-	struct am65_cpsw_ndev_priv *ndev_priv;
-	struct am65_cpsw_ndev_stats *stats;
 	struct cppi5_host_desc_t *desc_tx;
 	struct am65_cpsw_port *port;
 	struct xdp_frame *xdpf;
@@ -1477,14 +1448,7 @@ am65_cpsw_nuss_tx_compl_packet_xdp(struct am65_cpsw_common *common,
 	am65_cpsw_nuss_xmit_free(tx_chn, desc_tx);
 
 	port = am65_common_get_port(common, port_id);
-	*ndev = port->ndev;
-
-	ndev_priv = netdev_priv(*ndev);
-	stats = this_cpu_ptr(ndev_priv->stats);
-	u64_stats_update_begin(&stats->syncp);
-	stats->tx_packets++;
-	stats->tx_bytes += xdpf->len;
-	u64_stats_update_end(&stats->syncp);
+	dev_sw_netstats_tx_add(port->ndev, 1, xdpf->len);
 
 	return xdpf;
 }
@@ -2010,31 +1974,7 @@ static int am65_cpsw_nuss_ndo_slave_ioctl(struct net_device *ndev,
 static void am65_cpsw_nuss_ndo_get_stats(struct net_device *dev,
 					 struct rtnl_link_stats64 *stats)
 {
-	struct am65_cpsw_ndev_priv *ndev_priv = netdev_priv(dev);
-	unsigned int start;
-	int cpu;
-
-	for_each_possible_cpu(cpu) {
-		struct am65_cpsw_ndev_stats *cpu_stats;
-		u64 rx_packets;
-		u64 rx_bytes;
-		u64 tx_packets;
-		u64 tx_bytes;
-
-		cpu_stats = per_cpu_ptr(ndev_priv->stats, cpu);
-		do {
-			start = u64_stats_fetch_begin(&cpu_stats->syncp);
-			rx_packets = cpu_stats->rx_packets;
-			rx_bytes   = cpu_stats->rx_bytes;
-			tx_packets = cpu_stats->tx_packets;
-			tx_bytes   = cpu_stats->tx_bytes;
-		} while (u64_stats_fetch_retry(&cpu_stats->syncp, start));
-
-		stats->rx_packets += rx_packets;
-		stats->rx_bytes   += rx_bytes;
-		stats->tx_packets += tx_packets;
-		stats->tx_bytes   += tx_bytes;
-	}
+	dev_fetch_sw_netstats(stats, dev->tstats);
 
 	stats->rx_errors	= dev->stats.rx_errors;
 	stats->rx_dropped	= dev->stats.rx_dropped;
@@ -2855,13 +2795,6 @@ of_node_put:
 	return ret;
 }
 
-static void am65_cpsw_pcpu_stats_free(void *data)
-{
-	struct am65_cpsw_ndev_stats __percpu *stats = data;
-
-	free_percpu(stats);
-}
-
 static void am65_cpsw_nuss_phylink_cleanup(struct am65_cpsw_common *common)
 {
 	struct am65_cpsw_port *port;
@@ -2892,7 +2825,6 @@ am65_cpsw_nuss_init_port_ndev(struct am65_cpsw_common *common, u32 port_idx)
 	struct device *dev = common->dev;
 	struct am65_cpsw_port *port;
 	struct phylink *phylink;
-	int ret;
 
 	port = &common->ports[port_idx];
 
@@ -2985,21 +2917,13 @@ am65_cpsw_nuss_init_port_ndev(struct am65_cpsw_common *common, u32 port_idx)
 	if (common->pdata.quirks & AM65_CPSW_QUIRK_I2027_NO_TX_CSUM)
 		port->ndev->features &= ~NETIF_F_HW_CSUM;
 
-	ndev_priv->stats = netdev_alloc_pcpu_stats(struct am65_cpsw_ndev_stats);
-	if (!ndev_priv->stats)
-		return -ENOMEM;
-
-	ret = devm_add_action_or_reset(dev, am65_cpsw_pcpu_stats_free,
-				       ndev_priv->stats);
-	if (ret)
-		dev_err(dev, "failed to add percpu stat free action %d\n", ret);
-
+	port->ndev->pcpu_stat_type = NETDEV_PCPU_STAT_TSTATS;
 	port->xdp_prog = NULL;
 
 	if (!common->dma_ndev)
 		common->dma_ndev = port->ndev;
 
-	return ret;
+	return 0;
 }
 
 static int am65_cpsw_nuss_init_ndevs(struct am65_cpsw_common *common)
