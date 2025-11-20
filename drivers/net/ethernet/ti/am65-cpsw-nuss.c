@@ -1927,18 +1927,33 @@ static int am65_cpsw_xdp_prog_setup(struct net_device *ndev,
 				    struct bpf_prog *prog)
 {
 	struct am65_cpsw_port *port = am65_ndev_to_port(ndev);
-	bool running = netif_running(ndev);
+	struct am65_cpsw_common *common = port->common;
+	bool running = !!port->common->usage_count;
 	struct bpf_prog *old_prog;
+	int ret;
 
-	if (running)
-		am65_cpsw_nuss_ndo_slave_stop(ndev);
+	if (running) {
+		/* stop all queues */
+		am65_cpsw_destroy_txqs(common);
+		am65_cpsw_destroy_rxqs(common);
+	}
 
 	old_prog = xchg(&port->xdp_prog, prog);
 	if (old_prog)
 		bpf_prog_put(old_prog);
 
-	if (running)
-		return am65_cpsw_nuss_ndo_slave_open(ndev);
+	if (running) {
+		/* start all queues */
+		ret = am65_cpsw_create_rxqs(common);
+		if (ret)
+			return ret;
+
+		ret = am65_cpsw_create_txqs(common);
+		if (ret) {
+			am65_cpsw_destroy_rxqs(common);
+			return ret;
+		}
+	}
 
 	return 0;
 }
