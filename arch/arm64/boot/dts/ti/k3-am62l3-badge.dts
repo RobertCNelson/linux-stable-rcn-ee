@@ -367,8 +367,9 @@
 	};
 
 	/* Fuel Gauge */
+	/* Todo: Add BQ27220 support */
 	fuel-gauge@55 {
-		compatible = "ti,bq27200";
+		compatible = "ti,bq27541";
 		reg = <0x55>;
 	};
 
