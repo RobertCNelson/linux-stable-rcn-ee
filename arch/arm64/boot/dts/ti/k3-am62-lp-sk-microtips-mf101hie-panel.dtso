@@ -59,6 +59,7 @@
 &oldi1 {
 	status = "okay";
 	ti,secondary-oldi;
+	ti,companion-oldi = <&oldi0>;
 };
 
 &oldi0_ports {
