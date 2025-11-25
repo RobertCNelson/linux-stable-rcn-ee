@@ -91,20 +91,24 @@ struct davinci_mcasp {
 	int	tdm_slots_tx;
 	int	tdm_slots_rx;
 	u32	tdm_mask[2];
-	int	slot_width;
+	int	slot_width_tx;
+	int	slot_width_rx;
 	u8	op_mode;
 	u8	dismod;
 	u8	num_serializer;
 	u8	*serial_dir;
 	u8	version;
-	u8	bclk_div;
+	u8	bclk_div_tx;
+	u8	bclk_div_rx;
 	int	streams;
 	u32	irq_request[2];
 
-	int	sysclk_freq;
+	unsigned int	sysclk_freq_tx;
+	unsigned int	sysclk_freq_rx;
 	bool	bclk_master;
 	bool	async_mode;
-	u32	auxclk_fs_ratio;
+	u32	auxclk_fs_ratio_tx;
+	u32	auxclk_fs_ratio_rx;
 
 	unsigned long pdir; /* Pin direction bitfield */
 
@@ -216,6 +220,30 @@ static inline int mcasp_get_tdm_slots(struct davinci_mcasp *mcasp, int stream)
 {
 	return (stream == SNDRV_PCM_STREAM_PLAYBACK) ?
 	       mcasp->tdm_slots_tx : mcasp->tdm_slots_rx;
+}
+
+static inline int mcasp_get_slot_width(struct davinci_mcasp *mcasp, int stream)
+{
+	return (stream == SNDRV_PCM_STREAM_PLAYBACK) ?
+	       mcasp->slot_width_tx : mcasp->slot_width_rx;
+}
+
+static inline unsigned int mcasp_get_sysclk_freq(struct davinci_mcasp *mcasp, int stream)
+{
+	return (stream == SNDRV_PCM_STREAM_PLAYBACK) ?
+	       mcasp->sysclk_freq_tx : mcasp->sysclk_freq_rx;
+}
+
+static inline unsigned int mcasp_get_bclk_div(struct davinci_mcasp *mcasp, int stream)
+{
+	return (stream == SNDRV_PCM_STREAM_PLAYBACK) ?
+	       mcasp->bclk_div_tx : mcasp->bclk_div_rx;
+}
+
+static inline unsigned int mcasp_get_auxclk_fs_ratio(struct davinci_mcasp *mcasp, int stream)
+{
+	return (stream == SNDRV_PCM_STREAM_PLAYBACK) ?
+	       mcasp->auxclk_fs_ratio_tx : mcasp->auxclk_fs_ratio_rx;
 }
 
 static void mcasp_start_rx(struct davinci_mcasp *mcasp)
@@ -633,13 +661,39 @@ static int __davinci_mcasp_set_clkdiv(struct davinci_mcasp *mcasp, int div_id,
 			       AHCLKRDIV(div - 1), AHCLKRDIV_MASK);
 		break;
 
+	case MCASP_CLKDIV_AUXCLK_TXONLY:		/* MCLK divider for TX only */
+		mcasp_mod_bits(mcasp, DAVINCI_MCASP_AHCLKXCTL_REG,
+			       AHCLKXDIV(div - 1), AHCLKXDIV_MASK);
+		break;
+
+	case MCASP_CLKDIV_AUXCLK_RXONLY:		/* MCLK divider for RX only */
+		mcasp_mod_bits(mcasp, DAVINCI_MCASP_AHCLKRCTL_REG,
+			       AHCLKRDIV(div - 1), AHCLKRDIV_MASK);
+		break;
+
 	case MCASP_CLKDIV_BCLK:			/* BCLK divider */
 		mcasp_mod_bits(mcasp, DAVINCI_MCASP_ACLKXCTL_REG,
 			       ACLKXDIV(div - 1), ACLKXDIV_MASK);
 		mcasp_mod_bits(mcasp, DAVINCI_MCASP_ACLKRCTL_REG,
 			       ACLKRDIV(div - 1), ACLKRDIV_MASK);
+		if (explicit) {
+			mcasp->bclk_div_tx = div;
+			mcasp->bclk_div_rx = div;
+		}
+		break;
+
+	case MCASP_CLKDIV_BCLK_TXONLY:		/* BCLK divider for TX only */
+		mcasp_mod_bits(mcasp, DAVINCI_MCASP_ACLKXCTL_REG,
+			       ACLKXDIV(div - 1), ACLKXDIV_MASK);
 		if (explicit)
-			mcasp->bclk_div = div;
+			mcasp->bclk_div_tx = div;
+		break;
+
+	case MCASP_CLKDIV_BCLK_RXONLY:		/* BCLK divider for RX only */
+		mcasp_mod_bits(mcasp, DAVINCI_MCASP_ACLKRCTL_REG,
+			       ACLKRDIV(div - 1), ACLKRDIV_MASK);
+		if (explicit)
+			mcasp->bclk_div_rx = div;
 		break;
 
 	case MCASP_CLKDIV_BCLK_FS_RATIO:
@@ -653,11 +707,33 @@ static int __davinci_mcasp_set_clkdiv(struct davinci_mcasp *mcasp, int div_id,
 		 * tdm_slot width by dividing the ratio by the
 		 * number of configured tdm slots.
 		 */
-		mcasp->slot_width = div / mcasp->tdm_slots_tx;
+		mcasp->slot_width_tx = div / mcasp->tdm_slots_tx;
 		if (div % mcasp->tdm_slots_tx)
 			dev_warn(mcasp->dev,
-				 "%s(): BCLK/LRCLK %d is not divisible by %d tdm slots",
+				 "%s(): BCLK/LRCLK %d is not divisible by %d TX tdm slots",
 				 __func__, div, mcasp->tdm_slots_tx);
+
+		mcasp->slot_width_rx = div / mcasp->tdm_slots_rx;
+		if (div % mcasp->tdm_slots_rx)
+			dev_warn(mcasp->dev,
+				 "%s(): BCLK/LRCLK %d is not divisible by %d RX tdm slots",
+				 __func__, div, mcasp->tdm_slots_rx);
+		break;
+
+	case MCASP_CLKDIV_BCLK_FS_RATIO_TXONLY:
+		mcasp->slot_width_tx = div / mcasp->tdm_slots_tx;
+		if (div % mcasp->tdm_slots_tx)
+			dev_warn(mcasp->dev,
+				 "%s(): BCLK/LRCLK %d is not divisible by %d TX tdm slots",
+				 __func__, div, mcasp->tdm_slots_tx);
+		break;
+
+	case MCASP_CLKDIV_BCLK_FS_RATIO_RXONLY:
+		mcasp->slot_width_rx = div / mcasp->tdm_slots_rx;
+		if (div % mcasp->tdm_slots_rx)
+			dev_warn(mcasp->dev,
+				 "%s(): BCLK/LRCLK %d is not divisible by %d RX tdm slots",
+				 __func__, div, mcasp->tdm_slots_rx);
 		break;
 
 	default:
@@ -691,6 +767,20 @@ static int davinci_mcasp_set_sysclk(struct snd_soc_dai *dai, int clk_id,
 			mcasp_clr_bits(mcasp, DAVINCI_MCASP_AHCLKRCTL_REG,
 				       AHCLKRE);
 			clear_bit(PIN_BIT_AHCLKX, &mcasp->pdir);
+			mcasp->sysclk_freq_tx = freq;
+			mcasp->sysclk_freq_rx = freq;
+			break;
+		case MCASP_CLK_HCLK_AHCLK_TXONLY:
+			mcasp_clr_bits(mcasp, DAVINCI_MCASP_AHCLKXCTL_REG,
+				       AHCLKXE);
+			clear_bit(PIN_BIT_AHCLKX, &mcasp->pdir);
+			mcasp->sysclk_freq_tx = freq;
+			break;
+		case MCASP_CLK_HCLK_AHCLK_RXONLY:
+			mcasp_clr_bits(mcasp, DAVINCI_MCASP_AHCLKRCTL_REG,
+				       AHCLKRE);
+			clear_bit(PIN_BIT_AHCLKR, &mcasp->pdir);
+			mcasp->sysclk_freq_rx = freq;
 			break;
 		case MCASP_CLK_HCLK_AUXCLK:
 			mcasp_set_bits(mcasp, DAVINCI_MCASP_AHCLKXCTL_REG,
@@ -698,22 +788,55 @@ static int davinci_mcasp_set_sysclk(struct snd_soc_dai *dai, int clk_id,
 			mcasp_set_bits(mcasp, DAVINCI_MCASP_AHCLKRCTL_REG,
 				       AHCLKRE);
 			set_bit(PIN_BIT_AHCLKX, &mcasp->pdir);
+			mcasp->sysclk_freq_tx = freq;
+			mcasp->sysclk_freq_rx = freq;
+			break;
+		case MCASP_CLK_HCLK_AUXCLK_TXONLY:
+			mcasp_set_bits(mcasp, DAVINCI_MCASP_AHCLKXCTL_REG,
+				       AHCLKXE);
+			set_bit(PIN_BIT_AHCLKX, &mcasp->pdir);
+			mcasp->sysclk_freq_tx = freq;
+			break;
+		case MCASP_CLK_HCLK_AUXCLK_RXONLY:
+			mcasp_set_bits(mcasp, DAVINCI_MCASP_AHCLKRCTL_REG,
+				       AHCLKRE);
+			set_bit(PIN_BIT_AHCLKR, &mcasp->pdir);
+			mcasp->sysclk_freq_rx = freq;
 			break;
 		default:
 			dev_err(mcasp->dev, "Invalid clk id: %d\n", clk_id);
 			goto out;
 		}
 	} else {
-		/* Select AUXCLK as HCLK */
-		mcasp_set_bits(mcasp, DAVINCI_MCASP_AHCLKXCTL_REG, AHCLKXE);
-		mcasp_set_bits(mcasp, DAVINCI_MCASP_AHCLKRCTL_REG, AHCLKRE);
-		set_bit(PIN_BIT_AHCLKX, &mcasp->pdir);
+		/* McASP is clock master, select AUXCLK as HCLK */
+		switch (clk_id) {
+		case MCASP_CLK_HCLK_AUXCLK_TXONLY:
+			mcasp_set_bits(mcasp, DAVINCI_MCASP_AHCLKXCTL_REG,
+				       AHCLKXE);
+			set_bit(PIN_BIT_AHCLKX, &mcasp->pdir);
+			mcasp->sysclk_freq_tx = freq;
+			break;
+		case MCASP_CLK_HCLK_AUXCLK_RXONLY:
+			mcasp_set_bits(mcasp, DAVINCI_MCASP_AHCLKRCTL_REG,
+				       AHCLKRE);
+			set_bit(PIN_BIT_AHCLKR, &mcasp->pdir);
+			mcasp->sysclk_freq_rx = freq;
+			break;
+		default:
+			mcasp_set_bits(mcasp, DAVINCI_MCASP_AHCLKXCTL_REG,
+				       AHCLKXE);
+			mcasp_set_bits(mcasp, DAVINCI_MCASP_AHCLKRCTL_REG,
+				       AHCLKRE);
+			set_bit(PIN_BIT_AHCLKX, &mcasp->pdir);
+			mcasp->sysclk_freq_tx = freq;
+			mcasp->sysclk_freq_rx = freq;
+			break;
+		}
 	}
 	/*
 	 * When AHCLK X/R is selected to be output it means that the HCLK is
 	 * the same clock - coming via AUXCLK.
 	 */
-	mcasp->sysclk_freq = freq;
 out:
 	pm_runtime_put(mcasp->dev);
 	return 0;
@@ -795,35 +918,41 @@ static int davinci_mcasp_set_tdm_slot(struct snd_soc_dai *dai,
 	}
 
 	if (mcasp->async_mode) {
-		if (tx_mask)
+		if (tx_mask) {
 			mcasp->tdm_slots_tx = slots;
-		if (rx_mask)
+			mcasp->slot_width_tx = slot_width;
+		}
+		if (rx_mask) {
 			mcasp->tdm_slots_rx = slots;
+			mcasp->slot_width_rx = slot_width;
+		}
 	} else {
 		mcasp->tdm_slots_tx = slots;
 		mcasp->tdm_slots_rx = slots;
+		mcasp->slot_width_tx = slot_width;
+		mcasp->slot_width_rx = slot_width;
 	}
 
 	mcasp->tdm_mask[SNDRV_PCM_STREAM_PLAYBACK] = tx_mask;
 	mcasp->tdm_mask[SNDRV_PCM_STREAM_CAPTURE] = rx_mask;
-	mcasp->slot_width = slot_width;
 
 	return davinci_mcasp_set_ch_constraints(mcasp);
 }
 
 static int davinci_config_channel_size(struct davinci_mcasp *mcasp,
-				       int sample_width)
+				       int sample_width, int stream)
 {
 	u32 fmt;
 	u32 tx_rotate, rx_rotate, slot_width;
 	u32 mask = (1ULL << sample_width) - 1;
 
-	if (mcasp->slot_width)
-		slot_width = mcasp->slot_width;
-	else if (mcasp->max_format_width)
-		slot_width = mcasp->max_format_width;
-	else
-		slot_width = sample_width;
+	slot_width = mcasp_get_slot_width(mcasp, stream);
+	if (!slot_width) {
+		if (mcasp->max_format_width)
+			slot_width = mcasp->max_format_width;
+		else
+			slot_width = sample_width;
+	}
 	/*
 	 * TX rotation:
 	 * right aligned formats: rotate w/ slot_width
@@ -846,17 +975,23 @@ static int davinci_config_channel_size(struct davinci_mcasp *mcasp,
 	fmt = (slot_width >> 1) - 1;
 
 	if (mcasp->op_mode != DAVINCI_MCASP_DIT_MODE) {
-		mcasp_mod_bits(mcasp, DAVINCI_MCASP_RXFMT_REG, RXSSZ(fmt),
-			       RXSSZ(0x0F));
-		mcasp_mod_bits(mcasp, DAVINCI_MCASP_TXFMT_REG, TXSSZ(fmt),
-			       TXSSZ(0x0F));
-		mcasp_mod_bits(mcasp, DAVINCI_MCASP_TXFMT_REG, TXROT(tx_rotate),
-			       TXROT(7));
-		mcasp_mod_bits(mcasp, DAVINCI_MCASP_RXFMT_REG, RXROT(rx_rotate),
-			       RXROT(7));
-		mcasp_set_reg(mcasp, DAVINCI_MCASP_RXMASK_REG, mask);
+		if (!mcasp->async_mode || stream == SNDRV_PCM_STREAM_PLAYBACK) {
+			mcasp_mod_bits(mcasp, DAVINCI_MCASP_TXFMT_REG, TXSSZ(fmt),
+				       TXSSZ(0x0F));
+			mcasp_mod_bits(mcasp, DAVINCI_MCASP_TXFMT_REG, TXROT(tx_rotate),
+				       TXROT(7));
+			mcasp_set_reg(mcasp, DAVINCI_MCASP_TXMASK_REG, mask);
+		}
+		if (!mcasp->async_mode || stream == SNDRV_PCM_STREAM_CAPTURE) {
+			mcasp_mod_bits(mcasp, DAVINCI_MCASP_RXFMT_REG, RXSSZ(fmt),
+				       RXSSZ(0x0F));
+			mcasp_mod_bits(mcasp, DAVINCI_MCASP_RXFMT_REG, RXROT(rx_rotate),
+				       RXROT(7));
+			mcasp_set_reg(mcasp, DAVINCI_MCASP_RXMASK_REG, mask);
+		}
 	} else {
 		/*
+		 * DIT mode only use TX serializers
 		 * according to the TRM it should be TXROT=0, this one works:
 		 * 16 bit to 23-8 (TXROT=6, rotate 24 bits)
 		 * 24 bit to 23-0 (TXROT=0, rotate 0 bits)
@@ -869,9 +1004,8 @@ static int davinci_config_channel_size(struct davinci_mcasp *mcasp,
 			       TXROT(7));
 		mcasp_mod_bits(mcasp, DAVINCI_MCASP_TXFMT_REG, TXSSZ(15),
 			       TXSSZ(0x0F));
+		mcasp_set_reg(mcasp, DAVINCI_MCASP_TXMASK_REG, mask);
 	}
-
-	mcasp_set_reg(mcasp, DAVINCI_MCASP_TXMASK_REG, mask);
 
 	return 0;
 }
@@ -1149,16 +1283,33 @@ static int mcasp_dit_hw_param(struct davinci_mcasp *mcasp,
 
 static int davinci_mcasp_calc_clk_div(struct davinci_mcasp *mcasp,
 				      unsigned int sysclk_freq,
-				      unsigned int bclk_freq, bool set)
+				      unsigned int bclk_freq,
+				      int stream,
+				      bool set)
 {
-	u32 reg = mcasp_get_reg(mcasp, DAVINCI_MCASP_AHCLKXCTL_REG);
 	int div = sysclk_freq / bclk_freq;
 	int rem = sysclk_freq % bclk_freq;
 	int error_ppm;
 	int aux_div = 1;
+	int bclk_div_id, auxclk_div_id;
+	bool auxclk_enabled;
+
+	if (mcasp->async_mode && stream == SNDRV_PCM_STREAM_CAPTURE) {
+		auxclk_enabled = mcasp_get_reg(mcasp, DAVINCI_MCASP_AHCLKRCTL_REG) & AHCLKRE;
+		bclk_div_id = MCASP_CLKDIV_BCLK_RXONLY;
+		auxclk_div_id = MCASP_CLKDIV_AUXCLK_RXONLY;
+	} else if (mcasp->async_mode && stream == SNDRV_PCM_STREAM_PLAYBACK) {
+		auxclk_enabled = mcasp_get_reg(mcasp, DAVINCI_MCASP_AHCLKXCTL_REG) & AHCLKXE;
+		bclk_div_id = MCASP_CLKDIV_BCLK_TXONLY;
+		auxclk_div_id = MCASP_CLKDIV_AUXCLK_TXONLY;
+	} else {
+		auxclk_enabled = mcasp_get_reg(mcasp, DAVINCI_MCASP_AHCLKXCTL_REG) & AHCLKXE;
+		bclk_div_id = MCASP_CLKDIV_BCLK;
+		auxclk_div_id = MCASP_CLKDIV_AUXCLK;
+	}
 
 	if (div > (ACLKXDIV_MASK + 1)) {
-		if (reg & AHCLKXE) {
+		if (auxclk_enabled) {
 			aux_div = div / (ACLKXDIV_MASK + 1);
 			if (div % (ACLKXDIV_MASK + 1))
 				aux_div++;
@@ -1188,10 +1339,10 @@ static int davinci_mcasp_calc_clk_div(struct davinci_mcasp *mcasp,
 			dev_info(mcasp->dev, "Sample-rate is off by %d PPM\n",
 				 error_ppm);
 
-		__davinci_mcasp_set_clkdiv(mcasp, MCASP_CLKDIV_BCLK, div, 0);
-		if (reg & AHCLKXE)
-			__davinci_mcasp_set_clkdiv(mcasp, MCASP_CLKDIV_AUXCLK,
-						   aux_div, 0);
+		__davinci_mcasp_set_clkdiv(mcasp, bclk_div_id, div, false);
+		if (auxclk_enabled)
+			__davinci_mcasp_set_clkdiv(mcasp, auxclk_div_id,
+						   aux_div, false);
 	}
 
 	return error_ppm;
@@ -1242,6 +1393,7 @@ static int davinci_mcasp_hw_params(struct snd_pcm_substream *substream,
 	int channels = params_channels(params);
 	int period_size = params_period_size(params);
 	int ret;
+	unsigned int sysclk_freq = mcasp_get_sysclk_freq(mcasp, substream->stream);
 
 	switch (params_format(params)) {
 	case SNDRV_PCM_FORMAT_U8:
@@ -1282,24 +1434,26 @@ static int davinci_mcasp_hw_params(struct snd_pcm_substream *substream,
 	 * If mcasp is BCLK master, and a BCLK divider was not provided by
 	 * the machine driver, we need to calculate the ratio.
 	 */
-	if (mcasp->bclk_master && mcasp->bclk_div == 0 && mcasp->sysclk_freq) {
-		int slots;
+	if (mcasp->bclk_master && mcasp_get_bclk_div(mcasp, substream->stream) == 0 &&
+	    sysclk_freq) {
+		int slots, slot_width;
 		int rate = params_rate(params);
 		int sbits = params_width(params);
 		unsigned int bclk_target;
 
 		slots = mcasp_get_tdm_slots(mcasp, substream->stream);
 
-		if (mcasp->slot_width)
-			sbits = mcasp->slot_width;
+		slot_width = mcasp_get_slot_width(mcasp, substream->stream);
+		if (slot_width)
+			sbits = slot_width;
 
 		if (mcasp->op_mode == DAVINCI_MCASP_IIS_MODE)
 			bclk_target = rate * sbits * slots;
 		else
 			bclk_target = rate * 128;
 
-		davinci_mcasp_calc_clk_div(mcasp, mcasp->sysclk_freq,
-					   bclk_target, true);
+		davinci_mcasp_calc_clk_div(mcasp, sysclk_freq,
+					   bclk_target, substream->stream, true);
 	}
 
 	ret = mcasp_common_hw_param(mcasp, substream->stream,
@@ -1316,7 +1470,7 @@ static int davinci_mcasp_hw_params(struct snd_pcm_substream *substream,
 	if (ret)
 		return ret;
 
-	davinci_config_channel_size(mcasp, word_length);
+	davinci_config_channel_size(mcasp, word_length, substream->stream);
 
 	/* Channel constraints are disabled for async mode */
 	if (mcasp->op_mode == DAVINCI_MCASP_IIS_MODE && !mcasp->async_mode) {
@@ -1363,7 +1517,7 @@ static int davinci_mcasp_hw_rule_slot_width(struct snd_pcm_hw_params *params,
 	snd_pcm_format_t i;
 
 	snd_mask_none(&nfmt);
-	slot_width = rd->mcasp->slot_width;
+	slot_width = mcasp_get_slot_width(rd->mcasp, rd->stream);
 
 	pcm_for_each_format(i) {
 		if (snd_mask_test_format(fmt, i)) {
@@ -1413,14 +1567,15 @@ static int davinci_mcasp_hw_rule_rate(struct snd_pcm_hw_params *params,
 	struct snd_interval *ri =
 		hw_param_interval(params, SNDRV_PCM_HW_PARAM_RATE);
 	int sbits = params_width(params);
-	int slots;
+	int slots, slot_width;
 	struct snd_interval range;
 	int i;
 
 	slots = mcasp_get_tdm_slots(rd->mcasp, rd->stream);
 
-	if (rd->mcasp->slot_width)
-		sbits = rd->mcasp->slot_width;
+	slot_width = mcasp_get_slot_width(rd->mcasp, rd->stream);
+	if (slot_width)
+		sbits = slot_width;
 
 	snd_interval_any(&range);
 	range.empty = 1;
@@ -1430,16 +1585,17 @@ static int davinci_mcasp_hw_rule_rate(struct snd_pcm_hw_params *params,
 			uint bclk_freq = sbits * slots *
 					 davinci_mcasp_dai_rates[i];
 			unsigned int sysclk_freq;
+			unsigned int ratio;
 			int ppm;
 
-			if (rd->mcasp->auxclk_fs_ratio)
-				sysclk_freq =  davinci_mcasp_dai_rates[i] *
-					       rd->mcasp->auxclk_fs_ratio;
+			ratio = mcasp_get_auxclk_fs_ratio(rd->mcasp, rd->stream);
+			if (ratio)
+				sysclk_freq = davinci_mcasp_dai_rates[i] * ratio;
 			else
-				sysclk_freq = rd->mcasp->sysclk_freq;
+				sysclk_freq = mcasp_get_sysclk_freq(rd->mcasp, rd->stream);
 
 			ppm = davinci_mcasp_calc_clk_div(rd->mcasp, sysclk_freq,
-							 bclk_freq, false);
+							 bclk_freq, rd->stream, false);
 			if (abs(ppm) < DAVINCI_MAX_RATE_ERROR_PPM) {
 				if (range.empty) {
 					range.min = davinci_mcasp_dai_rates[i];
@@ -1477,20 +1633,22 @@ static int davinci_mcasp_hw_rule_format(struct snd_pcm_hw_params *params,
 		if (snd_mask_test_format(fmt, i)) {
 			uint sbits = snd_pcm_format_width(i);
 			unsigned int sysclk_freq;
-			int ppm;
+			unsigned int ratio;
+			int ppm, slot_width;
 
-			if (rd->mcasp->auxclk_fs_ratio)
-				sysclk_freq =  rate *
-					       rd->mcasp->auxclk_fs_ratio;
+			ratio = mcasp_get_auxclk_fs_ratio(rd->mcasp, rd->stream);
+			if (ratio)
+				sysclk_freq = rate * ratio;
 			else
-				sysclk_freq = rd->mcasp->sysclk_freq;
+				sysclk_freq = mcasp_get_sysclk_freq(rd->mcasp, rd->stream);
 
-			if (rd->mcasp->slot_width)
-				sbits = rd->mcasp->slot_width;
+			slot_width = mcasp_get_slot_width(rd->mcasp, rd->stream);
+			if (slot_width)
+				sbits = slot_width;
 
 			ppm = davinci_mcasp_calc_clk_div(rd->mcasp, sysclk_freq,
 							 sbits * slots * rate,
-							 false);
+							 rd->stream, false);
 			if (abs(ppm) < DAVINCI_MAX_RATE_ERROR_PPM) {
 				snd_mask_set_format(&nfmt, i);
 				count++;
@@ -1602,8 +1760,7 @@ static int davinci_mcasp_startup(struct snd_pcm_substream *substream,
 					  SNDRV_PCM_HW_PARAM_FORMAT, -1);
 		if (ret)
 			return ret;
-	}
-	else if (mcasp->slot_width) {
+	} else if (mcasp_get_slot_width(mcasp, substream->stream)) {
 		/* Only allow formats require <= slot_width bits on the bus */
 		ret = snd_pcm_hw_rule_add(substream->runtime, 0,
 					  SNDRV_PCM_HW_PARAM_FORMAT,
@@ -1618,7 +1775,8 @@ static int davinci_mcasp_startup(struct snd_pcm_substream *substream,
 	 * If we rely on implicit BCLK divider setting we should
 	 * set constraints based on what we can provide.
 	 */
-	if (mcasp->bclk_master && mcasp->bclk_div == 0 && mcasp->sysclk_freq) {
+	if (mcasp->bclk_master && mcasp_get_bclk_div(mcasp, substream->stream) == 0 &&
+	    mcasp_get_sysclk_freq(mcasp, substream->stream)) {
 		ret = snd_pcm_hw_rule_add(substream->runtime, 0,
 					  SNDRV_PCM_HW_PARAM_RATE,
 					  davinci_mcasp_hw_rule_rate,
@@ -2008,8 +2166,13 @@ static int davinci_mcasp_get_config(struct davinci_mcasp *mcasp,
 	if (of_property_read_u32(np, "rx-num-evt", &val) == 0)
 		pdata->rxnumevt = val;
 
-	if (of_property_read_u32(np, "auxclk-fs-ratio", &val) == 0)
-		mcasp->auxclk_fs_ratio = val;
+	if (of_property_read_u32(np, "auxclk-fs-ratio", &val) == 0) {
+		mcasp->auxclk_fs_ratio_tx = val;
+		mcasp->auxclk_fs_ratio_rx = val;
+	}
+
+	if (of_property_read_u32(np, "auxclk-fs-ratio-rx", &val) == 0)
+		mcasp->auxclk_fs_ratio_rx = val;
 
 	if (of_property_read_u32(np, "dismod", &val) == 0) {
 		if (val == 0 || val == 2 || val == 3) {
@@ -2067,11 +2230,21 @@ out:
 	}
 
 	/* Different TX/RX slot counts require async mode */
-	if (pdata->op_mode == DAVINCI_MCASP_IIS_MODE &&
+	if (pdata->op_mode != DAVINCI_MCASP_DIT_MODE &&
 	    mcasp->tdm_slots_tx != mcasp->tdm_slots_rx && !mcasp->async_mode) {
 		dev_err(&pdev->dev,
 			"Different TX (%d) and RX (%d) TDM slots require ti,async-mode\n",
 			mcasp->tdm_slots_tx, mcasp->tdm_slots_rx);
+		return -EINVAL;
+	}
+
+	/* Different TX/RX auxclk-fs-ratio require async mode */
+	if (pdata->op_mode != DAVINCI_MCASP_DIT_MODE &&
+	    mcasp->auxclk_fs_ratio_tx && mcasp->auxclk_fs_ratio_rx &&
+	    mcasp->auxclk_fs_ratio_tx != mcasp->auxclk_fs_ratio_rx && !mcasp->async_mode) {
+		dev_err(&pdev->dev,
+			"Different TX (%d) and RX (%d) auxclk-fs-ratio require ti,async-mode\n",
+			mcasp->auxclk_fs_ratio_tx, mcasp->auxclk_fs_ratio_rx);
 		return -EINVAL;
 	}
 
