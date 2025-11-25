@@ -1,0 +1,110 @@
+# SPDX-License-Identifier: GPL-2.0-only OR BSD-2-Clause
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/memory-controllers/ti/cdns,j7-ddr.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Cadence DDR controller for K3 devices
+
+maintainers:
+  - Gandhar Deshpande <g-deshpande@ti.com>
+  - Santhosh Kumar K <s-k6@ti.com>
+  - Neha Malcom Francis <n-francis@ti.com>
+
+properties:
+  compatible:
+    const: cdns,j7-ddr
+
+  reg:
+    minItems: 3
+    maxItems: 3
+    description: |
+      Address ranges for the different register regions of the DDRSS controller.
+      - ctl_cfg: Controller configuration registers
+      - ctl_cfg_pi: PHY Interface configuration registers
+      - ctl_cfg_phy: PHY configuration registers
+
+  reg-names:
+    items:
+      - const: ctl_cfg
+      - const: ctl_cfg_pi
+      - const: ctl_cfg_phy
+
+  ti,ctl-data:
+    $ref: /schemas/types.yaml#/definitions/uint32-array
+    description: |
+      Array of controller register values for DDR initialization.
+      These values configure the DDR controller parameters.
+
+  ti,pi-data:
+    $ref: /schemas/types.yaml#/definitions/uint32-array
+    description: |
+      Array of PHY Interface register values for DDR initialization.
+      These values configure the interface between controller and PHY.
+
+  ti,phy-data:
+    $ref: /schemas/types.yaml#/definitions/uint32-array
+    description: |
+      Array of PHY register values for DDR initialization.
+      These values configure the DDR PHY parameters.
+
+required:
+  - compatible
+  - reg
+  - reg-names
+
+unevaluatedProperties: false
+
+examples:
+  - |
+    #include <dt-bindings/interrupt-controller/arm-gic.h>
+    #include <dt-bindings/soc/ti,sci_pm_domain.h>
+
+    cbass_main {
+      #address-cells = <2>;
+      #size-cells = <2>;
+
+      memorycontroller: memory-controller@298e000 {
+        compatible = "ti,j7-ddrss";
+        reg = <0x00 0x02980000 0x00 0x184>;
+        reg-names = "ss_cfg";
+        ranges = <0x00 0x00 0x00 0x02990000 0x00 0x00004000>;
+        interrupts = <GIC_SPI 216 IRQ_TYPE_LEVEL_HIGH>;
+        power-domains = <&k3_pds 8 TI_SCI_PD_EXCLUSIVE>,
+                      <&k3_pds 90 TI_SCI_PD_SHARED>;
+        clocks = <&k3_clks 8 0>, <&k3_clks 30 9>;
+        bootph-pre-ram;
+        ti,ddr-freq1 = <0x27b9fba0>;
+        ti,ddr-freq2 = <0x27b9fba0>;
+        ti,ddr-fhs-cnt = <0xa>;
+        #address-cells = <2>;
+        #size-cells = <2>;
+
+        ddr@0 {
+          compatible = "cdns,j7-ddr";
+          reg = <0x00 0x0000 0x00 0x72c>,
+                <0x00 0x2000 0x00 0x4b0>,
+                <0x00 0x4000 0x00 0x163c>;
+          reg-names = "ctl_cfg", "ctl_cfg_pi", "ctl_cfg_phy";
+          bootph-pre-ram;
+
+          ti,ctl-data = <
+            0xb00
+            0x0
+            0x0
+          >;
+
+          ti,pi-data = <
+            0xb00
+            0x0
+            0x0
+          >;
+
+          ti,phy-data = <
+            0x4f0
+            0x0
+            0x30200
+          >;
+        };
+      };
+    };
