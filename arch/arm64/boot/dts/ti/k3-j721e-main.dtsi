@@ -2961,4 +2961,25 @@
 		bootph-pre-ram;
 		ti,esm-pins = <344>, <345>;
 	};
+
+	memorycontroller: memory-controller@2980000 {
+		compatible = "ti,j7-ddrss";
+		reg = <0x00 0x2980000 0x00 0x184>;
+		reg-names = "ss_cfg";
+		ranges = <0x00 0x00 0x00 0x02990000 0x00 0x0000563c>;
+		interrupts = <GIC_SPI 216 IRQ_TYPE_LEVEL_HIGH>;
+		power-domains = <&k3_pds 47 TI_SCI_PD_EXCLUSIVE>,
+				<&k3_pds 90 TI_SCI_PD_EXCLUSIVE>;
+		clocks = <&k3_clks 47 2>, <&k3_clks 30 9>;
+		#address-cells = <2>;
+		#size-cells = <2>;
+
+		ddr: ddr@0 {
+			compatible = "cdns,j7-ddr";
+			reg = <0x00 0x0000 0x00 0x72c>,
+				  <0x00 0x2000 0x00 0x4b0>,
+				  <0x00 0x4000 0x00 0x163c>;
+			reg-names = "ctl_cfg", "ctl_cfg_pi", "ctl_cfg_phy";
+		};
+	};
 };
