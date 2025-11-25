@@ -1318,7 +1318,8 @@ static int davinci_mcasp_hw_params(struct snd_pcm_substream *substream,
 
 	davinci_config_channel_size(mcasp, word_length);
 
-	if (mcasp->op_mode == DAVINCI_MCASP_IIS_MODE) {
+	/* Channel constraints are disabled for async mode */
+	if (mcasp->op_mode == DAVINCI_MCASP_IIS_MODE && !mcasp->async_mode) {
 		mcasp->channels = channels;
 		if (!mcasp->max_format_width)
 			mcasp->max_format_width = word_length;
@@ -1592,7 +1593,7 @@ static int davinci_mcasp_startup(struct snd_pcm_substream *substream,
 	if (mcasp->max_format_width && !mcasp->async_mode) {
 		/*
 		 * Only allow formats which require same amount of bits on the
-		 * bus as the currently running stream
+		 * bus as the currently running stream to ensure sync mode
 		 */
 		ret = snd_pcm_hw_rule_add(substream->runtime, 0,
 					  SNDRV_PCM_HW_PARAM_FORMAT,
