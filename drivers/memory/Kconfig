@@ -87,6 +87,15 @@ config TI_AEMIF
 	  of 256M bytes of any of these memories can be accessed at a given
 	  time via four chip selects with 64M byte access per chip select.
 
+config TI_K3_DDR
+	tristate "Texas Instruments DDR Controller Driver for K3 family of SoCs"
+	depends on (ARCH_K3 && HWMON && SYSFS) || COMPILE_TEST
+	help
+	  This driver is for the DDR Controller available in Texas Instruments
+	  K3 family of SoCs. This driver initializes the DDR Controller to
+	  monitor DDR-related events such as interrupts. It detects temperature
+	  changes DDR and notifies the change with hwmon.
+
 config TI_EMIF
 	tristate "Texas Instruments EMIF driver"
 	depends on ARCH_OMAP2PLUS || COMPILE_TEST
