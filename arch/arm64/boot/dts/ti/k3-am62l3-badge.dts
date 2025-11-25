@@ -173,6 +173,17 @@
 		gpio = <&wkup_gpio0 1 GPIO_ACTIVE_HIGH>;
 		bootph-all;
 	};
+
+	wlan_en: regulator-5 {
+		compatible = "regulator-fixed";
+		regulator-name = "wlan_en";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		enable-active-high;
+		gpios = <&main_gpio0 51 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&wlan_en_pins_default>;
+	};
 };
 
 &pmx0 {
@@ -188,6 +199,15 @@
 		pinctrl-single,pins = <
 			AM62LX_IOPAD(0x01b8, PIN_OUTPUT, 0) /* (C13) UART0_TXD */
 			AM62LX_IOPAD(0x01b4, PIN_INPUT | PIN_WKUP_EN, 0) /* (D13) UART0_RXD */
+		>;
+	};
+
+	main_uart1_default_pins: main-uart1-default-pins {
+		pinctrl-single,pins = <
+			AM62LX_IOPAD(0x019c, PIN_OUTPUT, 2) /* (A12) UART1_TXD */
+			AM62LX_IOPAD(0x0198, PIN_INPUT, 2) /* (C11) UART1_RXD */
+			AM62LX_IOPAD(0x0180, PIN_INPUT, 2) /* (A8) UART1_CTS */
+			AM62LX_IOPAD(0x0184, PIN_OUTPUT, 2) /* (B10) UART1_RTS */
 		>;
 	};
 
@@ -320,8 +340,16 @@
 };
 
 &main_uart1 {
-	/* Pending: enable bluetooth */
 	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&main_uart1_default_pins>;
+	bootph-all;
+
+	bluetooth {
+		compatible = "ti,cc33xx-bt";
+		cc33xx-supply = <&wlan_en>;
+		max-speed = <115200>;
+	};
 };
 
 &main_i2c0 {
@@ -457,6 +485,7 @@
 };
 
 &sdhci2 {
+	vmmc-supply = <&wlan_en>;
 	pinctrl-names = "default";
 	pinctrl-0 = <&main_mmc2_pins_default>;
 	bus-width = <4>;
