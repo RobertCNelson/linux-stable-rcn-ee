@@ -212,6 +212,12 @@ static inline void mcasp_set_axr_pdir(struct davinci_mcasp *mcasp, bool enable)
 	}
 }
 
+static inline int mcasp_get_tdm_slots(struct davinci_mcasp *mcasp, int stream)
+{
+	return (stream == SNDRV_PCM_STREAM_PLAYBACK) ?
+	       mcasp->tdm_slots_tx : mcasp->tdm_slots_rx;
+}
+
 static void mcasp_start_rx(struct davinci_mcasp *mcasp)
 {
 	if (mcasp->rxnumevt) {	/* enable FIFO */
@@ -722,10 +728,7 @@ static int davinci_mcasp_ch_constraint(struct davinci_mcasp *mcasp, int stream,
 	int slots;
 	int i, count = 0;
 
-	if (stream == SNDRV_PCM_STREAM_PLAYBACK)
-		slots = mcasp->tdm_slots_tx;
-	else
-		slots = mcasp->tdm_slots_rx;
+	slots = mcasp_get_tdm_slots(mcasp, stream);
 
 	if (mcasp->tdm_mask[stream])
 		slots = hweight32(mcasp->tdm_mask[stream]);
@@ -880,15 +883,12 @@ static int mcasp_common_hw_param(struct davinci_mcasp *mcasp, int stream,
 	int i;
 	u8 tx_ser = 0;
 	u8 rx_ser = 0;
-	u8 slots;
+	int slots;
 	u8 max_active_serializers, max_rx_serializers, max_tx_serializers;
 	int active_serializers, numevt;
 	u32 reg;
 
-	if (stream == SNDRV_PCM_STREAM_PLAYBACK)
-		slots = mcasp->tdm_slots_tx;
-	else
-		slots = mcasp->tdm_slots_rx;
+	slots = mcasp_get_tdm_slots(mcasp, stream);
 
 	/* In DIT mode we only allow maximum of one serializers for now */
 	if (mcasp->op_mode == DAVINCI_MCASP_DIT_MODE)
@@ -1017,10 +1017,7 @@ static int mcasp_i2s_hw_param(struct davinci_mcasp *mcasp, int stream,
 	u32 mask = 0;
 	u32 busel = 0;
 
-	if (stream == SNDRV_PCM_STREAM_PLAYBACK)
-		total_slots = mcasp->tdm_slots_tx;
-	else
-		total_slots = mcasp->tdm_slots_rx;
+	total_slots = mcasp_get_tdm_slots(mcasp, stream);
 
 	/*
 	 * If more than one serializer is needed, then use them with
@@ -1291,10 +1288,7 @@ static int davinci_mcasp_hw_params(struct snd_pcm_substream *substream,
 		int sbits = params_width(params);
 		unsigned int bclk_target;
 
-		if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
-			slots = mcasp->tdm_slots_tx;
-		else
-			slots = mcasp->tdm_slots_rx;
+		slots = mcasp_get_tdm_slots(mcasp, substream->stream);
 
 		if (mcasp->slot_width)
 			sbits = mcasp->slot_width;
@@ -1422,10 +1416,7 @@ static int davinci_mcasp_hw_rule_rate(struct snd_pcm_hw_params *params,
 	struct snd_interval range;
 	int i;
 
-	if (rd->stream == SNDRV_PCM_STREAM_PLAYBACK)
-		slots = rd->mcasp->tdm_slots_tx;
-	else
-		slots = rd->mcasp->tdm_slots_rx;
+	slots = mcasp_get_tdm_slots(rd->mcasp, rd->stream);
 
 	if (rd->mcasp->slot_width)
 		sbits = rd->mcasp->slot_width;
@@ -1477,10 +1468,7 @@ static int davinci_mcasp_hw_rule_format(struct snd_pcm_hw_params *params,
 	int count = 0;
 	snd_pcm_format_t i;
 
-	if (rd->stream == SNDRV_PCM_STREAM_PLAYBACK)
-		slots = rd->mcasp->tdm_slots_tx;
-	else
-		slots = rd->mcasp->tdm_slots_rx;
+	slots = mcasp_get_tdm_slots(rd->mcasp, rd->stream);
 
 	snd_mask_none(&nfmt);
 
@@ -1547,10 +1535,7 @@ static int davinci_mcasp_startup(struct snd_pcm_substream *substream,
 
 	mcasp->substreams[substream->stream] = substream;
 
-	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
-		tdm_slots = mcasp->tdm_slots_tx;
-	else
-		tdm_slots = mcasp->tdm_slots_rx;
+	tdm_slots = mcasp_get_tdm_slots(mcasp, substream->stream);
 
 	if (mcasp->tdm_mask[substream->stream])
 		tdm_slots = hweight32(mcasp->tdm_mask[substream->stream]);
