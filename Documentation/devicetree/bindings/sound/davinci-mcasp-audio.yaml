@@ -147,7 +147,21 @@ properties:
 
   auxclk-fs-ratio:
     $ref: /schemas/types.yaml#/definitions/uint32
-    description: ratio of AUCLK and FS rate if applicable
+    description:
+      Ratio of AUCLK and FS rate if applicable. This property specifies
+      the TX ratio, along with default RX ratio if auxclk-fs-ratio-rx
+      is not specified.
+      When not specified, the inputted system clock frequency via set_sysclk
+      callback by the machine driver is used for divider calculation.
+
+  auxclk-fs-ratio-rx:
+    $ref: /schemas/types.yaml#/definitions/uint32
+    description:
+      Ratio of AUCLK and FS rate for RX. If specified, allows
+      for a different RX ratio. Requires ti,async-mode to be
+      enabled when the ratio differs from auxclk-fs-ratio.
+      When not specified, it defaults to the value of auxclk-fs-ratio.
+      The property is ignored in DIT mode.
 
   gpio-controller: true
 
@@ -208,10 +222,18 @@ allOf:
         tdm-slots: false
         tdm-slots-rx: false
         ti,async-mode: false
+        auxclk-fs-ratio-rx: false
 
   - if:
       required:
         - tdm-slots-rx
+    then:
+      required:
+        - ti,async-mode
+
+  - if:
+      required:
+        - auxclk-fs-ratio-rx
     then:
       required:
         - ti,async-mode
