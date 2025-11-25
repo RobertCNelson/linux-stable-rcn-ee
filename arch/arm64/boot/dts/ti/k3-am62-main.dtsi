@@ -1289,4 +1289,24 @@
 		clock-names = "fck";
 		status = "disabled";
 	};
+
+	memorycontroller: memory-controller@f300000 {
+		compatible = "ti,am62-ddrss";
+		reg = <0x00 0x0f300000 0x00 0x200>;
+		reg-names = "ss_cfg";
+		ranges = <0x00 0x00 0x00 0x0f308000 0x00 0x55f8>;
+		interrupts = <GIC_SPI 119 IRQ_TYPE_LEVEL_HIGH>;
+		power-domains = <&k3_pds 170 TI_SCI_PD_EXCLUSIVE>;
+		clocks = <&k3_clks 170 0>;
+		#address-cells = <2>;
+		#size-cells = <2>;
+
+		ddr: ddr@0 {
+			compatible = "cdns,j7-ddr";
+			reg = <0x00 0x0000 0x00 0x69c>,
+				<0x00 0x2000 0x00 0x564>,
+				<0x00 0x4000 0x00 0x15f8>;
+			reg-names = "ctl_cfg", "ctl_cfg_pi", "ctl_cfg_phy";
+		};
+	};
 };
