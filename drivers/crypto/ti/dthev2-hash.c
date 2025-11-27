@@ -656,7 +656,7 @@ static int dthe_hash_finup(struct ahash_request *req)
 	unsigned int pad_len = 0;
 	struct scatterlist *src, *sg;
 	int src_nents = 0;
-	u8 pad_buf[SHA512_BLOCK_SIZE];
+	u8 *pad_buf = rctx->padding;
 	int ret = 0;
 
 	if (tot_len == 0) {

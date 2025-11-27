@@ -327,7 +327,7 @@ static int dthe_aes_run(struct crypto_engine *engine, void *areq)
 	int src_mapped_nents;
 	int dst_mapped_nents;
 
-	u8 pad_buf[AES_BLOCK_SIZE] = {0};
+	u8 *pad_buf = rctx->padding;
 	int pad_len = 0;
 
 	bool diff_dst;
@@ -355,6 +355,8 @@ static int dthe_aes_run(struct crypto_engine *engine, void *areq)
 			/* Need to create a new SG list with padding */
 			pad_len = ALIGN(req->cryptlen, AES_BLOCK_SIZE) - req->cryptlen;
 			struct scatterlist *sg;
+
+			memset(pad_buf, 0, pad_len);
 
 			sg_init_table(src_padded, 2);
 			sg = sg_last(req->src, src_nents);
@@ -943,9 +945,9 @@ static int dthe_aead_run(struct crypto_engine *engine, void *areq)
 	int dst_nents;
 	int src_mapped_nents, dst_mapped_nents;
 
-	u8 src_assoc_padbuf[AES_BLOCK_SIZE] = {0};
-	u8 src_crypt_padbuf[AES_BLOCK_SIZE] = {0};
-	u8 dst_crypt_padbuf[AES_BLOCK_SIZE] = {0};
+	u8 *src_assoc_padbuf = rctx->padding;
+	u8 *src_crypt_padbuf = rctx->padding + AES_BLOCK_SIZE;
+	u8 *dst_crypt_padbuf = rctx->padding + (2 * AES_BLOCK_SIZE);
 
 	enum dma_data_direction src_dir, dst_dir;
 
@@ -967,6 +969,10 @@ static int dthe_aead_run(struct crypto_engine *engine, void *areq)
 	unpadded_cryptlen = cryptlen;
 
 	// Prep src and dst scatterlists
+	memset(src_assoc_padbuf, 0, AES_BLOCK_SIZE);
+	memset(src_crypt_padbuf, 0, AES_BLOCK_SIZE);
+	memset(dst_crypt_padbuf, 0, AES_BLOCK_SIZE);
+
 	src = dthe_aead_prep_src(req->src, req->assoclen, cryptlen,
 				 src_assoc_padbuf, src_crypt_padbuf);
 	if (IS_ERR(src)) {
