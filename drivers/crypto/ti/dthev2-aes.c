@@ -1264,7 +1264,7 @@ static struct skcipher_engine_alg cipher_algs[] = {
 		.base.base = {
 			.cra_name		= "ctr(aes)",
 			.cra_driver_name	= "ctr-aes-dthev2",
-			.cra_priority		= 299,
+			.cra_priority		= 30000,
 			.cra_flags		= CRYPTO_ALG_TYPE_SKCIPHER |
 						  CRYPTO_ALG_ASYNC |
 						  CRYPTO_ALG_KERN_DRIVER_ONLY |
@@ -1287,7 +1287,7 @@ static struct skcipher_engine_alg cipher_algs[] = {
 		.base.base = {
 			.cra_name		= "xts(aes)",
 			.cra_driver_name	= "xts-aes-dthev2",
-			.cra_priority		= 299,
+			.cra_priority		= 30000,
 			.cra_flags		= CRYPTO_ALG_TYPE_SKCIPHER |
 						  CRYPTO_ALG_ASYNC |
 						  CRYPTO_ALG_KERN_DRIVER_ONLY |
