@@ -14,6 +14,9 @@
 
 #include <linux/bitops.h>
 #include <linux/debugfs.h>
+#include <linux/delay.h>
+#include <linux/io.h>
+#include <linux/iopoll.h>
 #include <linux/interrupt.h>
 #include <linux/irqdomain.h>
 #include <linux/module.h>
@@ -127,6 +130,7 @@ struct pru_rproc {
 	struct mutex lock;
 	const char *fw_name;
 	unsigned int *mapped_irq;
+	struct resource_table *rsc_tbl;
 	struct pru_irq_rsc *pru_interrupt_map;
 	size_t pru_interrupt_map_sz;
 	spinlock_t rmw_lock; /* register access lock */
@@ -669,6 +673,38 @@ map_fail:
 	return ret;
 }
 
+/*
+ * Attach to a running remote processor (IPC-only mode)
+ */
+static int pru_rproc_attach(struct rproc *rproc)
+{
+	struct device *dev = &rproc->dev;
+	struct pru_rproc *pru = rproc->priv;
+	int ret = 0;
+	u32 val;
+
+	dev_dbg(dev, "attach\n");
+
+	/*
+	 * Configure PRU Vring interrupt. Even if this configuration fails,
+	 * let the PRU continue execution without IPC.
+	 */
+	ret = pru_vring_interrupt_setup(rproc);
+	if (ret && pru->mapped_irq)
+		pru_dispose_irq_mapping(pru);
+
+	/* pru interrupts already configured. clear the cached map */
+	pru->pru_interrupt_map = NULL;
+	pru->pru_interrupt_map_sz = 0;
+
+	/* Release/enable the PRU execution */
+	val = pru_control_read_reg(pru, PRU_CTRL_CTRL);
+	val |= CTRL_CTRL_EN;
+	pru_control_write_reg(pru, PRU_CTRL_CTRL, val);
+
+	return ret;
+}
+
 static int pru_rproc_start(struct rproc *rproc)
 {
 	struct device *dev = &rproc->dev;
@@ -841,12 +877,6 @@ static void *pru_da_to_va(struct rproc *rproc, u64 da, size_t len, bool is_iram)
 	return va;
 }
 
-static struct rproc_ops pru_rproc_ops = {
-	.start		= pru_rproc_start,
-	.stop		= pru_rproc_stop,
-	.kick		= pru_rproc_kick,
-	.da_to_va	= pru_rproc_da_to_va,
-};
 
 /*
  * Custom memory copy implementation for ICSSG PRU/RTU/Tx_PRU Cores
@@ -1049,6 +1079,112 @@ static int pru_rproc_parse_fw(struct rproc *rproc, const struct firmware *fw)
 }
 
 /*
+ * This function gets called in IPC only mode. Resource table pointer
+ * is retrieved during 'prepare' and cached locally.
+ */
+static struct resource_table *pru_get_loaded_rsc_table(struct rproc *rproc,
+							size_t *rsc_table_sz)
+{
+	struct pru_rproc *pru = rproc->priv;
+
+	*rsc_table_sz = rproc->table_sz;
+	return pru->rsc_tbl;
+}
+/*
+ * is_pru_running - local utility function to check PRU status
+ * @pru: PRU device pointer used for checking core status
+ */
+static u32 is_pru_running(struct pru_rproc *pru)
+{
+	u32 val;
+
+	val = pru_control_read_reg(pru, PRU_CTRL_CTRL);
+	return (val & CTRL_CTRL_RUNSTATE);
+}
+
+/*
+ * For PRU cores, prepare function is used in IPC only mode. Remote proc
+ * core driver calls 'prepare' to facilitate enabling the configuraiton
+ * needed before attaching to the remote processor. In prepare the PRU
+ * is paused from fetching instruction stream, so that the vring and
+ * interrupts are configured before attaching to the PRU unit.
+ */
+static int pru_rproc_prepare(struct rproc *rproc)
+{
+	struct device *dev = &rproc->dev;
+	struct pru_rproc *pru = rproc->priv;
+	int ret = 0;
+	u32 stat = 0;
+	u32 val;
+	const struct firmware *firmware_p;
+
+	/*
+	 * For PRU cores, prepare is used only in IPC mode to pause and
+	 * configure vrings.
+	 */
+	if (rproc->state != RPROC_DETACHED)
+		return ret;
+
+	if (!rproc->firmware) {
+		dev_err(dev, "PRU FW needed to get PRU resource table\n");
+		return -EINVAL;
+	}
+
+	ret = request_firmware(&firmware_p, rproc->firmware, dev);
+	if (ret < 0) {
+		dev_err(dev, "request_firmware failed: %d\n", ret);
+		return ret;
+	}
+
+	/* Pause the PRU execution, while vring buffers are configured */
+	val = pru_control_read_reg(pru, PRU_CTRL_CTRL);
+	val &= ~CTRL_CTRL_EN;
+	pru_control_write_reg(pru, PRU_CTRL_CTRL, val);
+
+	ret = readx_poll_timeout(is_pru_running, pru, stat, !stat, 200, 2000);
+	if (ret) {
+		dev_err(dev, "timeout waiting for PRU to halt\n");
+		return ret;
+	}
+
+	/* parse the FW for INTR maps and resource table */
+	pru_rproc_parse_fw(rproc, firmware_p);
+
+	/* configure the interrupt map */
+	pru_handle_intrmap(rproc);
+
+	/* cache resource table pointer */
+	pru->rsc_tbl = rproc_elf_find_loaded_rsc_table(rproc, firmware_p);
+
+	release_firmware(firmware_p);
+
+	return ret;
+}
+
+/*
+ * Detach from a running remote processor (IPC-only mode)
+ * This callback is for any cleanup operations on detach for later
+ * state changes like re-attach. PRU IRQ mappings are removed here.
+ */
+static int pru_rproc_detach(struct rproc *rproc)
+{
+	struct pru_rproc *pru = rproc->priv;
+
+	if (!list_empty(&pru->rproc->rvdevs) && pru->irq_vring > 0)
+		free_irq(pru->irq_vring, pru);
+
+	pru_dispose_irq_mapping(pru);
+
+	/* dispose vring mapping as well */
+	if (pru->irq_vring > 0)
+		irq_dispose_mapping(pru->irq_vring);
+
+	pru->rsc_tbl = NULL;
+
+	return 0;
+}
+
+/*
  * Compute PRU id based on the IRAM addresses. The PRU IRAMs are
  * always at a particular offset within the PRUSS address space.
  */
@@ -1078,6 +1214,17 @@ static int pru_rproc_set_id(struct pru_rproc *pru)
 	return ret;
 }
 
+static struct rproc_ops pru_rproc_ops = {
+	.start		= pru_rproc_start,
+	.stop		= pru_rproc_stop,
+	.kick		= pru_rproc_kick,
+	.da_to_va	= pru_rproc_da_to_va,
+	.prepare	= pru_rproc_prepare,
+	.attach		= pru_rproc_attach,
+	.detach		= pru_rproc_detach,
+	.get_loaded_rsc_table	= pru_get_loaded_rsc_table,
+};
+
 static int pru_rproc_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -1090,6 +1237,7 @@ static int pru_rproc_probe(struct platform_device *pdev)
 	int i, ret;
 	const struct pru_private_data *data;
 	const char *mem_names[PRU_IOMEM_MAX] = { "iram", "control", "debug" };
+	u32 val;
 
 	data = of_device_get_match_data(&pdev->dev);
 	if (!data)
@@ -1158,6 +1306,18 @@ static int pru_rproc_probe(struct platform_device *pdev)
 		return ret;
 
 	platform_set_drvdata(pdev, rproc);
+
+	val = pru_control_read_reg(pru, PRU_CTRL_CTRL);
+	if (val & CTRL_CTRL_EN) {
+		/*
+		 * Configure for IPC only mode. 'stop' and 'start' callbacks
+		 * are not allowed in this mode.
+		 */
+		dev_dbg(dev, "Configure PRU IPC only mode.\n");
+		rproc->state = RPROC_DETACHED;
+		rproc->ops->stop = NULL;
+		rproc->ops->start = NULL;
+	}
 
 	ret = devm_rproc_add(dev, pru->rproc);
 	if (ret) {
