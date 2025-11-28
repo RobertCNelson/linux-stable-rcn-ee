@@ -42,6 +42,8 @@ struct sci_clk_provider {
  * @dev_id:	 Device index
  * @clk_id:	 Clock index
  * @num_parents: Number of parents for this clock
+ * @actual_parent: Actual parent
+ * @rate: Clock rate
  * @provider:	 Master clock provider
  * @flags:	 Flags for the clock
  * @node:	 Link for handling clocks probed via DT
@@ -53,6 +55,8 @@ struct sci_clk {
 	u16 dev_id;
 	u32 clk_id;
 	u32 num_parents;
+	int actual_parent;
+	unsigned long rate;
 	struct sci_clk_provider *provider;
 	u8 flags;
 	struct list_head node;
@@ -210,7 +214,7 @@ static int sci_clk_set_rate(struct clk_hw *hw, unsigned long rate,
 			    unsigned long parent_rate)
 {
 	struct sci_clk *clk = to_sci_clk(hw);
-
+	clk->rate = rate;
 	return clk->provider->ops->set_freq(clk->provider->sci, clk->dev_id,
 					    clk->clk_id, rate / 10 * 9, rate,
 					    rate / 10 * 11);
@@ -252,12 +256,17 @@ static u8 sci_clk_get_parent(struct clk_hw *hw)
 static int sci_clk_set_parent(struct clk_hw *hw, u8 index)
 {
 	struct sci_clk *clk = to_sci_clk(hw);
+	int ret;
 
 	clk->cached_req = 0;
 
-	return clk->provider->ops->set_parent(clk->provider->sci, clk->dev_id,
+	ret = clk->provider->ops->set_parent(clk->provider->sci, clk->dev_id,
 					      clk->clk_id,
 					      index + 1 + clk->clk_id);
+	if (!ret)
+		clk->actual_parent = index;
+
+	return ret;
 }
 
 /**
@@ -352,6 +361,8 @@ static int _sci_clk_build(struct sci_clk_provider *provider,
 		}
 		init.parent_names = (void *)parent_names;
 	}
+
+	sci_clk->actual_parent = -1;
 
 	init.ops = &sci_clk_ops;
 	init.num_parents = sci_clk->num_parents;
@@ -661,6 +672,27 @@ static int ti_sci_scan_clocks_from_dt(struct sci_clk_provider *provider)
 }
 #endif
 
+static int ti_sci_clk_resume_noirq(struct device *dev)
+{
+	struct sci_clk_provider *provider = dev_get_drvdata(dev);
+	struct sci_clk **clocks = provider->clocks;
+	int i;
+
+	if (provider->ops->restore_clk) {
+		for (i = 0; i < provider->num_clocks; i++) {
+			if (clocks[i]->actual_parent >= 0)
+				sci_clk_set_parent(&clocks[i]->hw, clocks[i]->actual_parent);
+
+			if (clocks[i]->rate)
+				sci_clk_set_rate(&clocks[i]->hw, clocks[i]->rate, 0);
+		}
+	}
+
+	return 0;
+}
+
+static DEFINE_NOIRQ_DEV_PM_OPS(sci_clk_pm_ops, NULL, ti_sci_clk_resume_noirq);
+
 /**
  * ti_sci_clk_probe - Probe function for the TI SCI clock driver
  * @pdev: platform device pointer to be probed
@@ -711,6 +743,8 @@ static int ti_sci_clk_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	dev_set_drvdata(dev, provider);
+
 	return of_clk_add_hw_provider(np, sci_clk_get, provider);
 }
 
@@ -733,6 +767,7 @@ static struct platform_driver ti_sci_clk_driver = {
 	.driver = {
 		.name = "ti-sci-clk",
 		.of_match_table = of_match_ptr(ti_sci_clk_of_match),
+		.pm = pm_sleep_ptr(&sci_clk_pm_ops),
 	},
 };
 module_platform_driver(ti_sci_clk_driver);
