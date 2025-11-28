@@ -196,6 +196,7 @@ struct ti_sci_clk_ops {
 	int (*set_spread_spectrum)(const struct ti_sci_handle *handle,
 				   u32 dev_id, u32 clk_id, u32 modfreq_hz,
 				   u32 mod_depth, u8 spread_type);
+	bool (*restore_clk)(void);
 };
 
 /* TISCI LPM IO isolation control values */

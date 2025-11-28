@@ -1450,6 +1450,14 @@ fail:
 }
 
 /**
+ * ti_sci_restore_clk_upon_resume() - Check if clock parents and rate are to be restored
+ */
+static bool ti_sci_restore_clk_upon_resume(void)
+{
+	return true;
+}
+
+/**
  * ti_sci_cmd_clk_get_match_freq() - Find a good match for frequency
  * @handle:	pointer to TI SCI handle
  * @dev_id:	Device identifier this request is for
@@ -3325,6 +3333,8 @@ static void ti_sci_setup_ops(struct ti_sci_info *info)
 	cops->set_parent = ti_sci_cmd_clk_set_parent;
 	cops->get_parent = ti_sci_cmd_clk_get_parent;
 	cops->get_num_parents = ti_sci_cmd_clk_get_num_parents;
+	if (info->fw_caps & MSG_FLAG_CAPS_LPM_BOARDCFG_MANAGED)
+		cops->restore_clk = ti_sci_restore_clk_upon_resume;
 
 	cops->get_best_match_freq = ti_sci_cmd_clk_get_match_freq;
 	cops->set_freq = ti_sci_cmd_clk_set_freq;
