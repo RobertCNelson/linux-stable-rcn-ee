@@ -624,8 +624,8 @@ int udma_slave_config(struct dma_chan *chan,
 struct udma_desc *udma_alloc_tr_desc(struct udma_chan *uc,
 			    size_t tr_size, int tr_count,
 			    enum dma_transfer_direction dir);
-int udma_get_tr_counters(size_t len, u16 *tr0_cnt0, u16 *tr0_cnt1,
-			 u16 *tr1_cnt0);
+int udma_get_tr_counters(struct udma_chan *uc, size_t len, unsigned long align_to, u16 *tr0_cnt0,
+			 u16 *tr0_cnt1, u16 *tr1_cnt0);
 struct udma_desc *
 udma_prep_slave_sg_tr(struct udma_chan *uc, struct scatterlist *sgl,
 		      unsigned int sglen, enum dma_transfer_direction dir,
