@@ -204,6 +204,27 @@ static inline void mcasp_set_clk_pdir(struct davinci_mcasp *mcasp, bool enable)
 	}
 }
 
+static inline void mcasp_set_clk_pdir_stream(struct davinci_mcasp *mcasp,
+					     int stream, bool enable)
+{
+	u32 bit, bit_end;
+
+	if (stream == SNDRV_PCM_STREAM_PLAYBACK) {
+		bit = PIN_BIT_ACLKX;
+		bit_end = PIN_BIT_AFSX + 1;
+	} else {
+		bit = PIN_BIT_ACLKR;
+		bit_end = PIN_BIT_AFSR + 1;
+	}
+
+	for_each_set_bit_from(bit, &mcasp->pdir, bit_end) {
+		if (enable)
+			mcasp_set_bits(mcasp, DAVINCI_MCASP_PDIR_REG, BIT(bit));
+		else
+			mcasp_clr_bits(mcasp, DAVINCI_MCASP_PDIR_REG, BIT(bit));
+	}
+}
+
 static inline void mcasp_set_axr_pdir(struct davinci_mcasp *mcasp, bool enable)
 {
 	u32 bit;
@@ -267,10 +288,12 @@ static void mcasp_start_rx(struct davinci_mcasp *mcasp)
 	if (mcasp_is_synchronous(mcasp)) {
 		mcasp_set_ctl_reg(mcasp, DAVINCI_MCASP_GBLCTLX_REG, TXHCLKRST);
 		mcasp_set_ctl_reg(mcasp, DAVINCI_MCASP_GBLCTLX_REG, TXCLKRST);
-		mcasp_set_clk_pdir(mcasp, true);
-	} else if (mcasp->bclk_master) {
-		mcasp_set_clk_pdir(mcasp, true);
 	}
+
+	if (mcasp->async_mode)
+		mcasp_set_clk_pdir_stream(mcasp, SNDRV_PCM_STREAM_CAPTURE, true);
+	else
+		mcasp_set_clk_pdir(mcasp, true);
 
 	/* Activate serializer(s) */
 	mcasp_set_reg(mcasp, DAVINCI_MCASP_RXSTAT_REG, 0xFFFFFFFF);
@@ -301,7 +324,10 @@ static void mcasp_start_tx(struct davinci_mcasp *mcasp)
 	/* Start clocks */
 	mcasp_set_ctl_reg(mcasp, DAVINCI_MCASP_GBLCTLX_REG, TXHCLKRST);
 	mcasp_set_ctl_reg(mcasp, DAVINCI_MCASP_GBLCTLX_REG, TXCLKRST);
-	mcasp_set_clk_pdir(mcasp, true);
+	if (mcasp->async_mode)
+		mcasp_set_clk_pdir_stream(mcasp, SNDRV_PCM_STREAM_PLAYBACK, true);
+	else
+		mcasp_set_clk_pdir(mcasp, true);
 
 	/* Activate serializer(s) */
 	mcasp_set_reg(mcasp, DAVINCI_MCASP_TXSTAT_REG, 0xFFFFFFFF);
@@ -344,10 +370,13 @@ static void mcasp_stop_rx(struct davinci_mcasp *mcasp)
 	/*
 	 * In synchronous mode stop the TX clocks if no other stream is
 	 * running
+	 * Otherwise in async mode only stop RX clocks
 	 */
 	if (mcasp_is_synchronous(mcasp) && !mcasp->streams) {
 		mcasp_set_clk_pdir(mcasp, false);
 		mcasp_set_reg(mcasp, DAVINCI_MCASP_GBLCTLX_REG, 0);
+	} else if (mcasp->async_mode) {
+		mcasp_set_clk_pdir_stream(mcasp, SNDRV_PCM_STREAM_CAPTURE, false);
 	} else if (!mcasp->streams) {
 		mcasp_set_clk_pdir(mcasp, false);
 	}
@@ -373,12 +402,14 @@ static void mcasp_stop_tx(struct davinci_mcasp *mcasp)
 	/*
 	 * In synchronous mode keep TX clocks running if the capture stream is
 	 * still running.
+	 * Otherwise in async mode only stop TX clocks
 	 */
 	if (mcasp_is_synchronous(mcasp) && mcasp->streams)
 		val =  TXHCLKRST | TXCLKRST | TXFSRST;
+	else if (mcasp->async_mode)
+		mcasp_set_clk_pdir_stream(mcasp, SNDRV_PCM_STREAM_PLAYBACK, false);
 	else if (!mcasp->streams)
 		mcasp_set_clk_pdir(mcasp, false);
-
 
 	mcasp_set_reg(mcasp, DAVINCI_MCASP_GBLCTLX_REG, val);
 	mcasp_set_reg(mcasp, DAVINCI_MCASP_TXSTAT_REG, 0xFFFFFFFF);
