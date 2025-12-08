@@ -162,6 +162,8 @@
 		regulator-boot-on;
 		enable-active-high;
 		gpio = <&main_gpio0 16 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&mmc1_sd_ena_default_pins>;
 		bootph-all;
 	};
 
@@ -233,6 +235,13 @@
 			AM62LX_IOPAD(0x01cc, PIN_INPUT_PULLUP, 0) /* (B7) I2C0_SCL */
 			AM62LX_IOPAD(0x01d0, PIN_INPUT_PULLUP, 0) /* (A7) I2C0_SDA */
 		>;
+	};
+
+	mmc1_sd_ena_default_pins: mmc1-sd-ena-default-pins {
+		pinctrl-single,pins = <
+			AM62LX_IOPAD(0x07c, PIN_OUTPUT, 7) /* (L23) GPMC0_AD1 */
+		>;
+		bootph-all;
 	};
 
 	main_mmc0_default_pins: main-mmc0-default-pins {
