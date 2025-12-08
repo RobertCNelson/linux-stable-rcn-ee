@@ -18,6 +18,10 @@
 	compatible = "ti,am62l3-badge", "ti,am62l3";
 	model = "Texas Instruments AM62L3 Badge";
 
+	chosen {
+		stdout-path = &main_uart0;
+	};
+
 	aliases {
 		gpio0 = &main_gpio0;
 		i2c0 = &main_i2c0;
