@@ -439,11 +439,11 @@
 	};
 
 	/* IMU Sensor */
-	imu-sensor@6a {
+	accelerometer@6a {
 		compatible = "st,lsm6ds3tr-c";
 		reg = <0x6a>;
-		vdd-supply = <&sensor_3v3>;
-		vddio-supply = <&sensor_3v3>;
+		vdd-supply = <&vcc_3v3_main>;
+		vddio-supply = <&vcc_3v3_main>;
 	};
 
 	/* T&H Sensor */
