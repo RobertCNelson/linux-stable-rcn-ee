@@ -201,6 +201,8 @@
 		regulator-boot-on;
 		enable-active-high;
 		gpio = <&wkup_gpio0 1 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&sensor_3v3_ena_default_pins>;
 		bootph-all;
 	};
 
@@ -264,6 +266,12 @@
 			AM62LX_IOPAD(0x07c, PIN_OUTPUT, 7) /* (L23) GPMC0_AD1 */
 		>;
 		bootph-all;
+	};
+
+	sensor_3v3_ena_default_pins: sensor-3v3-ena-default-pins {
+		pinctrl-single,pins = <
+			AM62LX_IOPAD(0x004, PIN_OUTPUT, 7) /* (AA23) WKUP_UART0_TXD.WKUP_GPIO0_1 */
+		>;
 	};
 
 	main_mmc0_default_pins: main-mmc0-default-pins {
