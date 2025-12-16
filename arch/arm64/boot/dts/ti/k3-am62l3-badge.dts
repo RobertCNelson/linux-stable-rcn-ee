@@ -315,18 +315,6 @@
 		>;
 	};
 
-	imu_irq_default_pins: imu_irq-default-pins {
-		pinctrl-single,pins = <
-			AM62LX_IOPAD(0x00e4, PIN_INPUT, 7) /* (L20) GPMC0_CSn0.GPIO0_41 */
-		>;
-	};
-
-	light_irq_default_pins: light_irq-default-pins {
-		pinctrl-single,pins = <
-			AM62LX_IOPAD(0x00e8, PIN_INPUT, 7) /* (L19) GPMC0_CSn1.GPIO0_42 */
-		>;
-	};
-
 	wkup_i2c0_default_pins: wkup-i2c0-default-pins {
 		pinctrl-single,pins = <
 			AM62LX_IOPAD(0x0010, PIN_INPUT_PULLUP, 0) /* (AB22) WKUP_I2C0_SCL */
@@ -409,9 +397,6 @@
 	imu-sensor@6a {
 		compatible = "st,lsm6ds3tr-c";
 		reg = <0x6a>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&imu_irq_default_pins>;
-		interrupts-extended = <&main_gpio0 41 IRQ_TYPE_EDGE_RISING>;
 		vdd-supply = <&sensor_3v3>;
 		vddio-supply = <&sensor_3v3>;
 	};
