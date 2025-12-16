@@ -112,7 +112,7 @@
 	pwm-beeper {
 		compatible = "pwm-beeper";
 		pinctrl-names = "default";
-		pinctrl-0 = <&main_epwm0_default_pins>;
+		pinctrl-0 = <&pwm_beeper_default_pins>;
 		pwms = <&epwm0 1 1000000 0>;
 		amp-supply = <&sensor_3v3>;
 	};
@@ -303,7 +303,7 @@
 		>;
 	};
 
-	main_epwm0_default_pins: main-epwm2-default-pins {
+	pwm_beeper_default_pins: pwm-beeper-default-pins {
 		pinctrl-single,pins = <
 			AM62LX_IOPAD(0x00b0, PIN_OUTPUT, 4) /* (F22) GPMC0_AD14.EHRPWM0_B */
 		>;
@@ -498,6 +498,10 @@
 	bootph-all;
 };
 
+&wkup_gpio0 {
+	status = "okay";
+};
+
 &sdhci0 {
 	/* eMMC */
 	non-removable;
@@ -554,8 +558,7 @@
 };
 
 &epwm0 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&main_epwm0_default_pins>;
+	/* Used for PWM Beeper */
 	status = "okay";
 };
 
