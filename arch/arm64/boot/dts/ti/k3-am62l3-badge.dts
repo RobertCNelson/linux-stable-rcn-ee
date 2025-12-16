@@ -537,7 +537,7 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&main_wlirq_pins_default>;
 		interrupt-parent = <&main_gpio0>;
-		interrupts = <52 IRQ_TYPE_EDGE_FALLING>;
+		interrupts = <52 IRQ_TYPE_EDGE_RISING>;
 	};
 };
 
