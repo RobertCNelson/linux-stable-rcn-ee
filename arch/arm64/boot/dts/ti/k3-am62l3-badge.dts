@@ -388,9 +388,27 @@
 		>;
 	};
 
+	main_spi3_pins_default: main-spi3-default-pins {
+		pinctrl-single,pins = <
+			AM62LX_IOPAD(0x00d0, PIN_OUTPUT, 5) /* (P22) GPMC0_BE1n.SPI3_CLK */
+			AM62LX_IOPAD(0x00cc, PIN_OUTPUT, 5) /* (P23) GPMC0_BE0n_CLE.SPI3_CS0 */
+			AM62LX_IOPAD(0x00d4, PIN_INPUT, 5) /* (N23) GPMC0_WAIT0.SPI3_D0 */
+			AM62LX_IOPAD(0x00d8, PIN_OUTPUT, 5) /* (N22) GPMC0_WAIT1.SPI3_D1 */
+		>;
+	};
+
 	mcp23s18_reset_pins_default: mcp23s18_reset-default-pins {
 		pinctrl-single,pins = <
 			AM62LX_IOPAD(0x00a0, PIN_OUTPUT, 4) /* (H21) GPMC0_AD10.GPIO0_25 */
+		>;
+	};
+
+	lora_control_pins_default: lora-control-default-pins {
+		pinctrl-single,pins = <
+			AM62LX_IOPAD(0x00c8, PIN_OUTPUT, 7) /* (M19) GPMC0_WEn.GPIO0_34 | RESET */
+			AM62LX_IOPAD(0x00e4, PIN_OUTPUT, 7) /* (L20) GPMC0_CSn0.GPIO0_41 | RF SW */
+			AM62LX_IOPAD(0x01a4, PIN_INPUT, 7) /* (D11) SPI0_CS1.GPIO0_88 | BUSY */
+			AM62LX_IOPAD(0x01bc, PIN_INPUT, 7) /* (B14) UART0_CTSn.GPIO0_94 | DIO (IRQ) */
 		>;
 	};
 };
@@ -519,8 +537,17 @@
 };
 
 &main_gpio0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&lora_control_pins_default>;
 	status = "okay";
 	bootph-all;
+
+	lora-reset {
+		gpio-hog;
+		gpios = <34 GPIO_ACTIVE_LOW>;
+		output-high; /* Keep out of reset by default */
+		line-name = "RESET";
+	};
 };
 
 &main_gpio2 {
@@ -710,5 +737,17 @@
 		#gpio-cells = <2>;
 		microchip,spi-present-mask = <0x01>;
 		reset-gpios = <&main_gpio0 25 GPIO_ACTIVE_LOW>;
+	};
+};
+
+&main_spi3 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&main_spi3_pins_default>;
+	status = "okay";
+
+	sx1262_lora: lora@0 {
+		compatible = "rohm,dh2228fv";
+		reg = <0>;
+		spi-max-frequency = <10000000>;
 	};
 };
