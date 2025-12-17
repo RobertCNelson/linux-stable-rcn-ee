@@ -187,7 +187,7 @@
 		enable-active-high;
 		gpio = <&main_gpio0 16 GPIO_ACTIVE_HIGH>;
 		pinctrl-names = "default";
-		pinctrl-0 = <&mmc1_sd_ena_default_pins>;
+		pinctrl-0 = <&vdd_3v3_sd_ena_default_pins>;
 		bootph-all;
 	};
 
@@ -261,9 +261,9 @@
 		>;
 	};
 
-	mmc1_sd_ena_default_pins: mmc1-sd-ena-default-pins {
+	vdd_3v3_sd_ena_default_pins: vdd-3v3-sd-ena-default-pins {
 		pinctrl-single,pins = <
-			AM62LX_IOPAD(0x07c, PIN_OUTPUT, 7) /* (L23) GPMC0_AD1 */
+			AM62LX_IOPAD(0x07c, PIN_OUTPUT, 7) /* (L23) GPMC0_AD1.GPIO0_16 */
 		>;
 		bootph-all;
 	};
