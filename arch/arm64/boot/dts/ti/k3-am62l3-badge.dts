@@ -541,6 +541,17 @@
 	pinctrl-0 = <&lora_control_pins_default>;
 	status = "okay";
 	bootph-all;
+	gpio-line-names ="","","","","","","","","","", //GPIO0_0->9
+			 "","","","","","","vdd_3v3_sd_ena","","","", //GPIO0_10->19
+			 "","","","","","mcp23s18_reset","button_select","","","", //GPIO0_20->29
+			 "","button_left","button_up","","lora_reset","","","","","", //GPIO0_30->39
+			 "","lora_rfsw","button_down","","","","","","","", //GPIO0_40->49
+			 "","wlan_ena","","","","","","","","", //GPIO0_50->59
+			 "","","","","","","","","","", //GPIO0_60->69
+			 "","","","","","","","","","", //GPIO0_70->79
+			 "","","","","","","","","lora_busy","", //GPIO0_80->89
+			 "","","","","lora_dio","button_right","","","","", //GPIO0_90->99
+			 "","","","","button_back","","","","",""; //GPIO0_100->109
 
 	lora-reset {
 		gpio-hog;
@@ -557,6 +568,8 @@
 
 &wkup_gpio0 {
 	status = "okay";
+
+	gpio-line-names ="","sensor_3v3_ena","","","","","",""; //GPIO0_0->7
 };
 
 &sdhci0 {
