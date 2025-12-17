@@ -243,7 +243,7 @@
 		>;
 	};
 
-	main_usr_button_default_pins: main-usr_button-default-pins {
+	main_usr_button_default_pins: main-usr-button-default-pins {
 		pinctrl-single,pins = <
 			AM62LX_IOPAD(0x00a4, PIN_INPUT, 7) /* (H18) GPMC0_AD11.GPIO0_26 | SELECT */
 			AM62LX_IOPAD(0x01e4, PIN_INPUT, 7) /* (D16) EXT_REFCLK1.GPIO0_104 | BACK*/
@@ -379,7 +379,7 @@
 		>;
 	};
 
-	main_spi1_pins_default: main_spi1-default-pins {
+	main_spi1_pins_default: main-spi1-default-pins {
 		pinctrl-single,pins = <
 			AM62LX_IOPAD(0x008c, PIN_OUTPUT, 4) /* (H22) GPMC0_AD5.SPI1_CLK */
 			AM62LX_IOPAD(0x0088, PIN_OUTPUT, 4) /* (K23) GPMC0_AD4.SPI1_CS0 */
@@ -397,7 +397,7 @@
 		>;
 	};
 
-	mcp23s18_reset_pins_default: mcp23s18_reset-default-pins {
+	mcp23s18_reset_pins_default: mcp23s18-reset-default-pins {
 		pinctrl-single,pins = <
 			AM62LX_IOPAD(0x00a0, PIN_OUTPUT, 4) /* (H21) GPMC0_AD10.GPIO0_25 */
 		>;
