@@ -213,3 +213,16 @@ config TINYDRM_ST7735R
 	  * Okaya RH128128T 1.44" 128x128 TFT
 
 	  If M is selected the module will be called st7735r.
+
+config TINYDRM_SSD16XX
+	tristate "DRM support for Solomon Systech SSD16xx e-ink panels"
+	depends on DRM && SPI
+	select DRM_KMS_HELPER
+	select DRM_GEM_DMA_HELPER
+	help
+	  DRM driver for e-ink display panels using Solomon Systech SSD16xx family
+	  controllers (SSD1672, SSD1680, SSD1681, SSD1683). Uses panel-specific compatibles
+	  to distinguish between different display modules and configurations
+	  (monochrome vs 3-color).
+
+	  If M is selected the module will be called ssd16xx.
