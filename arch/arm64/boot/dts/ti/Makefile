@@ -61,6 +61,7 @@ dtb-$(CONFIG_ARCH_K3) += k3-am62l3-evm.dtb
 dtb-$(CONFIG_ARCH_K3) += k3-am62l3-minimal.dtb
 dtb-$(CONFIG_ARCH_K3) += k3-am62l3-evm-lpmdemo.dtb
 dtb-$(CONFIG_ARCH_K3) += k3-am62l3-badge.dtb
+dtb-$(CONFIG_ARCH_K3) += k3-am62l3-badge-dsi-rpi-7inch-panel.dtbo
 dtb-$(CONFIG_ARCH_K3) += k3-am62l3-badge-eink-gdey042t81.dtbo
 dtb-$(CONFIG_ARCH_K3) += k3-am62l3-evm-dsi-rpi-7inch-panel.dtbo
 dtb-$(CONFIG_ARCH_K3) += k3-am62l3-evm-ecap-capture.dtbo
@@ -412,6 +413,8 @@ k3-j784s4-evm-usb0-type-a-dtbs := k3-j784s4-evm.dtb \
 	k3-j784s4-j742s2-evm-usb0-type-a.dtbo
 k3-j784s4-evm-usxgmii-exp1-exp2-dtbs := k3-j784s4-evm.dtb \
 	k3-j784s4-evm-usxgmii-exp1-exp2.dtbo
+k3-am62l3-badge-dsi-rpi-7inch-panel-dtbs := k3-am62l3-badge.dtb \
+	k3-am62l3-badge-dsi-rpi-7inch-panel.dtbo
 k3-am62l3-badge-eink-gdey042t81-dtbs := k3-am62l3-badge.dtb \
 	k3-am62l3-badge-eink-gdey042t81.dtbo
 k3-am62l3-evm-dsi-rpi-7inch-panel-dtbs := k3-am62l3-evm.dtb \
@@ -496,6 +499,7 @@ dtb- += k3-am625-beagleplay-csi2-ov5640.dtb \
 	k3-j784s4-evm-quad-port-eth-exp1.dtb \
 	k3-j784s4-evm-usb0-type-a.dtb \
 	k3-j784s4-evm-usxgmii-exp1-exp2.dtb \
+	k3-am62l3-badge-dsi-rpi-7inch-panel.dtb \
 	k3-am62l3-badge-eink-gdey042t81.dtb \
 	k3-am62l3-evm-dsi-rpi-7inch-panel.dtb \
 	k3-am62l3-evm-eink-gdey042t81.dtb \
