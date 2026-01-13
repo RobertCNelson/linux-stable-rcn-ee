@@ -35,7 +35,7 @@ int snd_soc_ret(const struct device *dev, int ret, const char *fmt, ...)
 		vaf.fmt = fmt;
 		vaf.va = &args;
 
-		dev_err(dev, "ASoC error (%d): %pV", ret, &vaf);
+		dev_dbg(dev, "ASoC error (%d): %pV", ret, &vaf);
 	}
 
 	return ret;
