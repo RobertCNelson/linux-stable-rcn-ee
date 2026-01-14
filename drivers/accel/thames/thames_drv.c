@@ -14,6 +14,7 @@
 #include "thames_drv.h"
 #include "thames_core.h"
 #include "thames_gem.h"
+#include "thames_job.h"
 #include "thames_ipc.h"
 
 static struct platform_device *drm_dev;
@@ -38,8 +39,22 @@ static int thames_open(struct drm_device *dev, struct drm_file *file)
 
 	file->driver_priv = thames_priv;
 
+	ret = thames_job_open(thames_priv);
+	if (ret)
+		goto err_free;
+
+	ret = thames_context_create(thames_priv);
+	if (ret) {
+		dev_err(dev->dev, "Failed to create context for client: %d", ret);
+		goto err_close_job;
+	}
+
 	return 0;
 
+err_close_job:
+	thames_job_close(thames_priv);
+err_free:
+	kfree(thames_priv);
 err_put_mod:
 	module_put(THIS_MODULE);
 	return ret;
@@ -49,6 +64,9 @@ static void thames_postclose(struct drm_device *dev, struct drm_file *file)
 {
 	struct thames_file_priv *thames_priv = file->driver_priv;
 
+	thames_context_destroy(thames_priv);
+
+	thames_job_close(thames_priv);
 	kfree(thames_priv);
 	module_put(THIS_MODULE);
 }
@@ -57,6 +75,7 @@ static const struct drm_ioctl_desc thames_drm_driver_ioctls[] = {
 #define THAMES_IOCTL(n, func) DRM_IOCTL_DEF_DRV(THAMES_##n, thames_ioctl_##func, 0)
 	THAMES_IOCTL(BO_CREATE, bo_create),
 	THAMES_IOCTL(BO_MMAP_OFFSET, bo_mmap_offset),
+	THAMES_IOCTL(SUBMIT, submit),
 };
 
 DEFINE_DRM_ACCEL_FOPS(thames_accel_driver_fops);
