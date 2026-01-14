@@ -5,6 +5,7 @@
 #include <drm/drm_drv.h>
 #include <drm/drm_gem.h>
 #include <drm/drm_ioctl.h>
+#include <uapi/drm/thames_accel.h>
 #include <linux/err.h>
 #include <linux/platform_device.h>
 #include <linux/remoteproc.h>
@@ -12,6 +13,7 @@
 
 #include "thames_drv.h"
 #include "thames_core.h"
+#include "thames_gem.h"
 #include "thames_ipc.h"
 
 static struct platform_device *drm_dev;
@@ -53,7 +55,8 @@ static void thames_postclose(struct drm_device *dev, struct drm_file *file)
 
 static const struct drm_ioctl_desc thames_drm_driver_ioctls[] = {
 #define THAMES_IOCTL(n, func) DRM_IOCTL_DEF_DRV(THAMES_##n, thames_ioctl_##func, 0)
-
+	THAMES_IOCTL(BO_CREATE, bo_create),
+	THAMES_IOCTL(BO_MMAP_OFFSET, bo_mmap_offset),
 };
 
 DEFINE_DRM_ACCEL_FOPS(thames_accel_driver_fops);
@@ -62,6 +65,7 @@ static const struct drm_driver thames_drm_driver = {
 	.driver_features = DRIVER_COMPUTE_ACCEL | DRIVER_GEM,
 	.open = thames_open,
 	.postclose = thames_postclose,
+	.gem_create_object = thames_gem_create_object,
 	.ioctls = thames_drm_driver_ioctls,
 	.num_ioctls = ARRAY_SIZE(thames_drm_driver_ioctls),
 	.fops = &thames_accel_driver_fops,
