@@ -28,6 +28,9 @@ enum drm_thames_ioctl_id {
 	 * mmap to map a GEM object.
 	 */
 	DRM_THAMES_BO_MMAP_OFFSET,
+
+	/** @DRM_THAMES_SUBMIT: Submit a job and BOs to run. */
+	DRM_THAMES_SUBMIT,
 };
 
 /**
@@ -76,6 +79,55 @@ struct drm_thames_bo_mmap_offset {
 };
 
 /**
+ * struct drm_thames_job - A job to be run on the NPU
+ *
+ * The kernel will schedule the execution of this job taking into account its
+ * dependencies with other jobs. All tasks in the same job will be executed
+ * sequentially on the same core, to benefit from memory residency in SRAM.
+ */
+struct drm_thames_job {
+	/** Input: BO handle for kernel. */
+	__u32 kernel;
+
+	/** Input: Size in bytes of the compiled kernel. */
+	__u32 kernel_size;
+
+	/** Input: BO handle for params BO. */
+	__u32 params;
+
+	/** Input: Size in bytes of the params BO. */
+	__u32 params_size;
+
+	/** Input: Pointer to a u32 array of the BOs that are read by the job. */
+	__u64 in_bo_handles;
+
+	/** Input: Pointer to a u32 array of the BOs that are written to by the job. */
+	__u64 out_bo_handles;
+
+	/** Input: Number of input BO handles passed in (size is that times 4). */
+	__u32 in_bo_handle_count;
+
+	/** Input: Number of output BO handles passed in (size is that times 4). */
+	__u32 out_bo_handle_count;
+};
+
+/**
+ * struct drm_thames_submit - ioctl argument for submitting commands to the NPU.
+ *
+ * The kernel will schedule the execution of these jobs in dependency order.
+ */
+struct drm_thames_submit {
+	/** Input: Pointer to an array of struct drm_thames_job. */
+	__u64 jobs;
+
+	/** Input: Number of jobs passed in. */
+	__u32 job_count;
+
+	/** Reserved, must be zero. */
+	__u32 pad;
+};
+
+/**
  * DRM_IOCTL_THAMES() - Build a thames IOCTL number
  * @__access: Access type. Must be R, W or RW.
  * @__id: One of the DRM_THAMES_xxx id.
@@ -95,6 +147,8 @@ enum {
 		DRM_IOCTL_THAMES(WR, BO_CREATE, bo_create),
 	DRM_IOCTL_THAMES_BO_MMAP_OFFSET =
 		DRM_IOCTL_THAMES(WR, BO_MMAP_OFFSET, bo_mmap_offset),
+	DRM_IOCTL_THAMES_SUBMIT =
+		DRM_IOCTL_THAMES(WR, SUBMIT, submit),
 };
 
 #if defined(__cplusplus)
