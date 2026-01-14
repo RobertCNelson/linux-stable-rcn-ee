@@ -63,6 +63,14 @@ static int thames_rpmsg_callback(struct rpmsg_device *rpdev, void *data, int len
 		break;
 	}
 
+	case THAMES_MSG_CONTEXT_OP_RESPONSE:
+		ida_free(&core->tdev->ipc_seq_ida, hdr->seq);
+		break;
+
+	case THAMES_MSG_BO_OP_RESPONSE:
+		ida_free(&core->tdev->ipc_seq_ida, hdr->seq);
+		break;
+
 	default:
 		dev_warn(&rpdev->dev, "Unknown message type: %u\n", hdr->type);
 		break;
@@ -120,6 +128,67 @@ int thames_rpmsg_send_ping(struct thames_core *core, u32 ping_data, u32 *sequenc
 	*sequence = ping_msg.hdr.seq;
 
 	return thames_rpmsg_send_raw(core, &ping_msg, sizeof(ping_msg));
+}
+
+int thames_rpmsg_send_create_context(struct thames_core *core, u32 context_id)
+{
+	struct thames_msg_context_op msg = {};
+
+	msg.hdr.type = THAMES_MSG_CONTEXT_OP;
+	msg.hdr.seq = ida_alloc(&core->tdev->ipc_seq_ida, GFP_KERNEL);
+	msg.hdr.len = sizeof(msg);
+	msg.op = THAMES_CONTEXT_CREATE;
+	msg.context_id = context_id;
+
+	return thames_rpmsg_send_raw(core, &msg, sizeof(msg));
+}
+
+int thames_rpmsg_send_destroy_context(struct thames_core *core, u32 context_id)
+{
+	struct thames_msg_context_op msg = {};
+
+	msg.hdr.type = THAMES_MSG_CONTEXT_OP;
+	msg.hdr.seq = ida_alloc(&core->tdev->ipc_seq_ida, GFP_KERNEL);
+	msg.hdr.len = sizeof(msg);
+	msg.op = THAMES_CONTEXT_DESTROY;
+	msg.context_id = context_id;
+
+	return thames_rpmsg_send_raw(core, &msg, sizeof(msg));
+}
+
+int thames_rpmsg_send_map_bo(struct thames_core *core, u32 context_id, u32 bo_id, u64 vaddr,
+			     u64 paddr, u64 size)
+{
+	struct thames_msg_bo_op msg = {};
+
+	msg.hdr.type = THAMES_MSG_BO_OP;
+	msg.hdr.seq = ida_alloc(&core->tdev->ipc_seq_ida, GFP_KERNEL);
+	msg.hdr.len = sizeof(msg);
+	msg.op = THAMES_BO_MAP;
+	msg.context_id = context_id;
+	msg.bo_id = bo_id;
+	msg.vaddr = vaddr;
+	msg.paddr = paddr;
+	msg.size = size;
+
+	return thames_rpmsg_send_raw(core, &msg, sizeof(msg));
+}
+
+int thames_rpmsg_send_unmap_bo(struct thames_core *core, u32 context_id, u32 bo_id)
+{
+	struct thames_msg_bo_op msg = {};
+
+	msg.hdr.type = THAMES_MSG_BO_OP;
+	msg.hdr.seq = ida_alloc(&core->tdev->ipc_seq_ida, GFP_KERNEL);
+	msg.hdr.len = sizeof(msg);
+	msg.op = THAMES_BO_UNMAP;
+	msg.context_id = context_id;
+	msg.bo_id = bo_id;
+	msg.vaddr = 0;
+	msg.paddr = 0;
+	msg.size = 0;
+
+	return thames_rpmsg_send_raw(core, &msg, sizeof(msg));
 }
 
 int thames_rpmsg_ping_test(struct thames_core *core)
