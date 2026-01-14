@@ -13,6 +13,7 @@
 
 #include "thames_core.h"
 #include "thames_device.h"
+#include "thames_job.h"
 #include "thames_rpmsg.h"
 
 /* Shift to convert bytes to megabytes (divide by 1048576) */
@@ -115,11 +116,16 @@ int thames_core_init(struct thames_core *core)
 	if (err)
 		return err;
 
+	err = thames_job_init(core);
+	if (err)
+		return err;
+
 	return 0;
 }
 
 void thames_core_fini(struct thames_core *core)
 {
+	thames_job_fini(core);
 	thames_rpmsg_fini(core);
 }
 
