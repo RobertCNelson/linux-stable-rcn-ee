@@ -7,4 +7,5 @@ thames-y := \
 	thames_device.o \
 	thames_drv.o \
 	thames_gem.o \
+	thames_job.o \
 	thames_rpmsg.o
