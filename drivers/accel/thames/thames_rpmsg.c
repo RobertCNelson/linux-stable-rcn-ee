@@ -11,6 +11,7 @@
 #include "thames_core.h"
 #include "thames_device.h"
 #include "thames_ipc.h"
+#include "thames_job.h"
 
 #define THAMES_PING_TEST_PATTERN 0xDEADBEEF
 #define THAMES_PING_TIMEOUT_MS 5000
@@ -70,6 +71,36 @@ static int thames_rpmsg_callback(struct rpmsg_device *rpdev, void *data, int len
 	case THAMES_MSG_BO_OP_RESPONSE:
 		ida_free(&core->tdev->ipc_seq_ida, hdr->seq);
 		break;
+
+	case THAMES_MSG_SUBMIT_JOB_RESPONSE: {
+		struct thames_job *job;
+
+		scoped_guard(mutex, &core->job_lock)
+		{
+			job = core->in_flight_job;
+			if (!job) {
+				dev_err(&rpdev->dev,
+					"Received job response but no job in flight\n");
+				ida_free(&core->tdev->ipc_seq_ida, hdr->seq);
+				return -EINVAL;
+			}
+
+			if (hdr->seq != job->ipc_sequence) {
+				dev_err(&rpdev->dev,
+					"Job response sequence mismatch: got %u, expected %u\n",
+					hdr->seq, job->ipc_sequence);
+				ida_free(&core->tdev->ipc_seq_ida, hdr->seq);
+				return -EINVAL;
+			}
+
+			dma_fence_signal(job->done_fence);
+			core->in_flight_job = NULL;
+		}
+
+		ida_free(&core->tdev->ipc_seq_ida, hdr->seq);
+
+		break;
+	}
 
 	default:
 		dev_warn(&rpdev->dev, "Unknown message type: %u\n", hdr->type);
@@ -187,6 +218,27 @@ int thames_rpmsg_send_unmap_bo(struct thames_core *core, u32 context_id, u32 bo_
 	msg.vaddr = 0;
 	msg.paddr = 0;
 	msg.size = 0;
+
+	return thames_rpmsg_send_raw(core, &msg, sizeof(msg));
+}
+
+int thames_rpmsg_send_submit_job(struct thames_core *core, u32 context_id, u32 job_id,
+				 u64 kernel_iova, u64 kernel_size, u64 args_iova, u64 args_size,
+				 u32 *sequence)
+{
+	struct thames_msg_submit_job msg = {};
+
+	msg.hdr.type = THAMES_MSG_SUBMIT_JOB;
+	msg.hdr.seq = ida_alloc(&core->tdev->ipc_seq_ida, GFP_KERNEL);
+	msg.hdr.len = sizeof(msg);
+	msg.context_id = context_id;
+	msg.job_id = job_id;
+	msg.kernel_iova = kernel_iova;
+	msg.kernel_size = kernel_size;
+	msg.args_iova = args_iova;
+	msg.args_size = args_size;
+
+	*sequence = msg.hdr.seq;
 
 	return thames_rpmsg_send_raw(core, &msg, sizeof(msg));
 }
