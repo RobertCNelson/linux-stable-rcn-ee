@@ -6,4 +6,5 @@ thames-y := \
 	thames_core.o \
 	thames_device.o \
 	thames_drv.o \
+	thames_gem.o \
 	thames_rpmsg.o
