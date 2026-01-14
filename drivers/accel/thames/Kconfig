@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: GPL-2.0-only
+
+config DRM_ACCEL_THAMES
+	tristate "Thames (support for TI C7x DSP accelerators)"
+	depends on DRM_ACCEL
+	depends on TI_K3_R5_REMOTEPROC || COMPILE_TEST
+	depends on RPMSG
+	depends on MMU
+	select DRM_SCHED
+	select DRM_GEM_SHMEM_HELPER
+	help
+	  Choose this option if you have a Texas Instruments SoC that contains
+	  C7x DSP cores that can be used as compute accelerators. This includes
+	  SoCs such as the AM62A, J721E, J721S2, and J784S4.
+
+	  The C7x DSP cores can be used for general-purpose compute acceleration
+	  and are exposed through the DRM accel subsystem.
+
+	  The interface exposed to userspace is described in
+	  include/uapi/drm/thames_accel.h and is used by the Thames userspace
+	  driver in Mesa3D.
+
+	  If unsure, say N.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called thames.
