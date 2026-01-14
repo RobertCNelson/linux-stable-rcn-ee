@@ -31,6 +31,12 @@ enum drm_thames_ioctl_id {
 
 	/** @DRM_THAMES_SUBMIT: Submit a job and BOs to run. */
 	DRM_THAMES_SUBMIT,
+
+	/** @DRM_THAMES_BO_PREP: Prepare a BO for CPU access after DSP writes. */
+	DRM_THAMES_BO_PREP,
+
+	/** @DRM_THAMES_BO_FINI: Finish CPU access and prepare BO for DSP access. */
+	DRM_THAMES_BO_FINI,
 };
 
 /**
@@ -128,6 +134,27 @@ struct drm_thames_submit {
 };
 
 /**
+ * struct drm_thames_bo_prep - ioctl argument for preparing a BO for CPU access.
+ *
+ * This invalidates CPU caches and waits for pending DSP operations to complete.
+ */
+struct drm_thames_bo_prep {
+	__u32 handle;
+	__u32 reserved;
+	__s64 timeout_ns;	/* absolute */
+};
+
+/**
+ * struct drm_thames_bo_fini - ioctl argument for finishing CPU access to a BO.
+ *
+ * This flushes CPU caches to make CPU writes visible to the DSP.
+ */
+struct drm_thames_bo_fini {
+	__u32 handle;
+	__u32 reserved;
+};
+
+/**
  * DRM_IOCTL_THAMES() - Build a thames IOCTL number
  * @__access: Access type. Must be R, W or RW.
  * @__id: One of the DRM_THAMES_xxx id.
@@ -149,6 +176,10 @@ enum {
 		DRM_IOCTL_THAMES(WR, BO_MMAP_OFFSET, bo_mmap_offset),
 	DRM_IOCTL_THAMES_SUBMIT =
 		DRM_IOCTL_THAMES(WR, SUBMIT, submit),
+	DRM_IOCTL_THAMES_BO_PREP =
+		DRM_IOCTL_THAMES(WR, BO_PREP, bo_prep),
+	DRM_IOCTL_THAMES_BO_FINI =
+		DRM_IOCTL_THAMES(WR, BO_FINI, bo_fini),
 };
 
 #if defined(__cplusplus)
