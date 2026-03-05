@@ -181,10 +181,19 @@ static void __get_cpu_fpsimd_context(void)
  *
  * The double-underscore version must only be called if you know the task
  * can't be preempted.
+ *
+ * On RT kernels local_bh_disable() is not sufficient because it only
+ * serializes soft interrupt related sections via a local lock, but stays
+ * preemptible. Disabling preemption is the right choice here as bottom
+ * half processing is always in thread context on RT kernels so it
+ * implicitly prevents bottom half processing as well.
  */
 static void get_cpu_fpsimd_context(void)
 {
-	local_bh_disable();
+	if (!IS_ENABLED(CONFIG_PREEMPT_RT))
+		local_bh_disable();
+	else
+		preempt_disable();
 	__get_cpu_fpsimd_context();
 }
 
@@ -205,7 +214,10 @@ static void __put_cpu_fpsimd_context(void)
 static void put_cpu_fpsimd_context(void)
 {
 	__put_cpu_fpsimd_context();
-	local_bh_enable();
+	if (!IS_ENABLED(CONFIG_PREEMPT_RT))
+		local_bh_enable();
+	else
+		preempt_enable();
 }
 
 static bool have_cpu_fpsimd_context(void)
@@ -1078,6 +1090,7 @@ void fpsimd_thread_switch(struct task_struct *next)
 void fpsimd_flush_thread(void)
 {
 	int vl, supported_vl;
+	void *sve_state = NULL;
 
 	if (!system_supports_fpsimd())
 		return;
@@ -1090,7 +1103,10 @@ void fpsimd_flush_thread(void)
 
 	if (system_supports_sve()) {
 		clear_thread_flag(TIF_SVE);
-		sve_free(current);
+
+		/* Defer kfree() while in atomic context */
+		sve_state = current->thread.sve_state;
+		current->thread.sve_state = NULL;
 
 		/*
 		 * Reset the task vector length as required.
@@ -1126,6 +1142,7 @@ void fpsimd_flush_thread(void)
 	current->thread.fp_type = FP_STATE_FPSIMD;
 
 	put_cpu_fpsimd_context();
+	kfree(sve_state);
 }
 
 /*
