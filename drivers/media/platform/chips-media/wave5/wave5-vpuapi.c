@@ -81,11 +81,16 @@ int wave5_vpu_flush_instance(struct vpu_instance *inst)
 
 			mutex_unlock(&inst->dev->hw_lock);
 			wave5_vpu_dec_get_output_info(inst, &dec_info);
+			/*
+			 * wave5_vpu_dec_set_disp_flag() acquires hw_lock internally,
+			 * so it must be called here before re-acquiring hw_lock to
+			 * avoid a deadlock.
+			 */
+			if (dec_info.index_frame_display >= 0)
+				wave5_vpu_dec_set_disp_flag(inst, dec_info.index_frame_display);
 			mutex_ret = mutex_lock_interruptible(&inst->dev->hw_lock);
 			if (mutex_ret)
 				return mutex_ret;
-			if (dec_info.index_frame_display > 0)
-				wave5_vpu_dec_set_disp_flag(inst, dec_info.index_frame_display);
 		}
 	} while (ret != 0);
 	mutex_unlock(&inst->dev->hw_lock);

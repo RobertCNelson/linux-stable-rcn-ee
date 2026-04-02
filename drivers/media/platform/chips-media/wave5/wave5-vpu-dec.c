@@ -286,10 +286,24 @@ static void send_eos_event(struct vpu_instance *inst)
 	inst->sent_eos = true;
 }
 
+static void wave5_update_min_bufs_ctrl(struct vpu_instance *inst, u32 fbc_buf_count)
+{
+	struct v4l2_m2m_ctx *m2m_ctx = inst->v4l2_fh.m2m_ctx;
+	struct v4l2_ctrl *ctrl;
+
+	if (!fbc_buf_count ||
+	    fbc_buf_count == v4l2_m2m_num_dst_bufs_ready(m2m_ctx))
+		return;
+
+	ctrl = v4l2_ctrl_find(&inst->v4l2_ctrl_hdl,
+			      V4L2_CID_MIN_BUFFERS_FOR_CAPTURE);
+	if (ctrl)
+		v4l2_ctrl_s_ctrl(ctrl, fbc_buf_count);
+}
+
 static int handle_dynamic_resolution_change(struct vpu_instance *inst)
 {
 	struct v4l2_fh *fh = &inst->v4l2_fh;
-	struct v4l2_m2m_ctx *m2m_ctx = inst->v4l2_fh.m2m_ctx;
 
 	static const struct v4l2_event vpu_event_src_ch = {
 		.type = V4L2_EVENT_SOURCE_CHANGE,
@@ -308,14 +322,6 @@ static int handle_dynamic_resolution_change(struct vpu_instance *inst)
 
 	inst->needs_reallocation = true;
 	inst->fbc_buf_count = initial_info->min_frame_buffer_count + 1;
-	if (inst->fbc_buf_count != v4l2_m2m_num_dst_bufs_ready(m2m_ctx)) {
-		struct v4l2_ctrl *ctrl;
-
-		ctrl = v4l2_ctrl_find(&inst->v4l2_ctrl_hdl,
-				      V4L2_CID_MIN_BUFFERS_FOR_CAPTURE);
-		if (ctrl)
-			v4l2_ctrl_s_ctrl(ctrl, inst->fbc_buf_count);
-	}
 
 	if (p_dec_info->initial_info_obtained) {
 		const struct vpu_format *vpu_fmt;
@@ -461,19 +467,24 @@ static void wave5_vpu_dec_finish_decode(struct vpu_instance *inst)
 	if ((dec_info.index_frame_display == DISPLAY_IDX_FLAG_SEQ_END ||
 	     dec_info.sequence_changed)) {
 		unsigned long flags;
+		u32 fbc_buf_count = 0;
 
 		spin_lock_irqsave(&inst->state_spinlock, flags);
 		if (!v4l2_m2m_has_stopped(m2m_ctx)) {
 			switch_state(inst, VPU_INST_STATE_STOP);
 
-			if (dec_info.sequence_changed)
+			if (dec_info.sequence_changed) {
 				handle_dynamic_resolution_change(inst);
-			else
+				fbc_buf_count = inst->fbc_buf_count;
+			} else {
 				send_eos_event(inst);
+			}
 
 			flag_last_buffer_done(inst);
 		}
 		spin_unlock_irqrestore(&inst->state_spinlock, flags);
+
+		wave5_update_min_bufs_ctrl(inst, fbc_buf_count);
 	}
 
 	if (inst->sent_eos &&
@@ -1512,6 +1523,7 @@ static int wave5_vpu_dec_start_streaming(struct vb2_queue *q, unsigned int count
 		ret = initialize_sequence(inst);
 		if (ret) {
 			unsigned long flags;
+			u32 fbc_buf_count = 0;
 
 			spin_lock_irqsave(&inst->state_spinlock, flags);
 			if (wave5_is_draining_or_eos(inst) &&
@@ -1520,14 +1532,18 @@ static int wave5_vpu_dec_start_streaming(struct vb2_queue *q, unsigned int count
 
 				switch_state(inst, VPU_INST_STATE_STOP);
 
-				if (vb2_is_streaming(dst_vq))
+				if (vb2_is_streaming(dst_vq)) {
 					send_eos_event(inst);
-				else
+				} else {
 					handle_dynamic_resolution_change(inst);
+					fbc_buf_count = inst->fbc_buf_count;
+				}
 
 				flag_last_buffer_done(inst);
 			}
 			spin_unlock_irqrestore(&inst->state_spinlock, flags);
+
+			wave5_update_min_bufs_ctrl(inst, fbc_buf_count);
 		} else {
 			switch_state(inst, VPU_INST_STATE_INIT_SEQ);
 		}
@@ -1725,6 +1741,8 @@ static const struct vpu_instance_ops wave5_vpu_dec_inst_ops = {
 static int initialize_sequence(struct vpu_instance *inst)
 {
 	struct dec_initial_info initial_info;
+	unsigned long flags;
+	u32 fbc_buf_count;
 	int ret = 0;
 	inst->time_stamp.head = 0;
 	inst->time_stamp.tail = 0;
@@ -1750,7 +1768,12 @@ static int initialize_sequence(struct vpu_instance *inst)
 		return ret;
 	}
 
+	spin_lock_irqsave(&inst->state_spinlock, flags);
 	handle_dynamic_resolution_change(inst);
+	fbc_buf_count = inst->fbc_buf_count;
+	spin_unlock_irqrestore(&inst->state_spinlock, flags);
+
+	wave5_update_min_bufs_ctrl(inst, fbc_buf_count);
 
 	return 0;
 }
@@ -1795,6 +1818,7 @@ static void wave5_vpu_dec_device_run(void *priv)
 		ret = initialize_sequence(inst);
 		if (ret) {
 			unsigned long flags;
+			u32 fbc_buf_count = 0;
 
 			spin_lock_irqsave(&inst->state_spinlock, flags);
 			if (wave5_is_draining_or_eos(inst) &&
@@ -1803,14 +1827,18 @@ static void wave5_vpu_dec_device_run(void *priv)
 
 				switch_state(inst, VPU_INST_STATE_STOP);
 
-				if (vb2_is_streaming(dst_vq))
+				if (vb2_is_streaming(dst_vq)) {
 					send_eos_event(inst);
-				else
+				} else {
 					handle_dynamic_resolution_change(inst);
+					fbc_buf_count = inst->fbc_buf_count;
+				}
 
 				flag_last_buffer_done(inst);
 			}
 			spin_unlock_irqrestore(&inst->state_spinlock, flags);
+
+			wave5_update_min_bufs_ctrl(inst, fbc_buf_count);
 		} else {
 			spin_lock_irqsave(&inst->state_spinlock, flags);
 			switch_state(inst, VPU_INST_STATE_INIT_SEQ);
