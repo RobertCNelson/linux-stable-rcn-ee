@@ -29,6 +29,9 @@
 };
 
 &main_gpio0 {
+        pinctrl-names = "default";
+        pinctrl-0 = <&csi_expansion_interface_reset>;
+
 	line68-hog{
 		gpio-hog;
 		gpios = <68 GPIO_ACTIVE_HIGH>;
