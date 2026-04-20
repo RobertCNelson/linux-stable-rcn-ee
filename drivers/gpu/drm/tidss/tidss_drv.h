@@ -16,7 +16,8 @@
 #define TIDSS_MAX_OLDI_TXES 2
 
 typedef u32 dispc_irq_t;
-struct tidss_oldi;
+
+struct auxiliary_device;
 
 struct tidss_device {
 	struct drm_device ddev;		/* DRM device for DSS */
@@ -34,7 +35,7 @@ struct tidss_device {
 	struct drm_plane *planes[TIDSS_MAX_PLANES];
 
 	unsigned int num_oldis;
-	struct tidss_oldi *oldis[TIDSS_MAX_OLDI_TXES];
+	struct auxiliary_device *oldis[TIDSS_MAX_OLDI_TXES];
 
 	unsigned int irq;
 
