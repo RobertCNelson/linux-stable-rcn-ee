@@ -122,6 +122,50 @@ static const struct drm_mode_config_funcs mode_config_funcs = {
 	.atomic_commit = drm_atomic_helper_commit,
 };
 
+static const char * const tidss_internal_bridge_compatibles[] = {
+	"ti,j721e-dsi",
+};
+
+/*
+ * Detect whether the bridge is internal to the SoC or not. This is needed
+ * to find out whether we are using DPI output (thus no internal bridge).
+ * We detect this via two means:
+ * - If the bridge's of_node has a compatible, compare to known internal values.
+ * - If the bridge is a grand-child of DSS, and has "oldi-transmitters" parent.
+ */
+static bool tidss_is_bridge_internal(struct tidss_device *tidss,
+				     struct drm_bridge *bridge)
+{
+	struct device_node *parent, *grand_parent;
+	struct property *prop;
+	bool is_internal;
+
+	if (WARN_ON(!bridge->of_node))
+		return false;
+
+	prop = of_find_property(bridge->of_node, "compatible", NULL);
+	for (const char *cp = of_prop_next_string(prop, NULL); cp;
+	     cp = of_prop_next_string(prop, cp)) {
+		for (unsigned int i = 0;
+		     i < ARRAY_SIZE(tidss_internal_bridge_compatibles); ++i) {
+			if (strcmp(cp, tidss_internal_bridge_compatibles[i]) == 0)
+				return true;
+		}
+	}
+
+	parent = of_get_parent(bridge->of_node);
+	grand_parent = of_get_parent(parent);
+
+	is_internal = parent && grand_parent &&
+		      tidss->dev->of_node == grand_parent &&
+		      of_node_name_eq(parent, "oldi-transmitters");
+
+	of_node_put(grand_parent);
+	of_node_put(parent);
+
+	return is_internal;
+}
+
 static int tidss_dispc_modeset_init(struct tidss_device *tidss)
 {
 	struct device *dev = tidss->dev;
@@ -133,6 +177,7 @@ static int tidss_dispc_modeset_init(struct tidss_device *tidss)
 		u32 hw_videoport;
 		struct drm_bridge *bridge;
 		u32 enc_type;
+		bool dpi_output;
 	};
 
 	const struct dispc_features *feat = tidss->feat;
@@ -149,6 +194,7 @@ static int tidss_dispc_modeset_init(struct tidss_device *tidss)
 		struct drm_panel *panel;
 		struct drm_bridge *bridge;
 		u32 enc_type = DRM_MODE_ENCODER_NONE;
+		bool dpi_output;
 		int ret;
 
 		ret = drm_of_find_panel_or_bridge(dev->of_node, i, 0,
@@ -159,6 +205,11 @@ static int tidss_dispc_modeset_init(struct tidss_device *tidss)
 		} else if (ret) {
 			return dev_err_probe(dev, ret, "port %d probe failed\n", i);
 		}
+
+		if (bridge)
+			dpi_output = !tidss_is_bridge_internal(tidss, bridge);
+		else
+			dpi_output = true;
 
 		if (panel) {
 			u32 conn_type;
@@ -199,6 +250,7 @@ static int tidss_dispc_modeset_init(struct tidss_device *tidss)
 		pipes[num_pipes].hw_videoport = i;
 		pipes[num_pipes].bridge = bridge;
 		pipes[num_pipes].enc_type = enc_type;
+		pipes[num_pipes].dpi_output = dpi_output;
 		num_pipes++;
 	}
 
@@ -224,7 +276,8 @@ static int tidss_dispc_modeset_init(struct tidss_device *tidss)
 		tidss->planes[tidss->num_planes++] = &tplane->plane;
 
 		tcrtc = tidss_crtc_create(tidss, pipes[i].hw_videoport,
-					  &tplane->plane);
+					  &tplane->plane,
+					  pipes[i].dpi_output);
 		if (IS_ERR(tcrtc)) {
 			dev_err(tidss->dev, "crtc create failed\n");
 			return PTR_ERR(tcrtc);
