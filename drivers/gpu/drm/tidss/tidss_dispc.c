@@ -467,6 +467,7 @@ struct dispc_device {
 	const struct dispc_features *feat;
 
 	struct clk *fclk;
+	struct regmap *syscon_dpi_io_ctrl;
 
 	bool is_enabled;
 
@@ -1201,6 +1202,12 @@ void dispc_vp_prepare(struct dispc_device *dispc, u32 hw_videoport,
 				  mode->crtc_hdisplay - 1) |
 		       FIELD_PREP(DISPC_VP_SIZE_SCREEN_VDISPLAY_MASK,
 				  mode->crtc_vdisplay - 1));
+
+	if (dispc->vp_data[hw_videoport].dpi_output && dispc->syscon_dpi_io_ctrl) {
+		regmap_write(dispc->syscon_dpi_io_ctrl, 0x0,
+			     (!ipc ? DPI0_CLK_CTRL_DATA_CLK_INVDIS : 0) |
+			     (rf ? DPI0_CLK_CTRL_SYNC_CLK_INVDIS : 0));
+	}
 }
 
 void dispc_vp_enable(struct dispc_device *dispc, u32 hw_videoport)
@@ -2988,6 +2995,17 @@ int dispc_init(struct tidss_device *tidss)
 	dispc->feat = feat;
 
 	dispc_init_errata(dispc);
+
+	dispc->syscon_dpi_io_ctrl = syscon_regmap_lookup_by_compatible("ti,am625-dss-dpi0-clk-ctrl");
+	if (IS_ERR(dispc->syscon_dpi_io_ctrl)) {
+		if (PTR_ERR(dispc->syscon_dpi_io_ctrl) != -ENODEV) {
+			r = dev_err_probe(dispc->dev, PTR_ERR(dispc->syscon_dpi_io_ctrl),
+					  "DISPC: syscon_regmap_lookup_by_phandle failed.\n");
+			return r;
+		}
+
+		dispc->syscon_dpi_io_ctrl = NULL;
+	}
 
 	dispc->fourccs = devm_kcalloc(dev, ARRAY_SIZE(dispc_color_formats),
 				      sizeof(*dispc->fourccs), GFP_KERNEL);
