@@ -10,6 +10,10 @@
 #include "tx.h"
 #include "cc33xx.h"
 
+#define NAB_SEND_CMD			0x940d
+#define NAB_SEND_FLAGS			0x08
+#define CC33xx_INTERNAL_DESC_SIZE	200
+
 static int cc33xx_set_default_wep_key(struct cc33xx *cc,
 				      struct cc33xx_vif *wlvif, u8 id)
 {
