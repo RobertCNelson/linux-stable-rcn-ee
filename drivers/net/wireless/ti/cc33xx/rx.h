@@ -25,13 +25,15 @@
  *
  * Bits 0-2 - error code
  * Bits 3-5 - process_id tag (AP mode FW)
- * Bits 6-7 - reserved
+ * Bits 6   - new key
+ * Bits 7   - reserved
  */
 enum {
 	CC33XX_RX_DESC_SUCCESS		= 0x00,
 	CC33XX_RX_DESC_DECRYPT_FAIL	= 0x01,
 	CC33XX_RX_DESC_MIC_FAIL		= 0x02,
-	CC33XX_RX_DESC_STATUS_MASK	= 0x07
+	CC33XX_RX_DESC_STATUS_MASK	= 0x07,
+	CC33XX_RX_DESC_NEW_KEY		= 0x40
 };
 
 /* Account for the padding inserted by the FW in case of RX_ALIGNMENT
