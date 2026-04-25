@@ -20,7 +20,6 @@ int cc33xx_ps_set_mode(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 		if (ret < 0)
 			return ret;
 
-		set_bit(WLVIF_FLAG_IN_PS, &wlvif->flags);
 		break;
 
 	case STATION_ACTIVE_MODE:
@@ -28,7 +27,6 @@ int cc33xx_ps_set_mode(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 		if (ret < 0)
 			return ret;
 
-		clear_bit(WLVIF_FLAG_IN_PS, &wlvif->flags);
 		break;
 
 	default:
