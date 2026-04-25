@@ -16,6 +16,8 @@
 #define CC33XX_INI_PARAM_COMMAND_SIZE (16UL)
 #define CC33XX_INI_CMD_MAX_SIZE      (CC33X_CONF_SIZE + CC33XX_INI_PARAM_COMMAND_SIZE + sizeof(int))
 
+#define CC33XX_MAX_FW_LOGS_BUFFER_SIZE    ((0x1000) - (sizeof(struct NAB_header))) //a bit under ~4KB
+
 #define CC33XX_CMD_BUFFER_SIZE ((CC33XX_INI_CMD_MAX_SIZE > CC33XX_CMD_MAX_SIZE)\
 				? CC33XX_INI_CMD_MAX_SIZE : CC33XX_CMD_MAX_SIZE)
 
@@ -40,7 +42,7 @@ enum wl_rx_buf_align;
 
 struct cc33xx_stats {
 	void *fw_stats;
-	unsigned long fw_stats_update;
+	unsigned long fw_stats_next_update;
 	unsigned int retry_count;
 	unsigned int excessive_retries;
 };
@@ -264,6 +266,9 @@ struct cc33xx {
 	/*ble_enable value - 1=enabled, 0=disabled. */
 	int ble_enable;
 
+	/*fw_crash_logs, allocated upon successfully receiving FW Logs after general error (ie FW assert)*/
+	u8  *fw_crash_logs;
+
 	/* parameters for joining a TWT agreement */
 	int min_wake_duration_usec;
 	int min_wake_interval_mantissa;
@@ -307,6 +312,8 @@ struct cc33xx {
 
 	/* burst mode cfg */
 	u8 burst_disable;
+
+	u8 disable_wifi6;
 
 	struct cc33xx_ant_diversity diversity;
 };
@@ -370,10 +377,9 @@ enum CC33xx_FRAME_FORMAT {
 #define NAB_CONTROL_ADDR	0x0000BFF8
 #define NAB_STATUS_ADDR		0x0000BFFC
 
-#define NAB_SEND_CMD			0x940d
-#define NAB_SEND_FLAGS			0x08
-#define CC33xx_INTERNAL_DESC_SIZE	200
 #define NAB_EXTRA_BYTES			4
+
+#define NAB_GENERAL_ERROR_FW_LOGS_OPCODE  (0x900)
 
 #define TX_RESULT_QUEUE_SIZE  108
 
