@@ -22,6 +22,7 @@
 struct cc33xx_sdio_glue {
 	struct device *dev;
 	struct platform_device *core;
+	struct work_struct inband_irq_work;
 };
 
 static void cc33xx_sdio_claim(struct device *child)
@@ -130,6 +131,16 @@ static int cc33xx_sdio_power_on(struct cc33xx_sdio_glue *glue)
 	return 0;
 }
 
+static bool mmc_inband_polling_host(struct sdio_func *func)
+{
+	struct mmc_host *host = func->card->host;
+
+	/* Indicates the MMC host uses a dedicated thread to poll
+	for SDIO in-band IRQs and run the IRQ handlers */
+
+	return !(host->caps2 & MMC_CAP2_SDIO_IRQ_NOTHREAD);
+}
+
 static int cc33xx_sdio_power_off(struct cc33xx_sdio_glue *glue)
 {
 	struct sdio_func *func = dev_to_sdio_func(glue->dev);
@@ -154,6 +165,15 @@ static int cc33xx_sdio_set_power(struct device *child, bool enable)
 		return cc33xx_sdio_power_off(glue);
 }
 
+static void inband_irq_work(struct work_struct *work)
+{
+	struct cc33xx_sdio_glue *glue = container_of(work, struct cc33xx_sdio_glue, inband_irq_work);
+	struct platform_device *pdev = glue->core;
+	struct cc33xx_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
+
+	pdev_data->irq_handler(pdev);
+}
+
 /**
  *	inband_irq_handler - Called from the MMC subsystem when the
  *	function's IRQ is signaled.
@@ -170,7 +190,10 @@ static void inband_irq_handler(struct sdio_func *func)
 	if (WARN_ON(!pdev_data->irq_handler))
 		return;
 
-	pdev_data->irq_handler(pdev);
+	if (mmc_inband_polling_host(func))
+		schedule_work(&glue->inband_irq_work);
+	else
+		pdev_data->irq_handler(pdev);
 }
 
 static void cc33xx_enable_async_interrupt(struct sdio_func *func)
@@ -205,6 +228,18 @@ static void cc33xx_sdio_disable_irq(struct device *child)
 	sdio_release_host(func);
 }
 
+static void cc33xx_sdio_sync_irq(struct device *child)
+{
+	struct cc33xx_sdio_glue *glue = dev_get_drvdata(child->parent);
+	struct sdio_func *func = dev_to_sdio_func(glue->dev);
+	struct mmc_host *host = func->card->host;
+
+	if (mmc_inband_polling_host(func))
+		flush_work(&glue->inband_irq_work);
+	else
+		flush_work(&host->sdio_irq_work);
+}
+
 static void cc33xx_enable_line_irq(struct device *child)
 {
 	struct cc33xx_sdio_glue *glue = dev_get_drvdata(child->parent);
@@ -221,6 +256,15 @@ static void cc33xx_disable_line_irq(struct device *child)
 	struct cc33xx_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
 
 	disable_irq_nosync(pdev_data->gpio_irq_num);
+}
+
+static void cc33xx_sync_line_irq(struct device *child)
+{
+	struct cc33xx_sdio_glue *glue = dev_get_drvdata(child->parent);
+	struct platform_device *pdev = glue->core;
+	struct cc33xx_platdev_data *pdev_data = dev_get_platdata(&pdev->dev);
+
+	synchronize_irq(pdev_data->gpio_irq_num);
 }
 
 static void cc33xx_set_irq_handler(struct device *child, void *handler)
@@ -242,6 +286,7 @@ static const struct cc33xx_if_operations sdio_ops_gpio_irq = {
 	.set_irq_handler	= cc33xx_set_irq_handler,
 	.disable_irq		= cc33xx_disable_line_irq,
 	.enable_irq		= cc33xx_enable_line_irq,
+	.sync_irq		= cc33xx_sync_line_irq,
 };
 
 static const struct cc33xx_if_operations sdio_ops_inband_irq = {
@@ -254,6 +299,7 @@ static const struct cc33xx_if_operations sdio_ops_inband_irq = {
 	.set_irq_handler	= cc33xx_set_irq_handler,
 	.disable_irq		= cc33xx_sdio_disable_irq,
 	.enable_irq		= cc33xx_sdio_enable_irq,
+	.sync_irq		= cc33xx_sdio_sync_irq,
 };
 
 #ifdef CONFIG_OF
@@ -389,6 +435,9 @@ static int sdio_cc33xx_probe(struct sdio_func *func,
 
 		pdev_data->if_ops = &sdio_ops_gpio_irq;
 	} else {
+		if (mmc_inband_polling_host(func))
+			INIT_WORK(&glue->inband_irq_work, inband_irq_work);
+
 		pdev_data->if_ops = &sdio_ops_inband_irq;
 	}
 
