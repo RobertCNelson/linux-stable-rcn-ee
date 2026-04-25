@@ -67,6 +67,9 @@ static void cc33xx_rx_status(struct cc33xx *cc,
 			cc33xx_warning("Michael MIC error. Desc: 0x%x",
 				       desc_err_code);
 		}
+
+		if (desc->status & CC33XX_RX_DESC_NEW_KEY)
+			status->flag |= RX_FLAG_PN_VALIDATED;
 	}
 
 	if (beacon || probe_rsp)
