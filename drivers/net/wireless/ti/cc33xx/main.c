@@ -2801,7 +2801,7 @@ static int cc33xx_config_vif(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 	return 0;
 }
 
-static int cc33xx_op_config(struct ieee80211_hw *hw, u32 changed)
+static int cc33xx_op_config(struct ieee80211_hw *hw, int radio_idx, u32 changed)
 {
 	struct cc33xx *cc = hw->priv;
 	struct cc33xx_vif *wlvif;
@@ -3408,12 +3408,14 @@ out:
 	return 0;
 }
 
-static int cc33xx_op_set_frag_threshold(struct ieee80211_hw *hw, u32 value)
+static int cc33xx_op_set_frag_threshold(struct ieee80211_hw *hw,
+					int radio_idx, u32 value)
 {
 	return 0;
 }
 
-static int cc33xx_op_set_rts_threshold(struct ieee80211_hw *hw, u32 value)
+static int cc33xx_op_set_rts_threshold(struct ieee80211_hw *hw,
+				       int radio_idx, u32 value)
 {
 	return 0;
 }
