@@ -4827,7 +4827,7 @@ static int cc33xx_op_cancel_remain_on_channel(struct ieee80211_hw *hw,
 
 static void cc33xx_op_sta_rc_update(struct ieee80211_hw *hw,
 				    struct ieee80211_vif *vif,
-				    struct ieee80211_sta *sta,
+				    struct ieee80211_link_sta *link_sta,
 				    u32 changed)
 {
 	struct cc33xx_vif *wlvif = cc33xx_vif_to_data(vif);
@@ -4836,8 +4836,8 @@ static void cc33xx_op_sta_rc_update(struct ieee80211_hw *hw,
 		return;
 
 	/* this callback is atomic, so schedule a new work */
-	wlvif->rc_update_bw = sta->deflink.bandwidth;
-	memcpy(&wlvif->rc_ht_cap, &sta->deflink.ht_cap, sizeof(sta->deflink.ht_cap));
+	wlvif->rc_update_bw = link_sta->sta->deflink.bandwidth;
+	memcpy(&wlvif->rc_ht_cap, &link_sta->sta->deflink.ht_cap, sizeof(link_sta->sta->deflink.ht_cap));
 	ieee80211_queue_work(hw, &wlvif->rc_update_work);
 }
 
@@ -4985,7 +4985,7 @@ static const struct ieee80211_ops cc33xx_ops = {
 	.assign_vif_chanctx = cc33xx_op_assign_vif_chanctx,
 	.unassign_vif_chanctx = cc33xx_op_unassign_vif_chanctx,
 	.switch_vif_chanctx = cc33xx_op_switch_vif_chanctx,
-	.sta_rc_update = cc33xx_op_sta_rc_update,
+	.link_sta_rc_update = cc33xx_op_sta_rc_update,
 	.sta_statistics = cc33xx_op_sta_statistics,
 	.get_expected_throughput = cc33xx_op_get_expected_throughput,
 	CFG80211_TESTMODE_CMD(cc33xx_tm_cmd)
