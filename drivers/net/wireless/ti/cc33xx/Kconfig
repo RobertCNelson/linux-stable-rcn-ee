@@ -12,6 +12,18 @@ config CC33XX
 	  If you choose to build a module, it will be called cc33xx. Say N if
 	  unsure.
 
+config CC33XX_SPI
+	tristate "TI CC33XX SPI support"
+	depends on CC33XX && SPI_MASTER && OF
+	select CRC7
+	help
+	  This module adds support for the SPI interface of adapters using
+	  TI CC33XX chipsets.  Select this if your platform is using
+	  the SPI bus.
+
+	  If you choose to build a module, it'll be called cc33xx_spi.
+	  Say N if unsure.
+
 config CC33XX_SDIO
 	tristate "TI CC33XX SDIO support"
 	depends on CC33XX && MMC
