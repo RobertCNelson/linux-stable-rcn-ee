@@ -5,28 +5,6 @@
 
 #include "acx.h"
 
-int cc33xx_acx_clear_statistics(struct cc33xx *cc)
-{
-	struct acx_header *acx;
-	int ret = 0;
-
-	acx = kzalloc(sizeof(*acx), GFP_KERNEL);
-	if (!acx) {
-		ret = -ENOMEM;
-		goto out;
-	}
-
-	ret = cc33xx_cmd_configure(cc, ACX_CLEAR_STATISTICS, acx, sizeof(*acx));
-	if (ret < 0) {
-		cc33xx_warning("failed to clear firmware statistics: %d", ret);
-		goto out;
-	}
-
-out:
-	kfree(acx);
-	return ret;
-}
-
 int cc33xx_acx_wake_up_conditions(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 				  u8 wake_up_event, u8 listen_interval)
 {
@@ -403,21 +381,6 @@ out:
 	return ret;
 }
 
-int cc33xx_acx_statistics(struct cc33xx *cc, void *stats)
-{
-	int ret;
-
-	ret = cc33xx_cmd_interrogate(cc, ACX_STATISTICS, stats,
-				     sizeof(struct acx_header),
-				     sizeof(struct cc33xx_acx_statistics));
-	if (ret < 0) {
-		cc33xx_warning("acx statistics failed: %d", ret);
-		return -ENOMEM;
-	}
-
-	return 0;
-}
-
 int cc33xx_update_ap_rates(struct cc33xx *cc, u8 role_id,
 			   u32 basic_rates_set, u32 supported_rates)
 {
@@ -609,56 +572,6 @@ int cc33xx_acx_set_ba_receiver_session(struct cc33xx *cc, u8 tid_index, u16 ssn,
 	ret = 0;
 out:
 	kfree(acx);
-	return ret;
-}
-
-int cc33xx_acx_tsf_info(struct cc33xx *cc,
-			struct cc33xx_vif *wlvif, u64 *mactime)
-{
-	struct cc33xx_acx_fw_tsf_information *tsf_info;
-	int ret = 0;
-
-	tsf_info = kzalloc(sizeof(*tsf_info), GFP_KERNEL);
-	if (!tsf_info) {
-		ret = -ENOMEM;
-		goto out;
-	}
-
-	tsf_info->role_id = wlvif->role_id;
-
-	*mactime = le32_to_cpu(tsf_info->current_tsf_low) |
-		((u64)le32_to_cpu(tsf_info->current_tsf_high) << 32);
-
-out:
-	kfree(tsf_info);
-	return ret;
-}
-
-int cc33xx_acx_config_ps(struct cc33xx *cc, struct cc33xx_vif *wlvif)
-{
-	struct cc33xx_acx_config_ps *config_ps;
-	int ret;
-
-	config_ps = kzalloc(sizeof(*config_ps), GFP_KERNEL);
-	if (!config_ps) {
-		ret = -ENOMEM;
-		goto out;
-	}
-
-	config_ps->exit_retries = cc->conf.host_conf.conn.psm_exit_retries;
-	config_ps->enter_retries = cc->conf.host_conf.conn.psm_entry_retries;
-	config_ps->null_data_rate = cpu_to_le32(wlvif->basic_rate);
-
-	ret = cc33xx_cmd_configure(cc, ACX_CONFIG_PS, config_ps,
-				   sizeof(*config_ps));
-
-	if (ret < 0) {
-		cc33xx_warning("acx config ps failed: %d", ret);
-		goto out;
-	}
-
-out:
-	kfree(config_ps);
 	return ret;
 }
 
@@ -908,6 +821,59 @@ out:
 	return ret;
 }
 
+int cc33xx_acx_set_antenna_select(struct cc33xx *cc, u8 selection)
+{
+	struct acx_antenna_select *acx;
+	int ret;
+
+	cc33xx_debug(DEBUG_ACX, "acx setting antenna to %d", selection);
+
+	acx = kzalloc(sizeof(*acx), GFP_KERNEL);
+	if (!acx) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	acx->selection = selection;
+
+	ret = cc33xx_cmd_configure(cc, SET_ANTENNA_SELECT_CFG,
+				   acx, sizeof(*acx));
+	if (ret < 0) {
+		cc33xx_warning("acx setting antenna failed: %d", ret);
+		goto out;
+	}
+
+out:
+	kfree(acx);
+	return ret;
+}
+
+int cc33xx_acx_set_tsf(struct cc33xx *cc, u64 tsf_val)
+{
+	struct debug_set_tsf *set_tsf_cmd;
+	int ret;
+
+	cc33xx_debug(DEBUG_ACX, "acx set tsf. new tsf value: %llx", tsf_val);
+
+	set_tsf_cmd = kzalloc(sizeof(*set_tsf_cmd), GFP_KERNEL);
+	if (!set_tsf_cmd) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	set_tsf_cmd->tsf_val = cpu_to_le64(tsf_val);
+
+	ret = cc33xx_cmd_debug(cc, SET_TSF, set_tsf_cmd, sizeof(*set_tsf_cmd));
+	if (ret < 0) {
+		cc33xx_error("acx set tsf failed: %d", ret);
+		goto out;
+	}
+
+out:
+	kfree(set_tsf_cmd);
+	return ret;
+}
+
 int cc33xx_acx_trigger_fw_assert(struct cc33xx *cc)
 {
 	struct debug_header *buf;
@@ -927,5 +893,347 @@ int cc33xx_acx_trigger_fw_assert(struct cc33xx *cc)
 
 out:
 	kfree(buf);
+	return ret;
+}
+
+int cc33xx_acx_burst_mode_cfg(struct cc33xx *cc, u8 burst_disable)
+{
+	struct debug_burst_mode_cfg *burst_mode_cfg;
+	int ret;
+
+	cc33xx_debug(DEBUG_ACX, "acx burst mode cfg. burst_disable = %d",
+		     burst_disable);
+
+	burst_mode_cfg = kzalloc(sizeof(*burst_mode_cfg), GFP_KERNEL);
+	if (!burst_mode_cfg) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	burst_mode_cfg->burst_disable = burst_disable;
+
+	ret = cc33xx_cmd_debug(cc, BURST_MODE_CFG, burst_mode_cfg,
+			       sizeof(*burst_mode_cfg));
+	if (ret < 0) {
+		cc33xx_warning("acx burst mode cfg failed: %d", ret);
+		goto out;
+	}
+
+out:
+	kfree(burst_mode_cfg);
+	return ret;
+}
+
+int cc33xx_acx_get_antenna_diversity_status(struct cc33xx *cc)
+{
+	struct acx_diversity_status *get_diversity_status_cmd;
+	int ret;
+
+	cc33xx_debug(DEBUG_ACX, "acx get antenna diversity status");
+
+	get_diversity_status_cmd = kzalloc(sizeof(*get_diversity_status_cmd), GFP_KERNEL);
+	if (!get_diversity_status_cmd) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	ret = cc33xx_cmd_interrogate(cc, GET_ANT_DIV_STATUS, get_diversity_status_cmd,
+				sizeof(struct acx_header), sizeof(*get_diversity_status_cmd));
+	if (ret < 0) {
+		cc33xx_warning("acx get antenna diversity status failed: %d", ret);
+		goto out;
+	}
+
+	ret = get_diversity_status_cmd->enable;
+
+out:
+	kfree(get_diversity_status_cmd);
+	return ret;
+}
+
+int cc33xx_acx_set_antenna_diversity_status(struct cc33xx *cc, u8 enable)
+{
+	struct acx_diversity_status *set_diversity_status_cmd;
+	int ret;
+
+	cc33xx_debug(DEBUG_ACX, "acx set antenna diversity status. enable = %d", enable);
+
+	set_diversity_status_cmd = kzalloc(sizeof(*set_diversity_status_cmd), GFP_KERNEL);
+	if (!set_diversity_status_cmd) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	set_diversity_status_cmd->enable = enable;
+
+	ret = cc33xx_cmd_configure(cc, ANT_DIV_ENABLE, set_diversity_status_cmd,
+							sizeof(*set_diversity_status_cmd));
+	if (ret < 0) {
+		cc33xx_warning("acx set antenna diversity status failed: %d", ret);
+		goto out;
+	}
+
+out:
+	kfree(set_diversity_status_cmd);
+	return ret;
+}
+
+int cc33xx_acx_antenna_diversity_get_rssi_threshold(struct cc33xx *cc, s8 *threshold)
+{
+	struct acx_diversity_rssi_threshold *get_rssi_threshold_cmd;
+	int ret;
+
+	cc33xx_debug(DEBUG_ACX, "acx antenna diversity get rssi threshold");
+
+	get_rssi_threshold_cmd = kzalloc(sizeof(*get_rssi_threshold_cmd), GFP_KERNEL);
+	if (!get_rssi_threshold_cmd) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	ret = cc33xx_cmd_interrogate(cc, GET_ANT_DIV_RSSI_THRESHOLD, get_rssi_threshold_cmd,
+				sizeof(struct acx_header), sizeof(*get_rssi_threshold_cmd));
+	if (ret < 0) {
+		cc33xx_warning("acx antenna diversity get rssi threshold failed: %d", ret);
+		goto out;
+	}
+
+	*threshold = get_rssi_threshold_cmd->rssi_threshold;
+	ret = 0;
+
+out:
+	kfree(get_rssi_threshold_cmd);
+	return ret;
+}
+
+int cc33xx_acx_antenna_diversity_set_rssi_threshold(struct cc33xx *cc, s8 rssi_threshold)
+{
+	struct acx_diversity_rssi_threshold *set_rssi_threshold_cmd;
+	int ret;
+
+	cc33xx_debug(DEBUG_ACX, "acx antenna diversity set rssi threshold to %d",
+					rssi_threshold);
+
+	set_rssi_threshold_cmd = kzalloc(sizeof(*set_rssi_threshold_cmd), GFP_KERNEL);
+	if (!set_rssi_threshold_cmd) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	set_rssi_threshold_cmd->rssi_threshold = rssi_threshold;
+
+	ret = cc33xx_cmd_configure(cc, ANT_DIV_SET_RSSI_THRESHOLD, set_rssi_threshold_cmd,
+					sizeof(*set_rssi_threshold_cmd));
+	if (ret < 0) {
+		cc33xx_warning("acx antenna diversity set rssi threshold failed: %d", ret);
+		goto out;
+	}
+
+out:
+	kfree(set_rssi_threshold_cmd);
+	return ret;
+}
+
+int cc33xx_acx_antenna_diversity_get_default_antenna(struct cc33xx *cc)
+{
+	struct acx_diversity_default_antenna *get_default_antenna_cmd;
+	int ret;
+
+	cc33xx_debug(DEBUG_ACX, "acx antenna diversity get default antenna");
+
+	get_default_antenna_cmd = kzalloc(sizeof(*get_default_antenna_cmd), GFP_KERNEL);
+	if (!get_default_antenna_cmd) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	ret = cc33xx_cmd_interrogate(cc, GET_ANT_DIV_DEFAULT_ANTENNA, get_default_antenna_cmd,
+				sizeof(struct acx_header), sizeof(*get_default_antenna_cmd));
+	if (ret < 0) {
+		cc33xx_warning("acx antenna diversity get default antenna failed: %d", ret);
+		goto out;
+	}
+
+	ret = get_default_antenna_cmd->default_antenna;
+
+out:
+	kfree(get_default_antenna_cmd);
+	return ret;
+}
+
+int cc33xx_acx_antenna_diversity_select_default_antenna(struct cc33xx *cc, u8 default_antenna)
+{
+	struct acx_diversity_default_antenna *select_default_antenna_cmd;
+	int ret;
+
+	cc33xx_debug(DEBUG_ACX, "acx antenna diversity select default antenna. default_antenna = %d", default_antenna);
+
+	select_default_antenna_cmd = kzalloc(sizeof(*select_default_antenna_cmd), GFP_KERNEL);
+	if (!select_default_antenna_cmd) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	select_default_antenna_cmd->default_antenna = default_antenna;
+
+	ret = cc33xx_cmd_configure(cc, ANT_DIV_SELECT_DEFAULT_ANTENNA, select_default_antenna_cmd, sizeof(*select_default_antenna_cmd));
+	if (ret < 0) {
+		cc33xx_warning("acx antenna diversity select default antenna failed: %d", ret);
+		goto out;
+	}
+
+out:
+	kfree(select_default_antenna_cmd);
+	return ret;
+}
+
+int cc33xx_acx_statistics(struct cc33xx *cc, void *stats)
+{
+	int ret;
+
+	ret = cc33xx_cmd_interrogate(cc, GET_STATISTICS, stats,
+				     sizeof(struct acx_header),
+				     sizeof(struct cc33xx_acx_statistics));
+	if (ret < 0) {
+		cc33xx_warning("acx statistics failed: %d", ret);
+		return -ENOMEM;
+	}
+
+	return 0;
+}
+
+int cc33xx_acx_clear_statistics(struct cc33xx *cc)
+{
+	struct acx_header *acx;
+	int ret;
+
+	acx = kzalloc(sizeof(*acx), GFP_KERNEL);
+	if (!acx)
+		return -ENOMEM;
+
+	ret = cc33xx_cmd_configure(cc, RESET_STATS,
+				   acx, sizeof(*acx));
+	if (ret < 0)
+		cc33xx_warning("clear stats failed: %d", ret);
+
+	kfree(acx);
+	return ret;
+}
+
+int cc33xx_acx_twt_setup(struct cc33xx *cc, u32 min_wake_duration_usec,
+		       u32 min_wake_interval_mantissa, u32 min_wake_interval_exponent,
+			   u32 max_wake_interval_mantissa, u32 max_wake_interval_exponent,
+			   u8 valid_params)
+{
+	struct acx_twt_setup *acx;
+	int ret;
+
+	cc33xx_debug(DEBUG_ACX, "acx config twt setup. valid_params: %d, "
+				"min_wake_duration_usec: %d, min_wake_interval_mantissa: %d, "
+				"min_wake_interval_exponent: %d, max_wake_interval_mantissa: %d, "
+				"max_wake_interval_exponent: %d",
+				valid_params, min_wake_duration_usec,
+				min_wake_interval_mantissa, min_wake_interval_exponent,
+				max_wake_interval_mantissa, max_wake_interval_exponent);
+
+	acx = kzalloc(sizeof(*acx), GFP_KERNEL);
+	if (!acx) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	acx->min_wake_duration_usec = cpu_to_le32(min_wake_duration_usec);
+	acx->min_wake_interval_mantissa = cpu_to_le32(min_wake_interval_mantissa);
+	acx->min_wake_interval_exponent = cpu_to_le32(min_wake_interval_exponent);
+	acx->max_wake_interval_mantissa = cpu_to_le32(max_wake_interval_mantissa);
+	acx->max_wake_interval_exponent = cpu_to_le32(max_wake_interval_exponent);
+	acx->valid_params = valid_params;
+
+	ret = cc33xx_cmd_configure(cc, TWT_SETUP, acx, sizeof(*acx));
+	if (ret < 0) {
+		cc33xx_warning("acx config twt setup failed: %d", ret);
+		goto out;
+	}
+
+	cc->min_wake_duration_usec = min_wake_duration_usec;
+	cc->min_wake_interval_mantissa = min_wake_interval_mantissa;
+	cc->min_wake_interval_exponent = min_wake_interval_exponent;
+	cc->max_wake_interval_mantissa = max_wake_interval_mantissa;
+	cc->max_wake_interval_exponent = max_wake_interval_exponent;
+out:
+	kfree(acx);
+	return ret;
+}
+
+int cc33xx_acx_twt_terminate(struct cc33xx *cc)
+{
+	struct acx_twt_terminate *acx;
+	int ret;
+
+	cc33xx_debug(DEBUG_ACX, "acx config twt terminate");
+
+	acx = kzalloc(sizeof(*acx), GFP_KERNEL);
+	if (!acx) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	ret = cc33xx_cmd_configure(cc, TWT_TERMINATE, acx, sizeof(*acx));
+	if (ret < 0) {
+		cc33xx_warning("acx config twt terminate failed: %d", ret);
+		goto out;
+	}
+
+out:
+	kfree(acx);
+	return ret;
+}
+
+int cc33xx_acx_twt_suspend(struct cc33xx *cc)
+{
+	struct acx_twt_terminate *acx;
+	int ret;
+
+	cc33xx_debug(DEBUG_ACX, "acx config twt suspend");
+
+	acx = kzalloc(sizeof(*acx), GFP_KERNEL);
+	if (!acx) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	ret = cc33xx_cmd_configure(cc, TWT_SUSPEND, acx, sizeof(*acx));
+	if (ret < 0) {
+		cc33xx_warning("acx config twt suspend failed: %d", ret);
+		goto out;
+	}
+
+out:
+	kfree(acx);
+	return ret;
+}
+
+int cc33xx_acx_twt_resume(struct cc33xx *cc)
+{
+	struct acx_twt_terminate *acx;
+	int ret;
+
+	cc33xx_debug(DEBUG_ACX, "acx config twt resume");
+
+	acx = kzalloc(sizeof(*acx), GFP_KERNEL);
+	if (!acx) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	ret = cc33xx_cmd_configure(cc, TWT_RESUME, acx, sizeof(*acx));
+	if (ret < 0) {
+		cc33xx_warning("acx config twt resume failed: %d", ret);
+		goto out;
+	}
+
+out:
+
+	kfree(acx);
 	return ret;
 }
