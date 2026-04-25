@@ -58,6 +58,7 @@ enum cc33xx_state {
 	CC33XX_STATE_OFF,
 	CC33XX_STATE_RESTARTING,
 	CC33XX_STATE_ON,
+	CC33XX_STATE_FAILED,
 };
 
 struct cc33xx;
@@ -89,6 +90,7 @@ struct cc33xx_if_operations {
 	void (*set_irq_handler)(struct device *child, void *irq_handler);
 	void (*enable_irq)(struct device *child);
 	void (*disable_irq)(struct device *child);
+	void (*sync_irq) (struct device *child);
 };
 
 struct cc33xx_platdev_data {
@@ -136,7 +138,6 @@ enum cc33xx_vif_flags {
 	WLVIF_FLAG_STA_AUTHORIZED,
 	WLVIF_FLAG_IBSS_JOINED,
 	WLVIF_FLAG_AP_STARTED,
-	WLVIF_FLAG_IN_PS,
 	WLVIF_FLAG_STA_STATE_SENT,
 	WLVIF_FLAG_PSPOLL_FAILURE,
 	WLVIF_FLAG_CS_PROGRESS,
@@ -397,6 +398,8 @@ struct cc33xx_vif {
 	 */
 	u8 persistent[];
 };
+
+void cc33xx_irq(void *cookie);
 
 static inline struct cc33xx_vif *cc33xx_vif_to_data(struct ieee80211_vif *vif)
 {
