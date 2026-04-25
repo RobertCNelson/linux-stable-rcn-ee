@@ -10,6 +10,7 @@ struct cc33xx;
 
 void cc33xx_disable_interrupts_nosync(struct cc33xx *cc);
 void cc33xx_enable_interrupts(struct cc33xx *cc);
+void cc33xx_sync_interrupts(struct cc33xx *cc);
 void cc33xx_io_reset(struct cc33xx *cc);
 void cc33xx_io_init(struct cc33xx *cc);
 int __must_check cc33xx_raw_read(struct cc33xx *cc, int addr,
