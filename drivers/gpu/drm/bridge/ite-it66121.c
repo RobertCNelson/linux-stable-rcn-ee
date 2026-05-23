@@ -182,6 +182,7 @@
 
 #define IT66121_HDMI_MODE_REG			0xC0
 #define IT66121_HDMI_MODE_HDMI			BIT(0)
+#define IT66121_HDMI_MODE_DVI			0
 
 #define IT66121_SYS_STATUS_REG			0x0E
 #define IT66121_SYS_STATUS_ACTIVE_IRQ		BIT(7)
@@ -908,8 +909,10 @@ void it66121_bridge_mode_set(struct drm_bridge *bridge,
 			 IT66121_AVI_INFO_PKT_ON | IT66121_AVI_INFO_PKT_RPT))
 		goto unlock;
 
-	/* Set TX mode to HDMI */
-	if (regmap_write(ctx->regmap, IT66121_HDMI_MODE_REG, IT66121_HDMI_MODE_HDMI))
+	/* Set TX mode to HDMI or DVI */
+	if (regmap_write(ctx->regmap, IT66121_HDMI_MODE_REG,
+			 ctx->connector.display_info.is_hdmi ?
+			 IT66121_HDMI_MODE_HDMI : IT66121_HDMI_MODE_DVI))
 		goto unlock;
 
 	if (ctx->info->id == ID_IT66121 &&
