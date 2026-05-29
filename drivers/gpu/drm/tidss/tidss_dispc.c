@@ -467,6 +467,8 @@ struct dispc_device {
 	const struct dispc_features *feat;
 
 	struct clk *fclk;
+	struct regmap *syscon_dpi_io_ctrl;
+	unsigned int syscon_dpi_io_ctrl_offset;
 
 	bool is_enabled;
 
@@ -1201,6 +1203,13 @@ void dispc_vp_prepare(struct dispc_device *dispc, u32 hw_videoport,
 				  mode->crtc_hdisplay - 1) |
 		       FIELD_PREP(DISPC_VP_SIZE_SCREEN_VDISPLAY_MASK,
 				  mode->crtc_vdisplay - 1));
+
+	if (dispc->vp_data[hw_videoport].dpi_output && dispc->syscon_dpi_io_ctrl) {
+		regmap_write(dispc->syscon_dpi_io_ctrl,
+			     dispc->syscon_dpi_io_ctrl_offset + 0x0,
+			     (!ipc ? DPI0_CLK_CTRL_DATA_CLK_INVDIS : 0) |
+			     (rf ? DPI0_CLK_CTRL_SYNC_CLK_INVDIS : 0));
+	}
 }
 
 void dispc_vp_enable(struct dispc_device *dispc, u32 hw_videoport)
@@ -2988,6 +2997,22 @@ int dispc_init(struct tidss_device *tidss)
 	dispc->feat = feat;
 
 	dispc_init_errata(dispc);
+
+	dispc->syscon_dpi_io_ctrl =
+		syscon_regmap_lookup_by_phandle_args(tidss->dev->of_node,
+						     "ti,dpi-io-ctrl", 1,
+						     &dispc->syscon_dpi_io_ctrl_offset);
+
+	if (IS_ERR(dispc->syscon_dpi_io_ctrl)) {
+		r = PTR_ERR(dispc->syscon_dpi_io_ctrl);
+
+		if (r == -ENOENT) {
+			dispc->syscon_dpi_io_ctrl = NULL;
+		} else {
+			return dev_err_probe(dispc->dev, r,
+					     "failed to get 'ti,dpi-io-ctrl'\n");
+		}
+	}
 
 	dispc->fourccs = devm_kcalloc(dev, ARRAY_SIZE(dispc_color_formats),
 				      sizeof(*dispc->fourccs), GFP_KERNEL);
