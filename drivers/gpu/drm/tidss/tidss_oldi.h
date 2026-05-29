@@ -36,7 +36,10 @@ enum tidss_oldi_link_type {
 	OLDI_MODE_SECONDARY_DUAL_LINK,
 };
 
-int tidss_oldi_init(struct tidss_device *tidss);
-void tidss_oldi_deinit(struct tidss_device *tidss);
+int tidss_oldi_create_devices(struct tidss_device *tidss);
+void tidss_oldi_destroy_devices(struct tidss_device *tidss);
+
+int tidss_oldi_register_driver(void);
+void tidss_oldi_unregister_driver(void);
 
 #endif /* __TIDSS_OLDI_H__ */

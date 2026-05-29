@@ -133,10 +133,6 @@ static int tidss_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	ret = tidss_oldi_init(tidss);
-	if (ret)
-		return dev_err_probe(dev, ret, "failed to init OLDI\n");
-
 	pm_runtime_enable(dev);
 
 	pm_runtime_set_autosuspend_delay(dev, 1000);
@@ -147,24 +143,30 @@ static int tidss_probe(struct platform_device *pdev)
 	dispc_runtime_resume(tidss->dispc);
 #endif
 
+	ret = tidss_oldi_create_devices(tidss);
+	if (ret) {
+		dev_err_probe(dev, ret, "failed to create OLDI devices\n");
+		goto err_runtime_suspend;
+	}
+
 	ret = tidss_modeset_init(tidss);
 	if (ret < 0) {
 		if (ret != -EPROBE_DEFER)
 			dev_err(dev, "failed to init DRM/KMS (%d)\n", ret);
-		goto err_runtime_suspend;
+		goto err_destroy_oldis;
 	}
 
 	irq = platform_get_irq(pdev, 0);
 	if (irq < 0) {
 		ret = irq;
-		goto err_runtime_suspend;
+		goto err_destroy_oldis;
 	}
 	tidss->irq = irq;
 
 	ret = tidss_irq_install(ddev, irq);
 	if (ret) {
 		dev_err(dev, "tidss_irq_install failed: %d\n", ret);
-		goto err_runtime_suspend;
+		goto err_destroy_oldis;
 	}
 
 	drm_kms_helper_poll_init(ddev);
@@ -194,14 +196,15 @@ err_drm_dev_unreg:
 err_irq_uninstall:
 	tidss_irq_uninstall(ddev);
 
+err_destroy_oldis:
+	tidss_oldi_destroy_devices(tidss);
+
 err_runtime_suspend:
 #ifndef CONFIG_PM
 	dispc_runtime_suspend(tidss->dispc);
 #endif
 	pm_runtime_dont_use_autosuspend(dev);
 	pm_runtime_disable(dev);
-
-	tidss_oldi_deinit(tidss);
 
 	return ret;
 }
@@ -218,14 +221,14 @@ static void tidss_remove(struct platform_device *pdev)
 
 	tidss_irq_uninstall(ddev);
 
+	tidss_oldi_destroy_devices(tidss);
+
 #ifndef CONFIG_PM
 	/* If we don't have PM, we need to call suspend manually */
 	dispc_runtime_suspend(tidss->dispc);
 #endif
 	pm_runtime_dont_use_autosuspend(dev);
 	pm_runtime_disable(dev);
-
-	tidss_oldi_deinit(tidss);
 
 	/* devm allocated dispc goes away with the dev so mark it NULL */
 	dispc_remove(tidss);
@@ -262,7 +265,31 @@ static struct platform_driver tidss_platform_driver = {
 	},
 };
 
-drm_module_platform_driver(tidss_platform_driver);
+static int __init tidss_platform_driver_init(void)
+{
+	int ret;
+
+	ret = tidss_oldi_register_driver();
+	if (ret)
+		return ret;
+
+	ret = drm_platform_driver_register(&tidss_platform_driver);
+	if (ret) {
+		tidss_oldi_unregister_driver();
+		return ret;
+	}
+
+	return 0;
+}
+module_init(tidss_platform_driver_init);
+
+static void __exit tidss_platform_driver_exit(void)
+{
+	platform_driver_unregister(&tidss_platform_driver);
+	tidss_oldi_unregister_driver();
+}
+module_exit(tidss_platform_driver_exit);
+
 
 MODULE_AUTHOR("Tomi Valkeinen <tomi.valkeinen@ti.com>");
 MODULE_DESCRIPTION("TI Keystone DSS Driver");
