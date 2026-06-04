@@ -1,0 +1,30 @@
+// SPDX-License-Identifier: GPL-2.0-only OR MIT
+/*
+ * Copyright (C) Robert Nelson, BeagleBoard.org Foundation
+ */
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/pinctrl/am33xx.h>
+
+/*
+ * Helper to show loaded overlays under: /proc/device-tree/chosen/overlays/
+ */
+&{/chosen} {
+	overlays {
+		AM335X-PRU-P9-25.kernel = __TIMESTAMP__;
+	};
+};
+
+&am33xx_pinmux {
+	pinctrl-names = "default";
+	pinctrl-0 = <&bb_pru_p9_25_pins>;
+
+	bb_pru_p9_25_pins: pinmux_bb_pru_p9_25_pins {
+		pinctrl-single,pins = <
+			AM33XX_IOPAD(0x9ac, PIN_OUTPUT | MUX_MODE5)	/* P9_25  gpio3.21 (A14) mcasp0_ahclkx.pr1_pru0_pru_r30[7] */
+		>;
+	};
+};
