@@ -14,6 +14,8 @@
 
 	chosen {
 		stdout-path = "serial0:115200n8";
+		base_dtb = "am335x-boneblue.dts";
+		base_dtb_timestamp = __TIMESTAMP__;
 	};
 
 	leds {
