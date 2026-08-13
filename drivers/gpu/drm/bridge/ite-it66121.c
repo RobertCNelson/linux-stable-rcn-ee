@@ -1607,12 +1607,16 @@ static int it66121_probe(struct i2c_client *client)
 	}
 
 	ctx = devm_kzalloc(dev, sizeof(*ctx), GFP_KERNEL);
-	if (!ctx)
+	if (!ctx) {
+		dev_err(dev, "devm_kzalloc failed\n");
 		return -ENOMEM;
+	}
 
 	ep = of_graph_get_endpoint_by_regs(dev->of_node, 0, 0);
-	if (!ep)
+	if (!ep) {
+		dev_err(dev, "Could not find OF endpoint 0\n");
 		return -EINVAL;
+	}
 
 	ctx->dev = dev;
 	ctx->client = client;
@@ -1621,12 +1625,14 @@ static int it66121_probe(struct i2c_client *client)
 	of_property_read_u32(ep, "bus-width", &ctx->bus_width);
 	of_node_put(ep);
 
-	if (ctx->bus_width != 12 && ctx->bus_width != 24)
+	if (ctx->bus_width != 12 && ctx->bus_width != 24) {
+		dev_err(dev, "Invalid bus width %u (must be 12 or 24)\n", ctx->bus_width);
 		return -EINVAL;
+	}
 
 	ep = of_graph_get_remote_node(dev->of_node, 1, -1);
 	if (!ep) {
-		dev_err(ctx->dev, "The endpoint is unconnected\n");
+		dev_err(dev, "Could not find remote node for port 1\n");
 		return -EINVAL;
 	}
 
@@ -1669,6 +1675,9 @@ static int it66121_probe(struct i2c_client *client)
 
 	if ((vendor_ids[1] << 8 | vendor_ids[0]) != ctx->info->vid ||
 	    (device_ids[1] << 8 | device_ids[0]) != ctx->info->pid) {
+		dev_err(dev, "Vendor / device not found: 0x%04x / 0x%04x\n",
+			vendor_ids[1] << 8 | vendor_ids[0],
+			device_ids[1] << 8 | device_ids[0]);
 		return -ENODEV;
 	}
 
