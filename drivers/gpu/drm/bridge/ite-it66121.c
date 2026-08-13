@@ -1520,12 +1520,16 @@ static int it66121_probe(struct i2c_client *client)
 
 	ctx = devm_drm_bridge_alloc(dev, struct it66121_ctx, bridge,
 				    &it66121_bridge_funcs);
-	if (IS_ERR(ctx))
+	if (IS_ERR(ctx)) {
+		dev_err(dev, "devm_drm_bridge_alloc failed: %ld\n", PTR_ERR(ctx));
 		return PTR_ERR(ctx);
+	}
 
 	ep = of_graph_get_endpoint_by_regs(dev->of_node, 0, 0);
-	if (!ep)
+	if (!ep) {
+		dev_err(dev, "Could not find OF endpoint 0\n");
 		return -EINVAL;
+	}
 
 	ctx->dev = dev;
 	ctx->client = client;
@@ -1533,12 +1537,14 @@ static int it66121_probe(struct i2c_client *client)
 	of_property_read_u32(ep, "bus-width", &ctx->bus_width);
 	of_node_put(ep);
 
-	if (ctx->bus_width != 12 && ctx->bus_width != 24)
+	if (ctx->bus_width != 12 && ctx->bus_width != 24) {
+		dev_err(dev, "Invalid bus width %u (must be 12 or 24)\n", ctx->bus_width);
 		return -EINVAL;
+	}
 
 	ep = of_graph_get_remote_node(dev->of_node, 1, -1);
 	if (!ep) {
-		dev_err(ctx->dev, "The endpoint is unconnected\n");
+		dev_err(dev, "Could not find remote node for port 1\n");
 		return -EINVAL;
 	}
 
@@ -1588,8 +1594,12 @@ static int it66121_probe(struct i2c_client *client)
 		}
 	}
 
-	if (i == ARRAY_SIZE(it66xx_chip_info))
+	if (i == ARRAY_SIZE(it66xx_chip_info)) {
+		dev_err(dev, "Vendor / device not found: 0x%04x / 0x%04x\n",
+			vendor_ids[1] << 8 | vendor_ids[0],
+			device_ids[1] << 8 | device_ids[0]);
 		return -ENODEV;
+	}
 
 	ctx->bridge.of_node = dev->of_node;
 	ctx->bridge.type = DRM_MODE_CONNECTOR_HDMIA;
