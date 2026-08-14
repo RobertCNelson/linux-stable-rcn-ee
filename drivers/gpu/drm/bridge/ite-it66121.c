@@ -346,6 +346,7 @@ static void it66121_hw_reset(struct it66121_ctx *ctx)
 	gpiod_set_value(ctx->gpio_reset, 1);
 	msleep(20);
 	gpiod_set_value(ctx->gpio_reset, 0);
+	msleep(100);
 }
 
 static inline int it66121_preamble_ddc(struct it66121_ctx *ctx)
