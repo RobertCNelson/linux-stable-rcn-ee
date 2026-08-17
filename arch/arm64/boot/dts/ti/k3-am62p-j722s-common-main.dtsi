@@ -64,6 +64,11 @@
 			#clock-cells = <0>;
 		};
 
+		dss_dpi0_clk_ctrl: dss-dpi0-clk-ctrl@8300 {
+			compatible = "ti,am625-dss-dpi0-clk-ctrl", "syscon";
+			reg = <0x8300 0x4>;
+		};
+
 		dss_oldi_io_ctrl: dss-oldi-io-ctrl@8600 {
 			compatible = "ti,am625-dss-oldi-io-ctrl", "syscon";
 			reg = <0x8600 0x200>;
@@ -784,6 +789,19 @@
 		};
 	};
 
+	gpu: gpu@fd80000 {
+		compatible = "ti,am62p-pvr", "img,pvr-bxs64";
+		reg = <0x00 0x0fd80000 0x00 0x80000>;
+		interrupts = <GIC_SPI 241 IRQ_TYPE_LEVEL_HIGH>;
+		power-domains = <&k3_pds 237 TI_SCI_PD_EXCLUSIVE>,
+		                <&k3_pds 242 TI_SCI_PD_EXCLUSIVE>;
+		assigned-clocks = <&k3_clks 237 3>;
+		assigned-clock-rates = <800000000>;
+		power-domain-names = "firmware", "dust";
+		clocks = <&k3_clks 237 3>;
+		clock-names = "core";
+	};
+
 	hwspinlock: spinlock@2a000000 {
 		compatible = "ti,am64-hwspinlock";
 		reg = <0x00 0x2a000000 0x00 0x1000>;
@@ -1134,7 +1152,6 @@
 			 <&k3_clks 186 2>;
 		clock-names = "fck", "vp1", "vp2";
 		interrupts = <GIC_SPI 84 IRQ_TYPE_LEVEL_HIGH>;
-		ti,dpi-io-ctrl = <&main_conf 0x8300>;
 		status = "disabled";
 
 		oldi-transmitters {
@@ -1152,9 +1169,6 @@
 
 			dss0_oldi1: oldi@1 {
 				reg = <1>;
-				clocks = <&k3_clks 186 0>;
-				clock-names = "serial";
-				ti,oldi-io-ctrl = <&dss_oldi_io_ctrl>;
 				status = "disabled";
 				power-domains = <&k3_pds 244 TI_SCI_PD_EXCLUSIVE>; /* OLDI1_VD */
 			};
@@ -1179,7 +1193,6 @@
 			 <&k3_clks 232 4>;
 		clock-names = "fck", "vp1", "vp2";
 		interrupts = <GIC_SPI 30 IRQ_TYPE_LEVEL_HIGH>;
-		ti,dpi-io-ctrl = <&main_conf 0x8300>;
 		status = "disabled";
 
 		oldi-transmitters {
