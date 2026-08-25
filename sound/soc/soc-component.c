@@ -29,11 +29,11 @@ static inline int _soc_component_ret(struct snd_soc_component *component,
 		break;
 	default:
 		if (reg == -1)
-			dev_err(component->dev,
+			dev_dbg(component->dev,
 				"ASoC: error at %s on %s: %d\n",
 				func, component->name, ret);
 		else
-			dev_err(component->dev,
+			dev_dbg(component->dev,
 				"ASoC: error at %s on %s for register: [0x%08x] %d\n",
 				func, component->name, reg, ret);
 	}
