@@ -2617,7 +2617,7 @@ static inline char *fmt_multiple_name(struct device *dev,
 		struct snd_soc_dai_driver *dai_drv)
 {
 	if (dai_drv->name == NULL) {
-		dev_err(dev,
+		dev_dbg(dev,
 			"ASoC: error - multiple DAI %s registered with no name\n",
 			dev_name(dev));
 		return NULL;
