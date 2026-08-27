@@ -278,12 +278,11 @@ err_clk_disable:
 	return ret;
 }
 
-static int pruss_remove(struct platform_device *dev)
+static void pruss_remove(struct platform_device *dev)
 {
 	struct uio_pruss_dev *gdev = platform_get_drvdata(dev);
 
 	pruss_cleanup(&dev->dev, gdev);
-	return 0;
 }
 
 static const struct of_device_id pruss_dt_ids[] = {
