@@ -383,12 +383,16 @@ static int get_oldi_mode(struct device_node *oldi_tx, int *companion_instance)
 		 */
 		return OLDI_MODE_SINGLE_LINK;
 
-	if (of_property_read_u32(companion, "reg", &companion_reg))
+	if (of_property_read_u32(companion, "reg", &companion_reg)) {
+		of_node_put(companion);
 		return OLDI_MODE_UNSUPPORTED;
+	}
 
-	if (companion_reg > (TIDSS_MAX_OLDI_TXES - 1))
+	if (companion_reg > (TIDSS_MAX_OLDI_TXES - 1)) {
 		/* Invalid companion OLDI reg value. */
+		of_node_put(companion);
 		return OLDI_MODE_UNSUPPORTED;
+	}
 
 	*companion_instance = (int)companion_reg;
 
