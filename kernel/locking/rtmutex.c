@@ -1618,6 +1618,7 @@ static int __sched rt_mutex_slowlock_block(struct rt_mutex_base *lock,
 					   struct hrtimer_sleeper *timeout,
 					   struct rt_mutex_waiter *waiter,
 					   struct wake_q_head *wake_q)
+	__releases(&lock->wait_lock) __acquires(&lock->wait_lock)
 {
 	struct rt_mutex *rtm = container_of(lock, struct rt_mutex, rtmutex);
 	struct task_struct *owner;
@@ -1837,6 +1838,7 @@ static __always_inline int __rt_mutex_lock(struct rt_mutex_base *lock,
  */
 static void __sched rtlock_slowlock_locked(struct rt_mutex_base *lock,
 					   struct wake_q_head *wake_q)
+	__releases(&lock->wait_lock) __acquires(&lock->wait_lock)
 {
 	struct rt_mutex_waiter waiter;
 	struct task_struct *owner;
