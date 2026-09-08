@@ -303,6 +303,7 @@ static struct platform_driver pruss_driver = {
 
 module_platform_driver(pruss_driver);
 
+MODULE_DESCRIPTION("Userspace I/O driver for Texas Instruments PRUSS.");
 MODULE_LICENSE("GPL v2");
 MODULE_VERSION(DRV_VERSION);
 MODULE_AUTHOR("Amit Chatterjee <amit.chatterjee@ti.com>");
