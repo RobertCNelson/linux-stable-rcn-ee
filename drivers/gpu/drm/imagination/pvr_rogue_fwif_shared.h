@@ -249,11 +249,7 @@ enum rogue_context_reset_reason {
 };
 
 struct rogue_context_reset_reason_data {
-	/*
-	 * The valid values for reset_reason are the ones from
-	 * enum rogue_context_reset_reason
-	 */
-	u32 reset_reason;
+	enum rogue_context_reset_reason reset_reason;
 	u32 reset_ext_job_ref;
 };
 
