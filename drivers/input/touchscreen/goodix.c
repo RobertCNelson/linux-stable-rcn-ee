@@ -48,6 +48,8 @@
 #define MAX_CONTACTS_LOC	5
 #define TRIGGER_LOC		6
 
+#define POLL_INTERVAL_MS		17	/* 17ms = 60fps */
+
 /* Our special handling for GPIO accesses through ACPI is x86 specific */
 #if defined CONFIG_X86 && defined CONFIG_ACPI
 #define ACPI_GPIO_SUPPORT
@@ -513,16 +515,67 @@ static irqreturn_t goodix_ts_irq_handler(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
+static void goodix_ts_irq_poll_timer(struct timer_list *t)
+{
+	struct goodix_ts_data *ts = from_timer(ts, t, timer);
+
+	schedule_work(&ts->work_i2c_poll);
+	mod_timer(&ts->timer, jiffies + msecs_to_jiffies(POLL_INTERVAL_MS));
+}
+
+static void goodix_ts_work_i2c_poll(struct work_struct *work)
+{
+	struct goodix_ts_data *ts = container_of(work,
+			struct goodix_ts_data, work_i2c_poll);
+
+	goodix_process_events(ts);
+	goodix_i2c_write_u8(ts->client, GOODIX_READ_COOR_ADDR, 0);
+}
+
+static void goodix_enable_irq(struct goodix_ts_data *ts)
+{
+	if (ts->client->irq) {
+		enable_irq(ts->client->irq);
+	} else {
+		ts->timer.expires = jiffies + msecs_to_jiffies(POLL_INTERVAL_MS);
+		add_timer(&ts->timer);
+	}
+}
+
+static void goodix_disable_irq(struct goodix_ts_data *ts)
+{
+	if (ts->client->irq) {
+		disable_irq(ts->client->irq);
+	} else {
+		del_timer(&ts->timer);
+		cancel_work_sync(&ts->work_i2c_poll);
+	}
+}
+
 static void goodix_free_irq(struct goodix_ts_data *ts)
 {
-	devm_free_irq(&ts->client->dev, ts->client->irq, ts);
+	if (ts->client->irq) {
+		devm_free_irq(&ts->client->dev, ts->client->irq, ts);
+	} else {
+		del_timer(&ts->timer);
+		cancel_work_sync(&ts->work_i2c_poll);
+	}
 }
 
 static int goodix_request_irq(struct goodix_ts_data *ts)
 {
-	return devm_request_threaded_irq(&ts->client->dev, ts->client->irq,
-					 NULL, goodix_ts_irq_handler,
-					 ts->irq_flags, ts->client->name, ts);
+	if (ts->client->irq) {
+		return devm_request_threaded_irq(&ts->client->dev, ts->client->irq,
+						 NULL, goodix_ts_irq_handler,
+						 ts->irq_flags, ts->client->name, ts);
+	} else {
+		INIT_WORK(&ts->work_i2c_poll,
+			  goodix_ts_work_i2c_poll);
+		timer_setup(&ts->timer, goodix_ts_irq_poll_timer, 0);
+		if (ts->irq_pin_access_method == IRQ_PIN_ACCESS_NONE)
+			goodix_enable_irq(ts);
+		return 0;
+	}
 }
 
 static int goodix_check_cfg_8(struct goodix_ts_data *ts, const u8 *cfg, int len)
@@ -1056,8 +1109,7 @@ static void goodix_read_config(struct goodix_ts_data *ts)
 	}
 
 	ts->int_trigger_type = ts->config[TRIGGER_LOC] & 0x03;
-	ts->max_touch_num = min(ts->config[MAX_CONTACTS_LOC] & 0x0f,
-				GOODIX_MAX_CONTACTS);
+	ts->max_touch_num = ts->config[MAX_CONTACTS_LOC] & 0x0f;
 
 	x_max = get_unaligned_le16(&ts->config[RESOLUTION_LOC]);
 	y_max = get_unaligned_le16(&ts->config[RESOLUTION_LOC + 2]);
@@ -1142,7 +1194,10 @@ static int goodix_configure_dev(struct goodix_ts_data *ts)
 		return -ENOMEM;
 	}
 
-	ts->input_dev->name = "Goodix Capacitive TouchScreen";
+	snprintf(ts->name, GOODIX_NAME_MAX_LEN, "%s Goodix Capacitive TouchScreen",
+		 dev_name(&ts->client->dev));
+
+	ts->input_dev->name = ts->name;
 	ts->input_dev->phys = "input/ts";
 	ts->input_dev->id.bustype = BUS_I2C;
 	ts->input_dev->id.vendor = 0x0416;
@@ -1408,6 +1463,11 @@ static void goodix_ts_remove(struct i2c_client *client)
 {
 	struct goodix_ts_data *ts = i2c_get_clientdata(client);
 
+	if (!client->irq) {
+		del_timer(&ts->timer);
+		cancel_work_sync(&ts->work_i2c_poll);
+	}
+
 	if (ts->load_cfg_from_disk)
 		wait_for_completion(&ts->firmware_loading_complete);
 }
@@ -1423,7 +1483,7 @@ static int goodix_suspend(struct device *dev)
 
 	/* We need gpio pins to suspend/resume */
 	if (ts->irq_pin_access_method == IRQ_PIN_ACCESS_NONE) {
-		disable_irq(client->irq);
+		goodix_disable_irq(ts);
 		return 0;
 	}
 
@@ -1467,7 +1527,7 @@ static int goodix_resume(struct device *dev)
 	int error;
 
 	if (ts->irq_pin_access_method == IRQ_PIN_ACCESS_NONE) {
-		enable_irq(client->irq);
+		goodix_enable_irq(ts);
 		return 0;
 	}
 
@@ -1520,7 +1580,6 @@ MODULE_DEVICE_TABLE(i2c, goodix_ts_id);
 static const struct acpi_device_id goodix_acpi_match[] = {
 	{ "GDIX1001", 0 },
 	{ "GDIX1002", 0 },
-	{ "GDIX1003", 0 },
 	{ "GDX9110", 0 },
 	{ }
 };
