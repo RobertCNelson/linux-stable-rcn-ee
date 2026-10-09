@@ -1,8 +1,8 @@
-// SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0-only OR MIT
 /*
  * Device Tree Source for J721E SoC Family MCU/WAKEUP Domain peripherals
  *
- * Copyright (C) 2016-2020 Texas Instruments Incorporated - https://www.ti.com/
+ * Copyright (C) 2016-2024 Texas Instruments Incorporated - https://www.ti.com/
  */
 
 &cbass_mcu_wakeup {
@@ -79,6 +79,7 @@
 		power-domains = <&k3_pds 287 TI_SCI_PD_EXCLUSIVE>;
 		clocks = <&k3_clks 287 0>;
 		clock-names = "fclk";
+		status = "disabled";
 	};
 
 	mcu_uart0: serial@40a00000 {
@@ -90,6 +91,7 @@
 		power-domains = <&k3_pds 149 TI_SCI_PD_EXCLUSIVE>;
 		clocks = <&k3_clks 149 0>;
 		clock-names = "fclk";
+		status = "disabled";
 	};
 
 	wkup_gpio_intr: interrupt-controller@42200000 {
@@ -118,6 +120,7 @@
 		power-domains = <&k3_pds 113 TI_SCI_PD_EXCLUSIVE>;
 		clocks = <&k3_clks 113 0>;
 		clock-names = "gpio";
+		status = "disabled";
 	};
 
 	wkup_gpio1: gpio@42100000 {
@@ -134,6 +137,7 @@
 		power-domains = <&k3_pds 114 TI_SCI_PD_EXCLUSIVE>;
 		clocks = <&k3_clks 114 0>;
 		clock-names = "gpio";
+		status = "disabled";
 	};
 
 	mcu_i2c0: i2c@40b00000 {
@@ -145,6 +149,7 @@
 		clock-names = "fck";
 		clocks = <&k3_clks 194 0>;
 		power-domains = <&k3_pds 194 TI_SCI_PD_EXCLUSIVE>;
+		status = "disabled";
 	};
 
 	mcu_i2c1: i2c@40b10000 {
@@ -156,6 +161,7 @@
 		clock-names = "fck";
 		clocks = <&k3_clks 195 0>;
 		power-domains = <&k3_pds 195 TI_SCI_PD_EXCLUSIVE>;
+		status = "disabled";
 	};
 
 	wkup_i2c0: i2c@42120000 {
@@ -167,6 +173,7 @@
 		clock-names = "fck";
 		clocks = <&k3_clks 197 0>;
 		power-domains = <&k3_pds 197 TI_SCI_PD_SHARED>;
+		status = "disabled";
 	};
 
 	fss: fss@47000000 {
@@ -191,6 +198,7 @@
 			power-domains = <&k3_pds 103 TI_SCI_PD_EXCLUSIVE>;
 			#address-cells = <1>;
 			#size-cells = <0>;
+			status = "disabled";
 		};
 
 		ospi1: spi@47050000 {
@@ -205,6 +213,7 @@
 			power-domains = <&k3_pds 104 TI_SCI_PD_EXCLUSIVE>;
 			#address-cells = <1>;
 			#size-cells = <0>;
+			status = "disabled";
 		};
 	};
 
@@ -216,10 +225,11 @@
 		clocks = <&k3_clks 0 1>;
 		assigned-clocks = <&k3_clks 0 3>;
 		assigned-clock-rates = <60000000>;
-		clock-names = "adc_tsc_fck";
+		clock-names = "fck";
 		dmas = <&main_udmap 0x7400>,
 			<&main_udmap 0x7401>;
 		dma-names = "fifo0", "fifo1";
+		status = "disabled";
 
 		adc {
 			#io-channel-cells = <1>;
@@ -235,10 +245,11 @@
 		clocks = <&k3_clks 1 1>;
 		assigned-clocks = <&k3_clks 1 3>;
 		assigned-clock-rates = <60000000>;
-		clock-names = "adc_tsc_fck";
+		clock-names = "fck";
 		dmas = <&main_udmap 0x7402>,
 			<&main_udmap 0x7403>;
 		dma-names = "fifo0", "fifo1";
+		status = "disabled";
 
 		adc {
 			#io-channel-cells = <1>;
@@ -258,10 +269,10 @@
 
 		mcu_ringacc: ringacc@2b800000 {
 			compatible = "ti,am654-navss-ringacc";
-			reg =	<0x0 0x2b800000 0x0 0x400000>,
-				<0x0 0x2b000000 0x0 0x400000>,
-				<0x0 0x28590000 0x0 0x100>,
-				<0x0 0x2a500000 0x0 0x40000>;
+			reg = <0x0 0x2b800000 0x0 0x400000>,
+			      <0x0 0x2b000000 0x0 0x400000>,
+			      <0x0 0x28590000 0x0 0x100>,
+			      <0x0 0x2a500000 0x0 0x40000>;
 			reg-names = "rt", "fifos", "proxy_gcfg", "proxy_target";
 			ti,num-rings = <286>;
 			ti,sci-rm-range-gp-rings = <0x1>; /* GP ring range */
@@ -272,9 +283,9 @@
 
 		mcu_udmap: dma-controller@285c0000 {
 			compatible = "ti,j721e-navss-mcu-udmap";
-			reg =	<0x0 0x285c0000 0x0 0x100>,
-				<0x0 0x2a800000 0x0 0x40000>,
-				<0x0 0x2aa00000 0x0 0x40000>;
+			reg = <0x0 0x285c0000 0x0 0x100>,
+			      <0x0 0x2a800000 0x0 0x40000>,
+			      <0x0 0x2aa00000 0x0 0x40000>;
 			reg-names = "gcfg", "rchanrt", "tchanrt";
 			msi-parent = <&main_udmass_inta>;
 			#dma-cells = <1>;
@@ -403,6 +414,7 @@
 			     <GIC_SPI 833 IRQ_TYPE_LEVEL_HIGH>;
 		interrupt-names = "int0", "int1";
 		bosch,mram-cfg = <0x0 128 64 64 64 64 32 32>;
+		status = "disabled";
 	};
 
 	mcu_mcan1: can@40568000 {
@@ -417,5 +429,6 @@
 			     <GIC_SPI 836 IRQ_TYPE_LEVEL_HIGH>;
 		interrupt-names = "int0", "int1";
 		bosch,mram-cfg = <0x0 128 64 64 64 64 32 32>;
+		status = "disabled";
 	};
 };
