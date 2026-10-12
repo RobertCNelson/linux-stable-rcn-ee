@@ -8,6 +8,7 @@
 #ifndef DTS_ARM64_TI_K3_PINCTRL_H
 #define DTS_ARM64_TI_K3_PINCTRL_H
 
+#define VGPIO_SEL_SHIFT		(4)
 #define WKUP_LVL_EN_SHIFT	(7)
 #define WKUP_LVL_POL_SHIFT	(8)
 #define DEBOUNCE_SHIFT		(11)
@@ -17,6 +18,7 @@
 #define PULLTYPESEL_SHIFT	(17)
 #define RXACTIVE_SHIFT		(18)
 #define DRV_STR_SHIFT		(19)
+#define TXDISABLE_SHIFT		(21)
 #define ISO_OVERRIDE_EN_SHIFT	(22)
 #define ISO_BYPASS_EN_SHIFT	(23)
 #define DS_EN_SHIFT		(24)
@@ -73,6 +75,7 @@
 #define PIN_INPUT_NOST		(INPUT_EN | PULL_DISABLE)
 #define PIN_INPUT_PULLUP_NOST	(INPUT_EN | PULL_UP)
 #define PIN_INPUT_PULLDOWN_NOST	(INPUT_EN | PULL_DOWN)
+#define PIN_DISABLE		(1 << TXDISABLE_SHIFT)
 
 #define PIN_DEBOUNCE_DISABLE	(0 << DEBOUNCE_SHIFT)
 #define PIN_DEBOUNCE_CONF1	(1 << DEBOUNCE_SHIFT)
@@ -110,6 +113,15 @@
 #define PIN_WKUP_EN_LEVEL_LOW		(WKUP_ENABLE | WKUP_ON_LEVEL | WKUP_LEVEL_LOW)
 #define PIN_WKUP_EN_LEVEL_HIGH		(WKUP_ENABLE | WKUP_ON_LEVEL | WKUP_LEVEL_HIGH)
 #define PIN_WKUP_EN			(WKUP_ENABLE | WKUP_ON_EDGE)
+
+/*
+ * SoC-specific field - Refer to the SoC Technical Reference Manual to
+ * determine which GPIO controller each value selects.
+ */
+#define PIN_VGPIO_SEL0		(0 << VGPIO_SEL_SHIFT)
+#define PIN_VGPIO_SEL1		(1 << VGPIO_SEL_SHIFT)
+#define PIN_VGPIO_SEL2		(2 << VGPIO_SEL_SHIFT)
+#define PIN_VGPIO_SEL3		(3 << VGPIO_SEL_SHIFT)
 
 /* Default mux configuration for gpio-ranges to use with pinctrl */
 #define PIN_GPIO_RANGE_IOPAD	(PIN_INPUT | 7)
