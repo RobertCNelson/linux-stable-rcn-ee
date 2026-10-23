@@ -47,6 +47,12 @@ struct cc33xx_stats {
 	unsigned int excessive_retries;
 };
 
+struct cc33xx_wowlan_search {
+	bool enabled;
+	int filter_count;
+	struct cc33xx_rx_filter *active_filters[CC33XX_MAX_RX_FILTERS];
+};
+
 struct cc33xx_ant_diversity {
 	u8 diversity_enable;
 	s8 rssi_threshold;
@@ -216,6 +222,9 @@ struct cc33xx {
 	 */
 
 	bool keep_device_power;
+
+	/* WoWLAN search pattern state */
+	struct cc33xx_wowlan_search wowlan_search;
 
 	/* AP-mode - links indexed by HLID. The global and broadcast links
 	 * are always active.

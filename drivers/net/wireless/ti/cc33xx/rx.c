@@ -337,6 +337,234 @@ int cc33xx_rx(struct cc33xx *cc, u8 *rx_buf_ptr, u16 rx_buf_len)
 	return 0;
 }
 
+int cc33xx_parse_wowlan_search_pattern(const char *input, u8 *pattern, u8 *mask,
+					size_t max_len, bool *has_mask)
+{
+	size_t byte_count = 0;
+	const char *p = input;
+	int val1, val2;
+
+	*has_mask = false;
+
+	while (*p != '\0' && byte_count < max_len) {
+		while (*p == ' ' || *p == '\t')
+			p++;
+
+		if (*p == '\0')
+			break;
+
+		if (*p == '-' || (*p == 'x' && p[1] == 'x')) {
+			pattern[byte_count] = 0x00;
+			mask[byte_count] = 0x00;
+			byte_count++;
+			*has_mask = true;
+
+			if (*p == 'x') {
+				p += 2;
+			} else {
+				p++;
+				if (*p == '-')
+					p++;
+			}
+
+			if (*p != '\0' && *p != ':' && *p != ' ' && *p != '\t')
+				return -EINVAL;
+
+			if (*p == ':')
+				p++;
+			continue;
+		}
+
+		val1 = hex_to_bin(*p);
+		if (val1 < 0)
+			return -EINVAL;
+
+		p++;
+
+		if (*p != '\0' && *p != ':' && *p != ' ' && *p != '\t') {
+			val2 = hex_to_bin(*p);
+			if (val2 < 0)
+				return -EINVAL;
+			p++;
+			pattern[byte_count] = (val1 << 4) | val2;
+		} else {
+			pattern[byte_count] = val1;
+		}
+
+		mask[byte_count] = 0xFF;
+		byte_count++;
+
+		if (*p == ':')
+			p++;
+	}
+
+	if (byte_count == max_len) {
+		while (*p == ' ' || *p == '\t')
+			p++;
+
+		if (*p != '\0') {
+			cc33xx_warning("Pattern exceeds maximum size (%zu bytes)\n",
+			       max_len);
+			return -EINVAL;
+		}
+	}
+
+	if (byte_count == 0)
+		return -EINVAL;
+
+	return byte_count;
+}
+
+int cc33xx_add_wowlan_search_pattern(struct cc33xx *cc, u16 offset,
+				     const u8 *pattern_data, int pattern_len,
+				     bool has_mask)
+{
+	struct cc33xx_rx_filter *filter;
+	u8 flags;
+	int ret;
+
+	if (!pattern_data || pattern_len <= 0) {
+		cc33xx_error("Invalid pattern parameters");
+		return -EINVAL;
+	}
+
+	if (cc->wowlan_search.filter_count >= CC33XX_MAX_RX_FILTERS) {
+		cc33xx_error("Maximum filters reached (%d/%d)",
+			     cc->wowlan_search.filter_count, CC33XX_MAX_RX_FILTERS);
+		return -ENOSPC;
+	}
+
+	filter = cc33xx_rx_filter_alloc();
+	if (!filter) {
+		cc33xx_error("Failed to allocate rx filter");
+		return -ENOMEM;
+	}
+
+	filter->action = FILTER_SIGNAL;
+
+	/* Set flags: SEARCH mode + optional MASK flag */
+	flags = CC33XX_RX_FILTER_FLAG_SEARCH_ANYWHERE;
+	if (has_mask)
+		flags |= CC33XX_RX_FILTER_FLAG_MASKED;
+
+	ret = cc33xx_rx_filter_alloc_field(filter, offset, flags,
+					   pattern_data, pattern_len);
+	if (ret < 0) {
+		cc33xx_rx_filter_free(filter);
+		return ret;
+	}
+
+	cc->wowlan_search.active_filters[cc->wowlan_search.filter_count] = filter;
+	cc->wowlan_search.filter_count++;
+
+	return 0;
+}
+
+int cc33xx_clear_wowlan_search_patterns(struct cc33xx *cc)
+{
+	int ret;
+
+	ret = cc33xx_rx_filter_clear_all(cc);
+	if (ret < 0) {
+		cc33xx_error("Failed to clear RX filters: %d", ret);
+		goto out;
+	}
+
+	ret = cc33xx_acx_default_rx_filter_enable(cc, 0, FILTER_SIGNAL);
+	if (ret < 0)
+		cc33xx_error("Failed to reset default RX filter: %d", ret);
+
+out:
+	cc33xx_free_wowlan_patterns_memory(cc);
+	return ret;
+}
+
+
+int cc33xx_set_wowlan_search_mode(struct cc33xx *cc, bool enable)
+{
+	struct cc33xx_vif *wlvif = NULL;
+	int ret = 0;
+
+	cc33xx_for_each_wlvif_sta(cc, wlvif) {
+		break;
+	}
+
+	if (!wlvif)
+		return -EINVAL;
+
+	if (enable) {
+		struct cfg80211_wowlan *wowlan_config;
+
+		wowlan_config = kzalloc(sizeof(*wowlan_config), GFP_KERNEL);
+		if (!wowlan_config) {
+			return -ENOMEM;
+		}
+
+		cc->hw->wiphy->wowlan_config = wowlan_config;
+		cc->keep_device_power = true;
+
+		ret = cc33xx_acx_wake_up_conditions(cc, wlvif,
+						    cc->conf.core.suspend_wake_up_event,
+						    cc->conf.core.suspend_listen_interval);
+		if (ret < 0) {
+			cc33xx_error("Failed to configure wake-up conditions: %d", ret);
+			cc->keep_device_power = false;
+			kfree(wowlan_config);
+			cc->hw->wiphy->wowlan_config = NULL;
+			return ret;
+		}
+
+		cc->wowlan_search.enabled = true;
+	} else {
+		/* Disable: try hardware operation first, then always clean up software state */
+		ret = cc33xx_acx_wake_up_conditions(cc, wlvif,
+						    cc->conf.core.wake_up_event,
+						    cc->conf.core.listen_interval);
+		if (ret < 0)
+			cc33xx_error("Failed to restore wake-up conditions: %d", ret);
+
+		/* Always clean up software state, even if hardware operation failed */
+		cc->wowlan_search.enabled = false;
+
+		cc33xx_clear_wowlan_search_patterns(cc);
+
+
+		if (cc->hw->wiphy->wowlan_config) {
+			kfree(cc->hw->wiphy->wowlan_config);
+			cc->hw->wiphy->wowlan_config = NULL;
+		}
+
+		cc->keep_device_power = false;
+	}
+
+	return ret;
+}
+
+void cc33xx_free_wowlan_patterns_memory(struct cc33xx *cc)
+{
+	int i;
+
+	for (i = 0; i < cc->wowlan_search.filter_count; i++) {
+		if (cc->wowlan_search.active_filters[i]) {
+			cc33xx_rx_filter_free(cc->wowlan_search.active_filters[i]);
+			cc->wowlan_search.active_filters[i] = NULL;
+		}
+	}
+	cc->wowlan_search.filter_count = 0;
+}
+
+int cc33xx_is_wowlan_search_enabled(struct cc33xx *cc)
+{
+	return cc->wowlan_search.enabled && (cc->wowlan_search.filter_count > 0);
+}
+
+int cc33xx_get_wowlan_search_filters(struct cc33xx *cc, struct cc33xx_rx_filter ***filters_out)
+{
+	if (filters_out)
+		*filters_out = cc->wowlan_search.active_filters;
+	return cc->wowlan_search.filter_count;
+}
+
 #ifdef CONFIG_PM
 int cc33xx_rx_filter_enable(struct cc33xx *cc, int index, bool enable,
 			    struct cc33xx_rx_filter *filter)

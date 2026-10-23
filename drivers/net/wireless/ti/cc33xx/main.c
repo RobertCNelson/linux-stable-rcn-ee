@@ -19,11 +19,15 @@
 #include "init.h"
 #include "testmode.h"
 #include "scan.h"
+#include "sysfs.h"
 #include "event.h"
 #include "debugfs.h"
+#include "rx.h"
 
 #define CC33XX_FW_RX_PACKET_RAM (9 * 1024)
 #define CC33XX_GENERAL_ERROR_READ_TIMEOUT_MSEC	(3000)
+#define CC33XX_CQM_RSSI_MIN_DBM		-110
+#define CC33XX_CQM_RSSI_MAX_DBM		17
 
 static int no_recovery     = -1;
 
@@ -1493,7 +1497,12 @@ static int cc33xx_validate_wowlan_pattern(struct cfg80211_pkt_pattern *p)
 	return 0;
 }
 
-static void cc33xx_rx_filter_free(struct cc33xx_rx_filter *filter)
+struct cc33xx_rx_filter *cc33xx_rx_filter_alloc(void)
+{
+	return kzalloc(sizeof(struct cc33xx_rx_filter), GFP_KERNEL);
+}
+
+void cc33xx_rx_filter_free(struct cc33xx_rx_filter *filter)
 {
 	int i;
 
@@ -1506,11 +1515,12 @@ static void cc33xx_rx_filter_free(struct cc33xx_rx_filter *filter)
 	kfree(filter);
 }
 
-static int cc33xx_rx_filter_alloc_field(struct cc33xx_rx_filter *filter,
+int cc33xx_rx_filter_alloc_field(struct cc33xx_rx_filter *filter,
 					u16 offset, u8 flags,
 					const u8 *pattern, u8 len)
 {
 	struct cc33xx_rx_filter_field *field;
+	u8 buffer_len;
 
 	if (filter->num_fields == CC33XX_RX_FILTER_MAX_FIELDS) {
 		cc33xx_warning("Max fields per RX filter. can't alloc another");
@@ -1519,7 +1529,8 @@ static int cc33xx_rx_filter_alloc_field(struct cc33xx_rx_filter *filter,
 
 	field = &filter->fields[filter->num_fields];
 
-	field->pattern = kzalloc(len, GFP_KERNEL);
+	buffer_len = (flags & CC33XX_RX_FILTER_FLAG_MASKED) ? len * 2 : len;
+	field->pattern = kzalloc(buffer_len, GFP_KERNEL);
 	if (!field->pattern)
 		return -ENOMEM;
 
@@ -1528,7 +1539,7 @@ static int cc33xx_rx_filter_alloc_field(struct cc33xx_rx_filter *filter,
 	field->offset = cpu_to_le16(offset);
 	field->flags = flags;
 	field->len = len;
-	memcpy(field->pattern, pattern, len);
+	memcpy(field->pattern, pattern, buffer_len);
 
 	return 0;
 }
@@ -1598,7 +1609,57 @@ out:
 	return ret;
 }
 
-static int cc33xx_configure_wowlan(struct cc33xx *cc,
+static int cc33xx_configure_wowlan_search(struct cc33xx *wl,
+					  struct cfg80211_wowlan *wow)
+{
+	struct cc33xx_rx_filter **active_filters;
+	int num_filters, i, ret;
+
+	num_filters = cc33xx_get_wowlan_search_filters(wl, &active_filters);
+
+	if (!wow) {
+		ret = cc33xx_acx_default_rx_filter_enable(wl, 0, FILTER_SIGNAL);
+		if (ret)
+			return ret;
+		return cc33xx_rx_filter_clear_all(wl);
+	}
+
+	if (wow->any || wow->n_patterns > 0) {
+		cc33xx_warning("WoWLAN conflict: both search and fixed patterns configured");
+		cc33xx_warning("Using search patterns only - fixed patterns IGNORED");
+	}
+
+	if (num_filters == 0) {
+		cc33xx_warning("Search WoWLAN enabled but no patterns configured");
+		ret = cc33xx_acx_default_rx_filter_enable(wl, 0, FILTER_SIGNAL);
+		if (ret)
+			return ret;
+		return cc33xx_rx_filter_clear_all(wl);
+	}
+
+	ret = cc33xx_acx_default_rx_filter_enable(wl, 0, FILTER_SIGNAL);
+	if (ret)
+		return ret;
+
+	ret = cc33xx_rx_filter_clear_all(wl);
+	if (ret)
+		return ret;
+
+	for (i = 0; i < num_filters; i++) {
+		if (!active_filters[i]) {
+			continue;
+		}
+
+		ret = cc33xx_rx_filter_enable(wl, i, 1, active_filters[i]);
+		if (ret)
+			return ret;
+	}
+
+	ret = cc33xx_acx_default_rx_filter_enable(wl, 1, FILTER_DROP);
+	return ret;
+}
+
+static int cc33xx_configure_wowlan_fixed(struct cc33xx *cc,
 				   struct cfg80211_wowlan *wow)
 {
 	int i, ret;
@@ -1677,6 +1738,15 @@ static int cc33xx_configure_wowlan(struct cc33xx *cc,
 
 out:
 	return ret;
+}
+
+static int cc33xx_configure_wowlan(struct cc33xx *wl,
+				   struct cfg80211_wowlan *wow)
+{
+	if (cc33xx_is_wowlan_search_enabled(wl))
+		return cc33xx_configure_wowlan_search(wl, wow);
+
+	return cc33xx_configure_wowlan_fixed(wl, wow);
 }
 
 static int cc33xx_configure_suspend_sta(struct cc33xx *cc,
@@ -1782,7 +1852,7 @@ static int __maybe_unused cc33xx_op_suspend(struct ieee80211_hw *hw,
 	unsigned long flags;
 	int ret = 0;
 
-	WARN_ON(!wow);
+	WARN_ON(!wow && !cc33xx_is_wowlan_search_enabled(cc));
 
 	/* we want to perform the recovery before suspending */
 	if (test_bit(CC33XX_FLAG_RECOVERY_IN_PROGRESS, &cc->flags)) {
@@ -2242,6 +2312,7 @@ static int cc33xx_init_vif_data(struct cc33xx *cc, struct ieee80211_vif *vif)
 	wlvif->bitrate_masks[NL80211_BAND_2GHZ] = tx_settings->basic_rate;
 	wlvif->bitrate_masks[NL80211_BAND_5GHZ] = tx_settings->basic_rate_5;
 	wlvif->beacon_int = CC33XX_DEFAULT_BEACON_INT;
+	wlvif->last_rssi_event = -1;
 
 	/* mac80211 configures some values globally, while we treat them
 	 * per-interface. thus, on init, we have to copy them from cc
@@ -2466,6 +2537,16 @@ static void __cc33xx_op_remove_interface(struct cc33xx *cc,
 
 	if (!test_bit(CC33XX_FLAG_RECOVERY_IN_PROGRESS, &cc->flags)) {
 		/* disable active roles */
+		if ((wlvif->bss_type == BSS_TYPE_STA_BSS || wlvif->bss_type == BSS_TYPE_IBSS) &&
+		    wlvif->cqm_enabled) {
+			cc33xx_debug(DEBUG_CMD, "CQM: Disabling on interface removal for role %u", wlvif->role_id);
+			ret = cc33xx_cmd_cqm_rssi_config(cc, wlvif, false, 0, 0);
+			if (ret < 0)
+				cc33xx_warning("CQM: Failed to disable on interface removal: %d", ret);
+			wlvif->cqm_enabled = false;
+			wlvif->rssi_thold = 0;
+			wlvif->cqm_rssi_hyst = 0;
+		}
 
 		if (wlvif->bss_type == BSS_TYPE_STA_BSS ||
 		    wlvif->bss_type == BSS_TYPE_IBSS) {
@@ -3701,6 +3782,64 @@ static void cc33xx_sta_set_he(struct cc33xx *cc, struct cc33xx_vif *wlvif, bool 
 		cc33xx_error("Both station interfaces has HE enabled!");
 }
 
+static int cc33xx_configure_cqm(struct cc33xx *wl, struct cc33xx_vif *wlvif, s32 rssi_thold, u32 rssi_hyst)
+{
+	int ret;
+	int role_id = wlvif->role_id;
+
+	if (unlikely(wl->state != CC33XX_STATE_ON)) {
+		cc33xx_warning("CQM: Cannot configure, FW not running (state=%d)", wl->state);
+		return -EAGAIN;
+	}
+
+	if (role_id >= CC33XX_MAX_ROLES) {
+		cc33xx_error("CQM: Invalid role_id %u", role_id);
+		return -EINVAL;
+	}
+
+	if (rssi_thold == 0) {
+		if (!wlvif->cqm_enabled) {
+			cc33xx_debug(DEBUG_CMD, "CQM: Already disabled, ignoring");
+			return 0;
+		}
+
+		cc33xx_debug(DEBUG_CMD, "CQM: Disabling monitoring for role %u", wlvif->role_id);
+
+		ret = cc33xx_cmd_cqm_rssi_config(wl, wlvif, false, 0, 0);
+		if (ret < 0) {
+			cc33xx_error("CQM: Failed to disable: %d", ret);
+		return ret;
+		}
+
+		wlvif->cqm_enabled = false;
+		wlvif->rssi_thold = 0;
+		wlvif->cqm_rssi_hyst = 0;
+
+		return ret;
+	}
+
+	if (rssi_thold < CC33XX_CQM_RSSI_MIN_DBM || rssi_thold > CC33XX_CQM_RSSI_MAX_DBM) {
+		cc33xx_error("CQM: Invalid threshold %d dBm (range: %d to +%d)",
+					 rssi_thold, CC33XX_CQM_RSSI_MIN_DBM, CC33XX_CQM_RSSI_MAX_DBM);
+		return -EINVAL;
+	}
+
+	cc33xx_debug(DEBUG_CMD, "CQM: Enabling for role %u: threshold=%d dBm, hysteresis=%u dB", wlvif->role_id, rssi_thold, rssi_hyst);
+
+
+	ret = cc33xx_cmd_cqm_rssi_config(wl, wlvif, true, (s8)rssi_thold, rssi_hyst);
+	if (ret < 0) {
+		cc33xx_error("CQM: Failed to enable: %d", ret);
+		return ret;
+	}
+
+	wlvif->cqm_enabled = true;
+	wlvif->rssi_thold = rssi_thold;
+	wlvif->cqm_rssi_hyst = rssi_hyst;
+
+	return ret;
+}
+
 /* STA/IBSS mode changes */
 static void cc33xx_bss_info_changed_sta(struct cc33xx *cc,
 					struct ieee80211_vif *vif,
@@ -3752,8 +3891,11 @@ static void cc33xx_bss_info_changed_sta(struct cc33xx *cc,
 	if (changed & BSS_CHANGED_IDLE && !is_ibss)
 		cc33xx_sta_handle_idle(cc, wlvif, vif->cfg.idle);
 
-	if (changed & BSS_CHANGED_CQM)
-		wlvif->rssi_thold = bss_conf->cqm_rssi_thold;
+	if (changed & BSS_CHANGED_CQM) {
+		ret = cc33xx_configure_cqm(cc, wlvif, bss_conf->cqm_rssi_thold, bss_conf->cqm_rssi_hyst);
+		if (ret < 0)
+			cc33xx_error("CQM: Configuration failed: %d", ret);
+	}
 
 	if (changed & (BSS_CHANGED_BSSID | BSS_CHANGED_HT | BSS_CHANGED_ASSOC)) {
 		rcu_read_lock();
@@ -5453,6 +5595,11 @@ static int cc33xx_free_hw(struct cc33xx *cc)
 	cc->fwlog_size = -1;
 	mutex_unlock(&cc->mutex);
 
+	wlcore_sysfs_free(cc);
+
+	cc33xx_free_wowlan_patterns_memory(cc);
+	cc->wowlan_search.enabled = 0;
+
 	kfree(cc->buffer_32);
 	kfree(cc->core_status);
 
@@ -5586,6 +5733,10 @@ static void cc33xx_nvs_cb(const struct firmware *fw, void *context)
 		goto out_irq;
 
 	ret = cc33xx_register_hw(cc);
+	if (ret)
+		goto out_irq;
+
+	ret = wlcore_sysfs_init(cc);
 	if (ret)
 		goto out_irq;
 

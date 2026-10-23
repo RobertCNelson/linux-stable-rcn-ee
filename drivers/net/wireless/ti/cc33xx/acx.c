@@ -689,10 +689,12 @@ out:
 static int cc33xx_rx_filter_get_fields_size(struct cc33xx_rx_filter *filter)
 {
 	int i, fields_size = 0;
+	u8 data_len;
 
 	for (i = 0; i < filter->num_fields; i++) {
-		fields_size += filter->fields[i].len - sizeof(u8 *)
-					+ sizeof(struct cc33xx_rx_filter_field);
+		data_len = (filter->fields[i].flags & CC33XX_RX_FILTER_FLAG_MASKED) ?
+		           filter->fields[i].len * 2 : filter->fields[i].len;
+		fields_size += RX_FILTER_FIELD_OVERHEAD + data_len;
 	}
 
 	return fields_size;
@@ -703,6 +705,7 @@ static void cc33xx_rx_filter_flatten_fields(struct cc33xx_rx_filter *filter,
 {
 	int i;
 	struct cc33xx_rx_filter_field *field;
+	u8 data_len;
 
 	for (i = 0; i < filter->num_fields; i++) {
 		field = (struct cc33xx_rx_filter_field *)buf;
@@ -711,9 +714,11 @@ static void cc33xx_rx_filter_flatten_fields(struct cc33xx_rx_filter *filter,
 		field->flags = filter->fields[i].flags;
 		field->len = filter->fields[i].len;
 
-		memcpy(&field->pattern, filter->fields[i].pattern, field->len);
+		data_len = (filter->fields[i].flags & CC33XX_RX_FILTER_FLAG_MASKED) ?
+				filter->fields[i].len * 2 : filter->fields[i].len;
+		memcpy(&field->pattern, filter->fields[i].pattern, data_len);
 		buf += sizeof(struct cc33xx_rx_filter_field) - sizeof(u8 *);
-		buf += field->len;
+		buf += data_len;
 	}
 }
 
@@ -840,6 +845,39 @@ int cc33xx_acx_set_antenna_select(struct cc33xx *cc, u8 selection)
 				   acx, sizeof(*acx));
 	if (ret < 0) {
 		cc33xx_warning("acx setting antenna failed: %d", ret);
+		goto out;
+	}
+
+out:
+	kfree(acx);
+	return ret;
+}
+
+int cc33xx_acx_set_regdoamin_and_tx_control_params(struct cc33xx *wl, struct acx_phy_regdomain_tx_control_params *params)
+{
+	struct acx_phy_regdomain_tx_control_params *acx;
+	int ret;
+
+	acx = kzalloc(sizeof(*acx), GFP_KERNEL);
+	if (!acx) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	acx->bitmask = params->bitmask;
+	acx->country_code = params->country_code;
+	acx->reg_domain   = params->reg_domain;
+
+	memcpy(acx->ble_ch_lim_1M, params->ble_ch_lim_1M, sizeof(u8) * BLE_LIM_CHANNELS_COUNT);
+	memcpy(acx->ble_ch_lim_2M, params->ble_ch_lim_2M, sizeof(u8) * BLE_LIM_CHANNELS_COUNT);
+
+	memcpy(acx->per_channel_power_limit, params->per_channel_power_limit, sizeof(u8) * REG_RULES_COUNT);
+
+
+	ret = cc33xx_cmd_configure(wl, PHY_REGDOMAIN_TX_POWER_PARAMS,
+				   acx, sizeof(*acx));
+	if (ret < 0) {
+		cc33xx_warning("acx regdoamin_and_tx_control_params failed: %d", ret);
 		goto out;
 	}
 

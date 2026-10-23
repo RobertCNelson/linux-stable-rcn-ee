@@ -474,6 +474,7 @@ enum cfg {
 	ENABLE_CHANNEL_UTILIZATION_NEXT_SCAN = 30,
 	SET_SEED_CFG			= 31,
 	RESET_STATS			= 32,
+	PHY_REGDOMAIN_TX_POWER_PARAMS = 33,
 
 	LAST_CFG_VALUE,
 	MAX_DOT11_CFG = LAST_CFG_VALUE,
@@ -577,6 +578,21 @@ struct acx_antenna_select {
 
 	u8 selection;
 	u8 padding[3];
+} __packed;
+
+#define BLE_LIM_CHANNELS_COUNT (40)
+#define REG_RULES_COUNT		   (520)
+
+struct acx_phy_regdomain_tx_control_params {
+	struct acx_header header;
+
+	u8  bitmask;
+	u32 country_code;
+	u8  reg_domain;
+	u8  ble_ch_lim_1M[BLE_LIM_CHANNELS_COUNT];
+	u8  ble_ch_lim_2M[BLE_LIM_CHANNELS_COUNT];
+	u8  per_channel_power_limit[REG_RULES_COUNT];
+	u8 	padding[2];
 } __packed;
 
 struct debug_set_tsf {
@@ -797,5 +813,6 @@ int cc33xx_acx_twt_resume(struct cc33xx *wl);
 int cc33xx_acx_twt_suspend(struct cc33xx *wl);
 int cc33xx_acx_statistics(struct cc33xx *cc, void *stats);
 int cc33xx_acx_clear_statistics(struct cc33xx *cc);
+int cc33xx_acx_set_regdoamin_and_tx_control_params(struct cc33xx *wl, struct acx_phy_regdomain_tx_control_params *params);
 
 #endif /* __CC33XX_ACX_H__ */
