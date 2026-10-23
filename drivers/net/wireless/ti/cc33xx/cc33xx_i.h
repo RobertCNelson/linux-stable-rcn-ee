@@ -190,6 +190,8 @@ struct cc33xx_link {
 
 #define CC33XX_RX_FILTER_FLAG_IP_HEADER           0
 #define CC33XX_RX_FILTER_FLAG_ETHERNET_HEADER     BIT(1)
+#define CC33XX_RX_FILTER_FLAG_SEARCH_ANYWHERE     BIT(2)
+#define CC33XX_RX_FILTER_FLAG_MASKED              BIT(3)
 
 struct ieee80211_header {
 	__le16 frame_ctl;
@@ -326,6 +328,8 @@ struct cc33xx_vif {
 
 	int rssi_thold;
 	int last_rssi_event;
+	bool cqm_enabled;
+	u32 cqm_rssi_hyst;
 
 	/* save the current encryption type for auto-arp config */
 	u8 encryption_type;
