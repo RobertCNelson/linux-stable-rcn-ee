@@ -498,6 +498,23 @@ int cc33xx_acx_init_get_fw_versions(struct cc33xx *cc)
 	return 0;
 }
 
+int cc33xx_acx_get_slow_clock_type(struct cc33xx *cc)
+{
+	struct acx_slow_clk_type *acx;
+	int ret = 0;
+
+	acx = kzalloc(sizeof(*acx), GFP_KERNEL);
+	if (!acx)
+		ret = -ENOMEM;
+
+	ret = cc33xx_cmd_interrogate(cc, GET_SLOW_CLK_SOURCE, acx,
+			sizeof(struct acx_header), sizeof(struct acx_slow_clk_type));
+	cc->is_ext_slw_clk = acx->is_ext_slw_clk;
+
+	kfree(acx);
+	return ret;
+}
+
 int cc33xx_acx_set_ht_information(struct cc33xx *cc, struct cc33xx_vif *wlvif,
 				  u16 ht_operation_mode, u32 he_oper_params,
 				  u16 he_oper_nss_set)
@@ -659,6 +676,67 @@ out:
 }
 
 #ifdef CONFIG_PM
+/* Configure ARP IP - send IP to add, or 0.0.0.0 to remove */
+int cc33xx_acx_arp_ip_config(struct cc33xx *cc, u8 role_id, __be32 ip_addr)
+{
+	struct acx_arp_ip_cfg *acx;
+	int ret;
+
+
+	acx = kzalloc(sizeof(*acx), GFP_KERNEL);
+	if (!acx) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	acx->role_id = role_id;
+
+	if (ip_addr) {
+		memcpy(acx->address, &ip_addr, ACX_IPV4_ADDR_LENGTH);
+		cc33xx_debug(DEBUG_ACX,
+			     "acx arp ip filter: SETTING role=%d, IP=%pI4", role_id, &ip_addr);
+	} else {
+		memset(acx->address, 0, ACX_IPV4_ADDR_LENGTH);
+		cc33xx_debug(DEBUG_ACX,
+			     "acx arp ip filter: CLEARING role=%d, IP=0.0.0.0", role_id);
+	}
+
+	ret = cc33xx_cmd_configure(cc, ACX_ARP_IP_CFG, acx, sizeof(*acx));
+	if (ret < 0) {
+		cc33xx_warning("acx arp ip filter failed: %d", ret);
+		goto out;
+	}
+
+out:
+	kfree(acx);
+	return ret;
+}
+
+/* Enable/disable ARP offload feature */
+int cc33xx_acx_arp_offload(struct cc33xx *cc, bool enable)
+{
+	struct acx_arp_offload *acx;
+	int ret;
+
+	cc33xx_debug(DEBUG_ACX, "acx arp offload enable: %d", enable);
+
+	acx = kzalloc(sizeof(*acx), GFP_KERNEL);
+	if (!acx)
+		return -ENOMEM;
+
+	acx->enable = enable;
+
+	ret = cc33xx_cmd_configure(cc, ACX_ARP_OFFLOAD_ENABLE, acx, sizeof(*acx));
+	if (ret < 0) {
+		cc33xx_warning("acx arp offload failed: %d", ret);
+		goto out;
+	}
+
+out:
+	kfree(acx);
+	return ret;
+}
+
 /* Set the global behaviour of RX filters - On/Off + default action */
 int cc33xx_acx_default_rx_filter_enable(struct cc33xx *cc, bool enable,
 					enum rx_filter_action action)
@@ -715,8 +793,7 @@ static void cc33xx_rx_filter_flatten_fields(struct cc33xx_rx_filter *filter,
 		field->len = filter->fields[i].len;
 
 		data_len = (filter->fields[i].flags & CC33XX_RX_FILTER_FLAG_MASKED) ?
-				filter->fields[i].len * 2 : filter->fields[i].len;
-		memcpy(&field->pattern, filter->fields[i].pattern, data_len);
+		           filter->fields[i].len * 2 : filter->fields[i].len;
 		buf += sizeof(struct cc33xx_rx_filter_field) - sizeof(u8 *);
 		buf += data_len;
 	}
@@ -772,6 +849,7 @@ out:
  */
 int cc33xx_acx_set_peer_cap(struct cc33xx *cc,
 			    struct ieee80211_sta_ht_cap *ht_cap,
+				struct ieee80211_sta_vht_cap *vht_cap,
 			    struct ieee80211_sta_he_cap *he_cap,
 			    struct cc33xx_vif *wlvif, bool allow_ht_operation,
 			    u32 rate_set, u8 hlid)
@@ -807,6 +885,8 @@ int cc33xx_acx_set_peer_cap(struct cc33xx *cc,
 	acx->supported_rates = cpu_to_le32(rate_set);
 
 	acx->role_id = wlvif->role_id;
+	acx->vht_capabilities = cpu_to_le32(vht_cap->cap);
+	acx->vht_supported = vht_cap->vht_supported;
 	acx->has_he = he_cap->has_he;
 	memcpy(acx->mac_cap_info, he_cap->he_cap_elem.mac_cap_info, 6);
 	cap_info = he_cap->he_cap_elem.phy_cap_info;
@@ -853,7 +933,7 @@ out:
 	return ret;
 }
 
-int cc33xx_acx_set_regdoamin_and_tx_control_params(struct cc33xx *wl, struct acx_phy_regdomain_tx_control_params *params)
+int cc33xx_acx_set_regdoamin_and_tx_control_params(struct cc33xx *cc, struct acx_phy_regdomain_tx_control_params *params)
 {
 	struct acx_phy_regdomain_tx_control_params *acx;
 	int ret;
@@ -874,7 +954,7 @@ int cc33xx_acx_set_regdoamin_and_tx_control_params(struct cc33xx *wl, struct acx
 	memcpy(acx->per_channel_power_limit, params->per_channel_power_limit, sizeof(u8) * REG_RULES_COUNT);
 
 
-	ret = cc33xx_cmd_configure(wl, PHY_REGDOMAIN_TX_POWER_PARAMS,
+	ret = cc33xx_cmd_configure(cc, PHY_REGDOMAIN_TX_POWER_PARAMS,
 				   acx, sizeof(*acx));
 	if (ret < 0) {
 		cc33xx_warning("acx regdoamin_and_tx_control_params failed: %d", ret);
@@ -1122,6 +1202,40 @@ int cc33xx_acx_antenna_diversity_select_default_antenna(struct cc33xx *cc, u8 de
 
 out:
 	kfree(select_default_antenna_cmd);
+	return ret;
+}
+
+int cc33xx_acx_cqm_rssi_config(struct cc33xx *cc, struct cc33xx_vif *wlvif, bool enable, s8 threshold, u8 hysteresis)
+{
+	struct acx_cqm_rssi_config *cqm_params;
+	int ret = 0;
+	int role_id = wlvif->role_id;
+
+	cc33xx_debug(DEBUG_CMD, "CQM config: role=%u, enable=%d, threshold=%d dBm, hysteresis=%d",
+		     role_id, enable, threshold, hysteresis);
+
+	if (wlvif && enable) {
+		wlvif->last_rssi_event = -1;
+		cc33xx_info("CQM: Reset last_rssi_event for role %u", role_id);
+	}
+
+	cqm_params = kzalloc(sizeof(*cqm_params), GFP_KERNEL);
+	if (!cqm_params) {
+		cc33xx_error("CQM: Failed to allocate command buffer");
+		return -ENOMEM;
+	}
+
+	cqm_params->role_id = role_id;
+	cqm_params->enable = enable;
+	cqm_params->threshold_dbm = threshold;
+	cqm_params->hysteresis_db = hysteresis;
+
+	ret = cc33xx_cmd_configure(cc, CQM_RSSI_CONFIG, cqm_params, sizeof(*cqm_params));
+	if (ret < 0) {
+		cc33xx_error("CQM: Failed to send configure command: %d", ret);
+	}
+
+	kfree(cqm_params);
 	return ret;
 }
 

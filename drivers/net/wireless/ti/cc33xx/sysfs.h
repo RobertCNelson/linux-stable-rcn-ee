@@ -5,11 +5,10 @@
  * Copyright (C) 2013 Texas Instruments Inc.
  */
 
-#ifndef __SYSFS_H__
-#define __SYSFS_H__
+#ifndef _CC33XX_SYSFS_H_
+#define _CC33XX_SYSFS_H_
 
+int cc33xx_sysfs_init(struct cc33xx *cc);
+void cc33xx_sysfs_free(struct cc33xx *cc);
 
-int wlcore_sysfs_init(struct cc33xx *wl);
-void wlcore_sysfs_free(struct cc33xx *wl);
-
-#endif /* __SYSFS_H__ */
+#endif

@@ -75,15 +75,16 @@ struct cc33xx_event_mailbox {
 	/* time sync low msb*/
 	__le16 time_sync_tsf_low_msb;
 
+	/* RSSI/SNR Trigger events - separate event for each STA role */
+	struct cc33xx_rssi_snr_trigger_event rssi_snr_trigger0;
+	struct cc33xx_rssi_snr_trigger_event rssi_snr_trigger1;
+
 	/* radar detect */
 	u8 radar_channel;
 	u8 radar_type;
 
 	/* time sync low lsb*/
 	__le16 time_sync_tsf_low_lsb;
-
-	struct cc33xx_rssi_snr_trigger_event rssi_snr_trigger0;
-	struct cc33xx_rssi_snr_trigger_event rssi_snr_trigger1;
 
 	u8 ble_event[304];
 	u8 csi_data[136];
@@ -321,7 +322,7 @@ static void cc33xx_event_beacon_loss(struct cc33xx *cc,
 	}
 }
 
-static void wlcore_event_rssi_trigger(struct cc33xx *wl, struct cc33xx_rssi_snr_trigger_event *evt)
+static void cc33xx_event_rssi_trigger(struct cc33xx *cc, struct cc33xx_rssi_snr_trigger_event *evt)
 {
 	struct cc33xx_vif *wlvif = NULL;
 	struct ieee80211_vif *vif;
@@ -332,7 +333,7 @@ static void wlcore_event_rssi_trigger(struct cc33xx *wl, struct cc33xx_rssi_snr_
 	if (evt->role_id >= CC33XX_MAX_ROLES)
 		return;
 
-	cc33xx_for_each_wlvif(wl, wlvif) {
+	cc33xx_for_each_wlvif(cc, wlvif) {
 		if (wlvif->role_id == evt->role_id)
 			break;
 	}
@@ -359,7 +360,7 @@ static void wlcore_event_rssi_trigger(struct cc33xx *wl, struct cc33xx_rssi_snr_
 	}
 
 	event_type = evt->event_type ? NL80211_CQM_RSSI_THRESHOLD_EVENT_HIGH :
-				       NL80211_CQM_RSSI_THRESHOLD_EVENT_LOW;
+				NL80211_CQM_RSSI_THRESHOLD_EVENT_LOW;
 
 	if (event_type == wlvif->last_rssi_event) {
 		cc33xx_debug(DEBUG_EVENT, "CQM: Duplicate %s event filtered (role %u)", evt->event_type ? "HIGH" : "LOW", evt->role_id);
@@ -371,7 +372,6 @@ static void wlcore_event_rssi_trigger(struct cc33xx *wl, struct cc33xx_rssi_snr_
 	wlvif->last_rssi_event = event_type;
 
 	cc33xx_debug(DEBUG_EVENT, "CQM: RSSI event notification sent to mac80211 (role %u)", evt->role_id);
-
 }
 
 void process_deferred_events(struct cc33xx *cc)
@@ -423,16 +423,16 @@ void process_deferred_events(struct cc33xx *cc)
 		if (vector & REMAIN_ON_CHANNEL_COMPLETE_EVENT_ID)
 			cc33xx_event_roc_complete(cc);
 
-		if (vector & RSSI_SNR_TRIGGER_0_EVENT_ID)
-		{
+		if (vector & RSSI_SNR_TRIGGER_0_EVENT_ID) {
 			cc33xx_debug(DEBUG_EVENT, "RSSI_SNR_TRIGGER_0_EVENT_ID");
-			wlcore_event_rssi_trigger(cc, &event_data->rssi_snr_trigger0);
+			cc33xx_event_rssi_trigger(cc, &event_data->rssi_snr_trigger0);
 		}
 
 		if (vector & RSSI_SNR_TRIGGER_1_EVENT_ID) {
 			cc33xx_debug(DEBUG_EVENT, "RSSI_SNR_TRIGGER_1_EVENT_ID");
-			wlcore_event_rssi_trigger(cc, &event_data->rssi_snr_trigger1);
+			cc33xx_event_rssi_trigger(cc, &event_data->rssi_snr_trigger1);
 		}
+
 		kfree(event_node);
 	}
 }
