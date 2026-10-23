@@ -3462,6 +3462,61 @@ int genpd_dev_pm_attach(struct device *dev)
 }
 EXPORT_SYMBOL_GPL(genpd_dev_pm_attach);
 
+static struct device *genpd_dev_pm_attach_virt(struct device *dev,
+					       struct device_node *np,
+					       unsigned int index)
+{
+	struct device *virt_dev;
+	int num_domains;
+	int ret;
+
+	/* Verify that the index is within a valid range. */
+	num_domains = of_count_phandle_with_args(np, "power-domains",
+						 "#power-domain-cells");
+	if (num_domains < 0 || index >= num_domains)
+		return NULL;
+
+	if (!genpd_bus_registered)
+		return ERR_PTR(-ENODEV);
+
+	/* Allocate and register device on the genpd bus. */
+	virt_dev = kzalloc_obj(*virt_dev);
+	if (!virt_dev)
+		return ERR_PTR(-ENOMEM);
+
+	if (np == dev->of_node)
+		dev_set_name(virt_dev, "genpd:%u:%s", index, dev_name(dev));
+	else
+		dev_set_name(virt_dev, "genpd:%u:%s:%pOFP", index,
+			     dev_name(dev), np);
+	virt_dev->bus = &genpd_bus_type;
+	virt_dev->release = genpd_release_dev;
+	virt_dev->of_node = of_node_get(np);
+
+	ret = device_register(virt_dev);
+	if (ret) {
+		put_device(virt_dev);
+		return ERR_PTR(ret);
+	}
+
+	/*
+	 * Try to attach the device to the PM domain at the specified index.
+	 * Pass 0 as the num_domains when np != dev->of_node, so that the dev's
+	 * required OPPs are not used for the PD.
+	 */
+	ret = __genpd_dev_pm_attach(virt_dev, dev, index,
+				    np == dev->of_node ? num_domains : 0, false);
+	if (ret < 1) {
+		device_unregister(virt_dev);
+		return ret ? ERR_PTR(ret) : NULL;
+	}
+
+	pm_runtime_enable(virt_dev);
+	genpd_queue_power_off_work(dev_to_genpd(virt_dev));
+
+	return virt_dev;
+}
+
 /**
  * genpd_dev_pm_attach_by_id - Associate a device with one of its PM domains.
  * @dev: The device used to lookup the PM domain.
@@ -3481,51 +3536,41 @@ EXPORT_SYMBOL_GPL(genpd_dev_pm_attach);
 struct device *genpd_dev_pm_attach_by_id(struct device *dev,
 					 unsigned int index)
 {
-	struct device *virt_dev;
-	int num_domains;
-	int ret;
-
 	if (!dev->of_node)
 		return NULL;
 
-	/* Verify that the index is within a valid range. */
-	num_domains = of_count_phandle_with_args(dev->of_node, "power-domains",
-						 "#power-domain-cells");
-	if (num_domains < 0 || index >= num_domains)
-		return NULL;
-
-	if (!genpd_bus_registered)
-		return ERR_PTR(-ENODEV);
-
-	/* Allocate and register device on the genpd bus. */
-	virt_dev = kzalloc_obj(*virt_dev);
-	if (!virt_dev)
-		return ERR_PTR(-ENOMEM);
-
-	dev_set_name(virt_dev, "genpd:%u:%s", index, dev_name(dev));
-	virt_dev->bus = &genpd_bus_type;
-	virt_dev->release = genpd_release_dev;
-	virt_dev->of_node = of_node_get(dev->of_node);
-
-	ret = device_register(virt_dev);
-	if (ret) {
-		put_device(virt_dev);
-		return ERR_PTR(ret);
-	}
-
-	/* Try to attach the device to the PM domain at the specified index. */
-	ret = __genpd_dev_pm_attach(virt_dev, dev, index, num_domains, false);
-	if (ret < 1) {
-		device_unregister(virt_dev);
-		return ret ? ERR_PTR(ret) : NULL;
-	}
-
-	pm_runtime_enable(virt_dev);
-	genpd_queue_power_off_work(dev_to_genpd(virt_dev));
-
-	return virt_dev;
+	return genpd_dev_pm_attach_virt(dev, dev->of_node, index);
 }
 EXPORT_SYMBOL_GPL(genpd_dev_pm_attach_by_id);
+
+/**
+ * genpd_dev_pm_attach_by_node - Associate a device with a PM domain of a DT
+ *				 node.
+ * @dev: The device that uses the PM domain.
+ * @np: The DT node with the PM domain.
+ * @index: The index of the PM domain in @np.
+ *
+ * Like genpd_dev_pm_attach_by_id(), but the PM domain is looked up in
+ * @np instead of the OF node of @dev.
+ *
+ * The virtual device is named after @dev and @np. The required OPPs of @dev are
+ * not linked to the PM domain.
+ *
+ * Returns the created virtual device if successfully attached PM domain, NULL
+ * when @np has no PM domain at @index, else an ERR_PTR() in case of failures.
+ * If the PM domain exists, but cannot be found or turned on, then
+ * ERR_PTR(-EPROBE_DEFER) is returned.
+ */
+struct device *genpd_dev_pm_attach_by_node(struct device *dev,
+					   struct device_node *np,
+					   unsigned int index)
+{
+	if (!np)
+		return NULL;
+
+	return genpd_dev_pm_attach_virt(dev, np, index);
+}
+EXPORT_SYMBOL_GPL(genpd_dev_pm_attach_by_node);
 
 /**
  * genpd_dev_pm_attach_by_name - Associate a device with one of its PM domains.

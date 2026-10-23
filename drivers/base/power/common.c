@@ -172,6 +172,33 @@ struct device *dev_pm_domain_attach_by_name(struct device *dev,
 EXPORT_SYMBOL_GPL(dev_pm_domain_attach_by_name);
 
 /**
+ * dev_pm_domain_attach_by_node - Associate a device with a PM domain of a DT
+ *				  node.
+ * @dev: The device that uses the PM domain.
+ * @np: The DT node with the PM domain.
+ * @index: The index of the PM domain in @np.
+ *
+ * Like dev_pm_domain_attach_by_id(), but the PM domain is looked up
+ * in @np instead of the OF node of @dev.
+ *
+ * Unlike dev_pm_domain_attach_by_id(), @dev may already be attached to a PM
+ * domain of its own. The driver controls the power to the PM domain through
+ * runtime PM of the returned virtual device, or through a device link to it.
+ *
+ * Returns the virtual created device when successfully attached to its PM
+ * domain, NULL in case @np has no PM domain at @index, else an ERR_PTR().
+ * Note that, to detach the returned virtual device, the driver shall call
+ * dev_pm_domain_detach() on it, typically during the remove phase.
+ */
+struct device *dev_pm_domain_attach_by_node(struct device *dev,
+					    struct device_node *np,
+					    unsigned int index)
+{
+	return genpd_dev_pm_attach_by_node(dev, np, index);
+}
+EXPORT_SYMBOL_GPL(dev_pm_domain_attach_by_node);
+
+/**
  * dev_pm_domain_attach_list - Associate a device with its PM domains.
  * @dev: The device used to lookup the PM domains for.
  * @data: The data used for attaching to the PM domains.
