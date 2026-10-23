@@ -20,42 +20,32 @@ static void init_cmd_header(struct cc33xx_cmd_header *header,
 	header->NAB_header.opcode = cpu_to_le16(id);
 }
 
-int cc33xx_set_max_buffer_size(struct cc33xx *cc, enum buffer_size max_buffer_size)
-{
-	switch (max_buffer_size) {
-	case INI_MAX_BUFFER_SIZE:
-		/* INI FILE PAYLOAD SIZE + INI CMD PARAM + INT */
-		cc->max_cmd_size = CC33XX_INI_CMD_MAX_SIZE;
-		cc->max_cmd_size += sizeof(struct cc33xx_cmd_ini_params_download);
-		cc->max_cmd_size += sizeof(u32);
-		break;
-
-	case CMD_MAX_BUFFER_SIZE:
-		cc->max_cmd_size = CC33XX_CMD_MAX_SIZE;
-		break;
-
-	default:
-		cc33xx_warning("max_buffer_size invalid, not changing buffer size");
-		break;
-	}
-
-	return 0;
-}
-
 static int send_buffer(struct cc33xx *cc, int cmd_box_addr,
 		       void *buf, size_t len)
 {
-	size_t max_cmd_size_align;
+	void *staging_buf;
+	size_t transfer_size;
+	u16 opcode = 0;
+	int ret;
 
-	memcpy(cc->cmd_buf, buf, len);
+	if (len >= sizeof(struct cc33xx_cmd_header))
+		opcode = le16_to_cpu(((struct cc33xx_cmd_header *)buf)->id);
 
-	memset(cc->cmd_buf + len, 0, (CC33XX_CMD_BUFFER_SIZE) - len);
+	if (opcode == CMD_CONTAINER_DOWNLOAD)
+		transfer_size = __ALIGN_MASK(len, CC33XX_BUS_BLOCK_SIZE * 2 - 1);
+	else
+		transfer_size = __ALIGN_MASK(len, CC33XX_BUS_BLOCK_SIZE - 1);
 
-	max_cmd_size_align = __ALIGN_MASK(cc->max_cmd_size,
-					  CC33XX_BUS_BLOCK_SIZE * 2 - 1);
+	staging_buf = kzalloc(transfer_size, GFP_KERNEL);
+	if (!staging_buf)
+		return -ENOMEM;
 
-	return cc33xx_write(cc, cmd_box_addr, cc->cmd_buf,
-			    max_cmd_size_align, true);
+	memcpy(staging_buf, buf, len);
+	ret = cc33xx_write(cc, cmd_box_addr, staging_buf, transfer_size,
+			   true);
+	kfree(staging_buf);
+
+	return ret;
 }
 
 /* send command to firmware
@@ -79,7 +69,6 @@ static int __cc33xx_cmd_send(struct cc33xx *cc, u16 id, void *buf,
 	}
 
 	if (WARN_ON(len < sizeof(*cmd))		||
-	    WARN_ON(len > cc->max_cmd_size)	||
 	    WARN_ON(len % 4 != 0))
 		return -EIO;
 
@@ -112,7 +101,6 @@ static int __cc33xx_cmd_send(struct cc33xx *cc, u16 id, void *buf,
 	case CMD_BM_READ_DEVICE_INFO:
 	case CMD_SET_PROBE_IE:
     case CMD_DEBUG:
-	case CMD_CQM_RSSI_CONFIG:
 		if (!res_len)
 			break; /* Response should be discarded */
 
@@ -2008,46 +1996,5 @@ int cmd_download_container_chunk(struct cc33xx *cc, u8 *chunk,
 		cc33xx_enable_interrupts(cc);
 	}
 
-	return ret;
-}
-
-int cc33xx_cmd_cqm_rssi_config(struct cc33xx *wl, struct cc33xx_vif *wlvif, bool enable, s8 threshold, u8 hysteresis)
-{
-	struct cc33xx_cmd_cqm_rssi_config *cqm_params = NULL;
-	int ret = 0;
-	int role_id = wlvif->role_id;
-
-	cc33xx_debug(DEBUG_CMD, "CQM config: role=%u, enable=%d, threshold=%d dBm, hysteresis=%d",
-					role_id, enable, threshold, hysteresis);
-
-    if (wlvif && enable) {
-        wlvif->last_rssi_event = (enum nl80211_cqm_rssi_threshold_event) -1;
-        cc33xx_info("CQM: Reset last_rssi_event for role %u", role_id);
-    }
-
-	cqm_params = kzalloc(sizeof(*cqm_params), GFP_KERNEL);
-	if (!cqm_params) {
-		cc33xx_error("CQM: Failed to allocate command buffer");
-		return -ENOMEM;
-	}
-
-	cqm_params->role_id = role_id;
-    cqm_params->enable = enable;
-    cqm_params->threshold_dbm = threshold;
-	cqm_params->hysteresis_db = hysteresis;
-
-	ret = cc33xx_cmd_send(wl, CMD_CQM_RSSI_CONFIG, cqm_params, sizeof(*cqm_params), sizeof(*cqm_params));
-	if (ret < 0) {
-		cc33xx_error("CQM: Failed to send config command: %d", ret);
-		goto out;
-	}
-
-	if (cqm_params->header.status != CMD_STATUS_SUCCESS) {
-		ret = -EIO;
-		goto out;
-	}
-
-out:
-	kfree(cqm_params);
 	return ret;
 }
