@@ -11,6 +11,13 @@
 
 #define CC33XX_WAIT_EVENT_FAST_POLL_COUNT 20
 
+struct cc33xx_rssi_snr_trigger_event {
+	u8 role_id;
+	u8 event_type;
+	s8 rssi_dbm;
+	u8 padding;
+} __packed;
+
 struct cc33xx_event_mailbox {
 	__le32 events_vector;
 
@@ -74,6 +81,9 @@ struct cc33xx_event_mailbox {
 
 	/* time sync low lsb*/
 	__le16 time_sync_tsf_low_lsb;
+
+	struct cc33xx_rssi_snr_trigger_event rssi_snr_trigger0;
+	struct cc33xx_rssi_snr_trigger_event rssi_snr_trigger1;
 
 	u8 ble_event[304];
 	u8 csi_data[136];
@@ -311,6 +321,59 @@ static void cc33xx_event_beacon_loss(struct cc33xx *cc,
 	}
 }
 
+static void wlcore_event_rssi_trigger(struct cc33xx *wl, struct cc33xx_rssi_snr_trigger_event *evt)
+{
+	struct cc33xx_vif *wlvif = NULL;
+	struct ieee80211_vif *vif;
+	enum nl80211_cqm_rssi_threshold_event event_type;
+
+	cc33xx_debug(DEBUG_EVENT, "CQM: RSSI event: role=%u, type=%s, rssi=%d dBm", evt->role_id, evt->event_type ? "HIGH" : "LOW", evt->rssi_dbm);
+
+	if (evt->role_id >= CC33XX_MAX_ROLES)
+		return;
+
+	cc33xx_for_each_wlvif(wl, wlvif) {
+		if (wlvif->role_id == evt->role_id)
+			break;
+	}
+
+	if (!wlvif || wlvif->role_id != evt->role_id) {
+		cc33xx_error("CQM: RSSI event for unknown role %u", evt->role_id);
+		return;
+	}
+
+	if (wlvif->role_id == CC33XX_INVALID_ROLE_ID) {
+		cc33xx_error("CQM: RSSI event for invalid role");
+		return;
+	}
+
+	if (!wlvif->cqm_enabled) {
+		cc33xx_warning("CQM: RSSI event received but monitoring not enabled for role %u", evt->role_id);
+		return;
+	}
+
+	vif = cc33xx_wlvif_to_vif(wlvif);
+	if (!vif) {
+		cc33xx_warning("CQM: VIF is NULL for role %u", evt->role_id);
+		return;
+	}
+
+	event_type = evt->event_type ? NL80211_CQM_RSSI_THRESHOLD_EVENT_HIGH :
+				       NL80211_CQM_RSSI_THRESHOLD_EVENT_LOW;
+
+	if (event_type == wlvif->last_rssi_event) {
+		cc33xx_debug(DEBUG_EVENT, "CQM: Duplicate %s event filtered (role %u)", evt->event_type ? "HIGH" : "LOW", evt->role_id);
+		return;
+	}
+
+	ieee80211_cqm_rssi_notify(vif, event_type, evt->rssi_dbm, GFP_KERNEL);
+
+	wlvif->last_rssi_event = event_type;
+
+	cc33xx_debug(DEBUG_EVENT, "CQM: RSSI event notification sent to mac80211 (role %u)", evt->role_id);
+
+}
+
 void process_deferred_events(struct cc33xx *cc)
 {
 	struct event_node *event_node, *tmp;
@@ -360,6 +423,16 @@ void process_deferred_events(struct cc33xx *cc)
 		if (vector & REMAIN_ON_CHANNEL_COMPLETE_EVENT_ID)
 			cc33xx_event_roc_complete(cc);
 
+		if (vector & RSSI_SNR_TRIGGER_0_EVENT_ID)
+		{
+			cc33xx_debug(DEBUG_EVENT, "RSSI_SNR_TRIGGER_0_EVENT_ID");
+			wlcore_event_rssi_trigger(cc, &event_data->rssi_snr_trigger0);
+		}
+
+		if (vector & RSSI_SNR_TRIGGER_1_EVENT_ID) {
+			cc33xx_debug(DEBUG_EVENT, "RSSI_SNR_TRIGGER_1_EVENT_ID");
+			wlcore_event_rssi_trigger(cc, &event_data->rssi_snr_trigger1);
+		}
 		kfree(event_node);
 	}
 }

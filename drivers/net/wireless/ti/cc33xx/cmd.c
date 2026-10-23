@@ -112,6 +112,7 @@ static int __cc33xx_cmd_send(struct cc33xx *cc, u16 id, void *buf,
 	case CMD_BM_READ_DEVICE_INFO:
 	case CMD_SET_PROBE_IE:
     case CMD_DEBUG:
+	case CMD_CQM_RSSI_CONFIG:
 		if (!res_len)
 			break; /* Response should be discarded */
 
@@ -2007,5 +2008,46 @@ int cmd_download_container_chunk(struct cc33xx *cc, u8 *chunk,
 		cc33xx_enable_interrupts(cc);
 	}
 
+	return ret;
+}
+
+int cc33xx_cmd_cqm_rssi_config(struct cc33xx *wl, struct cc33xx_vif *wlvif, bool enable, s8 threshold, u8 hysteresis)
+{
+	struct cc33xx_cmd_cqm_rssi_config *cqm_params = NULL;
+	int ret = 0;
+	int role_id = wlvif->role_id;
+
+	cc33xx_debug(DEBUG_CMD, "CQM config: role=%u, enable=%d, threshold=%d dBm, hysteresis=%d",
+					role_id, enable, threshold, hysteresis);
+
+    if (wlvif && enable) {
+        wlvif->last_rssi_event = (enum nl80211_cqm_rssi_threshold_event) -1;
+        cc33xx_info("CQM: Reset last_rssi_event for role %u", role_id);
+    }
+
+	cqm_params = kzalloc(sizeof(*cqm_params), GFP_KERNEL);
+	if (!cqm_params) {
+		cc33xx_error("CQM: Failed to allocate command buffer");
+		return -ENOMEM;
+	}
+
+	cqm_params->role_id = role_id;
+    cqm_params->enable = enable;
+    cqm_params->threshold_dbm = threshold;
+	cqm_params->hysteresis_db = hysteresis;
+
+	ret = cc33xx_cmd_send(wl, CMD_CQM_RSSI_CONFIG, cqm_params, sizeof(*cqm_params), sizeof(*cqm_params));
+	if (ret < 0) {
+		cc33xx_error("CQM: Failed to send config command: %d", ret);
+		goto out;
+	}
+
+	if (cqm_params->header.status != CMD_STATUS_SUCCESS) {
+		ret = -EIO;
+		goto out;
+	}
+
+out:
+	kfree(cqm_params);
 	return ret;
 }

@@ -84,5 +84,20 @@ int cc33xx_rx(struct cc33xx *cc, u8 *rx_buf_ptr, u16 rx_buf_len);
 int cc33xx_rx_filter_enable(struct cc33xx *cc, int index, bool enable,
 			    struct cc33xx_rx_filter *filter);
 int cc33xx_rx_filter_clear_all(struct cc33xx *cc);
+void cc33xx_flush_deferred_work(struct cc33xx *wl);
+void cc33xx_free_wowlan_patterns_memory(struct cc33xx *wl);
+int cc33xx_rx_filter_alloc_field(struct cc33xx_rx_filter *filter, u16 offset,
+				 u8 flags, const u8 *pattern, u8 len);
+struct cc33xx_rx_filter *cc33xx_rx_filter_alloc(void);
+int cc33xx_clear_wowlan_search_patterns(struct cc33xx *wl);
+int cc33xx_set_wowlan_search_mode(struct cc33xx *wl, bool enable);
+void cc33xx_rx_filter_free(struct cc33xx_rx_filter *filter);
+int cc33xx_get_wowlan_search_filters(struct cc33xx *wl, struct cc33xx_rx_filter ***filters_out);
+int cc33xx_parse_wowlan_search_pattern(const char *input, u8 *pattern, u8 *mask,
+					size_t max_len, bool *has_mask);
+int cc33xx_is_wowlan_search_enabled(struct cc33xx *wl);
+int cc33xx_add_wowlan_search_pattern(struct cc33xx *wl, u16 offset,
+				     const u8 *pattern_data, int pattern_len,
+				     bool has_mask);
 
 #endif /* __RX_H__ */
