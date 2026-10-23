@@ -477,6 +477,9 @@ struct device *genpd_dev_pm_attach_by_id(struct device *dev,
 					 unsigned int index);
 struct device *genpd_dev_pm_attach_by_name(struct device *dev,
 					   const char *name);
+struct device *genpd_dev_pm_attach_by_node(struct device *dev,
+					   struct device_node *np,
+					   unsigned int index);
 #else /* !CONFIG_PM_GENERIC_DOMAINS_OF */
 static inline int of_genpd_add_provider_simple(struct device_node *np,
 					struct generic_pm_domain *genpd)
@@ -535,6 +538,13 @@ static inline struct device *genpd_dev_pm_attach_by_name(struct device *dev,
 	return NULL;
 }
 
+static inline struct device *genpd_dev_pm_attach_by_node(struct device *dev,
+							 struct device_node *np,
+							 unsigned int index)
+{
+	return NULL;
+}
+
 static inline
 struct generic_pm_domain *of_genpd_remove_last(struct device_node *np)
 {
@@ -560,6 +570,9 @@ struct device *dev_pm_domain_attach_by_id(struct device *dev,
 					  unsigned int index);
 struct device *dev_pm_domain_attach_by_name(struct device *dev,
 					    const char *name);
+struct device *dev_pm_domain_attach_by_node(struct device *dev,
+					    struct device_node *np,
+					    unsigned int index);
 int dev_pm_domain_attach_list(struct device *dev,
 			      const struct dev_pm_domain_attach_data *data,
 			      struct dev_pm_domain_list **list);
@@ -583,6 +596,12 @@ static inline struct device *dev_pm_domain_attach_by_id(struct device *dev,
 }
 static inline struct device *dev_pm_domain_attach_by_name(struct device *dev,
 							  const char *name)
+{
+	return NULL;
+}
+static inline struct device *dev_pm_domain_attach_by_node(struct device *dev,
+							  struct device_node *np,
+							  unsigned int index)
 {
 	return NULL;
 }
