@@ -49,6 +49,9 @@ enum {
 	SMART_CONFIG_DECODE_EVENT_ID             = BIT(23),
 	TIME_SYNC_EVENT_ID                       = BIT(24),
 	FW_LOGGER_INDICATION                     = BIT(25),
+	RESERVED1_ID                             = BIT(26),
+	BLE_EVENT_ID                             = BIT(27),
+	RESEED_EVENT_ID                          = BIT(28),
 };
 
 /* events the driver might want to wait for */
