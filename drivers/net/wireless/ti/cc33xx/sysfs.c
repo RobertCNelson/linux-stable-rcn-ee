@@ -139,7 +139,7 @@ static ssize_t regdomain_txControl_param_store(struct device *dev,
 		return ret;
 	}
 
-	strncpy(buffer, buf, count);
+	strscpy(buffer, buf, count);
 	if(-EFAULT == ret){
 		cc33xx_warning("error in regdomain and tx control params set: %d", ret);
 		kfree(buffer);
