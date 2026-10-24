@@ -19,6 +19,9 @@ obj-$(CONFIG_BT_HCIBTSDIO)	+= btsdio.o
 obj-$(CONFIG_BT_INTEL)		+= btintel.o
 obj-$(CONFIG_BT_INTEL_PCIE)	+= btintel_pcie.o btintel.o
 obj-$(CONFIG_BT_ATH3K)		+= ath3k.o
+obj-$(CONFIG_BT_TI)			+= btti.o
+obj-$(CONFIG_BT_TI_SDIO)	+= btti_sdio.o
+obj-$(CONFIG_BT_TI_UART)	+= btti_uart.o
 obj-$(CONFIG_BT_MRVL)		+= btmrvl.o
 obj-$(CONFIG_BT_MRVL_SDIO)	+= btmrvl_sdio.o
 obj-$(CONFIG_BT_MTKSDIO)	+= btmtksdio.o
@@ -35,6 +38,9 @@ obj-$(CONFIG_BT_NXPUART)	+= btnxpuart.o
 obj-$(CONFIG_BT_HCIUART_NOKIA)	+= hci_nokia.o
 
 obj-$(CONFIG_BT_HCIRSI)		+= btrsi.o
+
+btti-y			:= btti_main.o
+btti-$(CONFIG_DEBUG_FS)	+= btti_debugfs.o
 
 btmrvl-y			:= btmrvl_main.o
 btmrvl-$(CONFIG_DEBUG_FS)	+= btmrvl_debugfs.o
