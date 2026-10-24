@@ -2,6 +2,7 @@
 /*
  * Copyright (C) 2022-2024 Texas Instruments Incorporated - https://www.ti.com/
  */
+#include <linux/hex.h>
 
 #include "acx.h"
 #include "rx.h"
