@@ -10,6 +10,8 @@
 #include <linux/of_graph.h>
 #include <linux/mfd/syscon.h>
 #include <linux/media-bus-format.h>
+#include <linux/pm_domain.h>
+#include <linux/pm_runtime.h>
 #include <linux/regmap.h>
 
 #include <drm/drm_atomic_helper.h>
@@ -35,6 +37,12 @@ struct tidss_oldi {
 
 	struct clk *serial;
 	struct regmap *io_ctrl;
+
+	/*
+	 * The power domains of this OLDI TX and, in dual-link mode, of its
+	 * companion. NULL for an OLDI TX without a power domain of its own.
+	 */
+	struct device *pd_devs[2];
 };
 
 struct oldi_bus_format {
@@ -238,6 +246,22 @@ static int tidss_oldi_atomic_check(struct drm_bridge *bridge,
 	return 0;
 }
 
+static void tidss_oldi_power_get(struct tidss_oldi *oldi)
+{
+	for (unsigned int i = 0; i < ARRAY_SIZE(oldi->pd_devs); i++) {
+		if (oldi->pd_devs[i])
+			WARN_ON(pm_runtime_get_sync(oldi->pd_devs[i]) < 0);
+	}
+}
+
+static void tidss_oldi_power_put(struct tidss_oldi *oldi)
+{
+	for (unsigned int i = 0; i < ARRAY_SIZE(oldi->pd_devs); i++) {
+		if (oldi->pd_devs[i])
+			pm_runtime_put(oldi->pd_devs[i]);
+	}
+}
+
 static void tidss_oldi_atomic_pre_enable(struct drm_bridge *bridge,
 					 struct drm_atomic_commit *state)
 {
@@ -250,6 +274,8 @@ static void tidss_oldi_atomic_pre_enable(struct drm_bridge *bridge,
 
 	if (oldi->link_type == OLDI_MODE_SECONDARY_CLONE_SINGLE_LINK)
 		return;
+
+	tidss_oldi_power_get(oldi);
 
 	connector = drm_atomic_get_new_connector_for_encoder(state,
 							     bridge->encoder);
@@ -296,6 +322,8 @@ static void tidss_oldi_atomic_post_disable(struct drm_bridge *bridge,
 
 	/* Clear OLDI Config */
 	tidss_disable_oldi(oldi->tidss, oldi->parent_vp);
+
+	tidss_oldi_power_put(oldi);
 }
 
 #define MAX_INPUT_SEL_FORMATS	1
@@ -468,6 +496,60 @@ err_return_ep_port:
 	return -ENODEV;
 }
 
+static void tidss_oldi_detach_pd(void *data)
+{
+	struct device *pd_dev = data;
+
+	dev_pm_domain_detach(pd_dev, true);
+}
+
+static struct device *tidss_oldi_create_pd_dev(struct tidss_device *tidss,
+					       struct device_node *oldi_tx)
+{
+	struct device *dev;
+	int ret;
+
+	dev = dev_pm_domain_attach_by_node(tidss->dev, oldi_tx, 0);
+	if (IS_ERR_OR_NULL(dev))
+		return dev;
+
+	ret = devm_add_action_or_reset(tidss->dev, tidss_oldi_detach_pd, dev);
+	if (ret)
+		return ERR_PTR(ret);
+
+	return dev;
+}
+
+static int tidss_oldi_create_pd_devs(struct tidss_device *tidss,
+				     struct tidss_oldi *oldi,
+				     struct device_node *oldi_tx)
+{
+	struct device_node *companion;
+	struct device *pd_dev;
+
+	pd_dev = tidss_oldi_create_pd_dev(tidss, oldi_tx);
+	if (IS_ERR(pd_dev))
+		return PTR_ERR(pd_dev);
+
+	oldi->pd_devs[0] = pd_dev;
+
+	if (oldi->companion_instance < 0)
+		return 0;
+
+	companion = of_parse_phandle(oldi_tx, "ti,companion-oldi", 0);
+	if (!companion)
+		return -EINVAL;
+
+	pd_dev = tidss_oldi_create_pd_dev(tidss, companion);
+	of_node_put(companion);
+	if (IS_ERR(pd_dev))
+		return PTR_ERR(pd_dev);
+
+	oldi->pd_devs[1] = pd_dev;
+
+	return 0;
+}
+
 void tidss_oldi_deinit(struct tidss_device *tidss)
 {
 	for (int i = 0; i < tidss->num_oldis; i++) {
@@ -609,6 +691,12 @@ static int tidss_oldi_init_one(struct tidss_device *tidss,
 			return ret;
 		}
 	}
+
+	ret = tidss_oldi_create_pd_devs(tidss, oldi, oldi_tx);
+	if (ret)
+		return dev_err_probe(tidss->dev, ret,
+				     "OLDI%u: Failed to set up the power domains.\n",
+				     oldi_instance);
 
 	/* Register the bridge. */
 	oldi->bridge.of_node = oldi_tx;
