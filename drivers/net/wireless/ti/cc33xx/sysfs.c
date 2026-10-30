@@ -538,7 +538,7 @@ static ssize_t wowlan_pattern_search_show(struct device *dev,
 	len += sysfs_emit_at(buf, len, "     echo \"-:-:-:-:-:-:-:-:-:-:-:-:-:-|31:32:-:34:35:36\" > wowlan_pattern_search\n\n");
 	len += sysfs_emit_at(buf, len, "  5. Match EtherType 0x0806 (ARP) at fixed payload offset:\n");
 	len += sysfs_emit_at(buf, len, "     echo \"-f -:-:-:-:-:-:-:-:-:-:-:-:08:06|10+01:02:03\" > wowlan_pattern_search\n\n");
-	len += sysfs_emit_at(buf, len, "Limits: Max %d filters, Max %d byte pattern\n",
+	len += sysfs_emit_at(buf, len, "Limits: Max %d filters, Max %lu byte pattern\n",
 			     CC33XX_MAX_RX_FILTERS, CC33XX_RX_FILTER_MAX_PATTERN_SIZE);
 	len += sysfs_emit_at(buf, len, "Clear:  echo 1 > wowlan_pattern_clear\n");
 
