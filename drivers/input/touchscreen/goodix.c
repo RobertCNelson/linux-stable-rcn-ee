@@ -299,6 +299,14 @@ static int goodix_ts_read_input_report(struct goodix_ts_data *ts, u8 *data)
 				return 0;
 		}
 
+		if (!ts->client->irq)
+			/*
+			 * No point in retrying if polling, particularly as some
+			 * versions continuously report "not ready" if there are
+			 * no touch points.
+			 */
+			break;
+
 		usleep_range(1000, 2000); /* Poll every 1 - 2 ms */
 	} while (time_before(jiffies, max_timeout));
 
@@ -1143,7 +1151,10 @@ static int goodix_configure_dev(struct goodix_ts_data *ts)
 		return -ENOMEM;
 	}
 
-	ts->input_dev->name = "Goodix Capacitive TouchScreen";
+	snprintf(ts->name, GOODIX_NAME_MAX_LEN, "%s Goodix Capacitive TouchScreen",
+		 dev_name(&ts->client->dev));
+
+	ts->input_dev->name = ts->name;
 	ts->input_dev->phys = "input/ts";
 	ts->input_dev->id.bustype = BUS_I2C;
 	ts->input_dev->id.vendor = 0x0416;
